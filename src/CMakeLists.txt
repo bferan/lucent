@@ -1,8 +1,14 @@
 
+target_include_directories(lucent PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
 target_sources(lucent PRIVATE
+        core/Lucent.hpp
         core/Math.hpp
         core/Matrix4.hpp
         core/Quaternion.hpp
         core/Vector3.hpp
         core/Vector4.hpp
+
+        device/Device.cpp
+        device/Device.hpp
         )

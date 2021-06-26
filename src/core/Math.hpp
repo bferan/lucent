@@ -1,11 +1,12 @@
 #pragma once
 
 #include <cmath>
+#include "math.h"
 
 namespace lucent
 {
 
-constexpr float kPi = 3.14159265358979f;
+constexpr float kPi = 3.14159265358979323846;
 constexpr float k2Pi = kPi * 2.0f;
 constexpr float kHalfPi = kPi / 2.0f;
 

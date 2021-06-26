@@ -8,17 +8,20 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 add_library(lucent STATIC)
 add_subdirectory(src)
 
+# Demos
+add_subdirectory(demos)
+
 # Glad
 add_subdirectory(extern/glad)
 target_link_libraries(lucent PRIVATE glad)
 
 # Vulkan
 find_package(Vulkan)
-target_link_libraries(lucent PRIVATE Vulkan::Vulkan)
+target_link_libraries(lucent PUBLIC Vulkan::Vulkan)
 
 # VulkanMemoryAllocator
 add_subdirectory(extern/VulkanMemoryAllocator)
-target_link_libraries(lucent PRIVATE VulkanMemoryAllocator)
+target_link_libraries(lucent PUBLIC VulkanMemoryAllocator)
 target_link_libraries(VulkanMemoryAllocator PRIVATE Vulkan::Vulkan)
 
 #glslang
@@ -39,7 +42,7 @@ target_link_libraries(lucent PRIVATE shaderc)
 
 # glfw
 add_subdirectory(extern/glfw)
-target_link_libraries(lucent PRIVATE glfw)
+target_link_libraries(lucent PUBLIC glfw)
 
 # renderdoc
 add_subdirectory(extern/renderdoc)
@@ -47,7 +50,7 @@ target_link_libraries(lucent PRIVATE renderdoc)
 
 # Assimp
 add_subdirectory(extern/assimp)
-target_link_libraries(lucent PRIVATE assimp)
+target_link_libraries(lucent PUBLIC assimp)
 
 # stb
 add_subdirectory(extern/stb)
