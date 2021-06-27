@@ -54,4 +54,4 @@ target_link_libraries(lucent PUBLIC assimp)
 
 # stb
 add_subdirectory(extern/stb)
-target_link_libraries(lucent PRIVATE stb)
+target_link_libraries(lucent PUBLIC stb)

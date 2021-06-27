@@ -13,6 +13,7 @@ namespace lucent
 {
 
 class Device;
+struct Texture;
 
 struct DeviceQueue
 {
@@ -28,6 +29,8 @@ struct Framebuffer
     VkFormat format;
     VkImage image;
     VkImageView imageView;
+
+    Texture* depthTexture;
 };
 
 struct Swapchain
@@ -51,22 +54,35 @@ struct Pipeline
     VkPipelineLayout layout;
 };
 
+enum class TextureFormat
+{
+    RGBA,
+    Depth
+};
 
 struct Texture
 {
+    VkImage image;
+    VkImageView imageView;
+    VmaAllocation alloc;
 
+    VkSampler sampler;
+    TextureFormat format;
 };
 
 struct TextureInfo
 {
-
+    uint32_t width = 1;
+    uint32_t height = 1;
+    TextureFormat format = TextureFormat::RGBA;
 };
 
 enum class BufferType
 {
     Vertex,
     Index,
-    Uniform
+    Uniform,
+    Staging
 };
 
 struct Buffer
@@ -77,6 +93,7 @@ struct Buffer
     VkBuffer handle;
     VmaAllocation allocation;
     BufferType type;
+    size_t bufSize;
 };
 
 struct DescriptorSet
@@ -96,10 +113,13 @@ public:
     void EndRenderPass() const;
 
     void Bind(Pipeline& pipeline);
-    void Bind(const Buffer& vertexBuffer, const Buffer& indexBuffer) const;
+
+    void Bind(const Buffer* indexBuffer);
+    void Bind(const Buffer* vertexBuffer, uint32_t binding);
 
     DescriptorSet* CreateDescriptorSet(const Pipeline& pipeline, uint32_t set);
     void WriteSet(DescriptorSet* set, uint32_t binding, const Buffer& buffer);
+    void WriteSet(DescriptorSet* set, uint32_t binding, const Texture& texture);
     void BindSet(const DescriptorSet* set);
 
     void Draw(uint32_t indexCount) const;
@@ -114,7 +134,7 @@ public:
     std::vector<std::unique_ptr<DescriptorSet>> m_DescSets;
 
     // Active state
-    Pipeline* m_BoundPipeline;
+    Pipeline* m_BoundPipeline{};
 
 };
 
@@ -128,7 +148,7 @@ public:
 
     Buffer* CreateBuffer(BufferType type, size_t size);
 
-    //Texture* CreateTexture(const TextureInfo& info);
+    Texture* CreateTexture(const TextureInfo& info, size_t size = 0, void* data = nullptr);
 
     const Framebuffer& AcquireFramebuffer();
 
@@ -151,6 +171,7 @@ public:
     VkInstance m_Instance{};
     VkSurfaceKHR m_Surface{};
     VkPhysicalDevice m_PhysicalDevice{};
+    VkPhysicalDeviceProperties m_DeviceProperties{};
 
     VmaAllocator m_Allocator{};
 
@@ -162,12 +183,15 @@ public:
 
     std::vector<std::unique_ptr<Pipeline>> m_Pipelines;
     std::vector<std::unique_ptr<Buffer>> m_Buffers;
+    std::vector<std::unique_ptr<Texture>> m_Textures;
     std::vector<std::unique_ptr<Context>> m_Contexts;
 
     VkSemaphore m_ImageAvailable{};
     VkSemaphore m_RenderFinished{};
     uint32_t m_NextImageIndex{};
 
+    Buffer* m_TransferBuffer;
+    VkCommandPool m_OneShotCmdPool;
 };
 
 }

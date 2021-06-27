@@ -32,13 +32,18 @@ private:
 public:
     Device m_Device;
 
-    Buffer* m_VertexBuffer;
-    Buffer* m_IndexBuffer;
-    uint32_t m_numIndices;
-
     Pipeline* m_Pipeline;
     Context* m_Context;
 
+    // MODEL
+    Buffer* m_VertexBuffer;
+    Buffer* m_IndexBuffer;
+    Buffer* m_UVBuffer;
+    uint32_t m_numIndices;
+
+    Texture* m_BaseColor;
+
+    // UBO
     Buffer* m_UniformBuffer;
     DescriptorSet* m_DescSet;
 
