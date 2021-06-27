@@ -11,6 +11,47 @@
 namespace lucent
 {
 
+// Device
+
+static VkBufferUsageFlags BufferTypeToFlags(BufferType type)
+{
+    VkBufferUsageFlags flags = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
+    switch (type)
+    {
+    case BufferType::Vertex:
+    {
+        flags |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        break;
+    }
+    case BufferType::Index:
+    {
+        flags |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+        break;
+    }
+    case BufferType::Uniform:
+    {
+        flags |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+        break;
+    }
+    }
+
+    return flags;
+}
+
+static VkDescriptorType BufferTypeToDescriptorType(BufferType type)
+{
+    switch (type)
+    {
+    case BufferType::Uniform:
+        return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+
+    default:
+        LC_ASSERT(false);
+        return VK_DESCRIPTOR_TYPE_MAX_ENUM;
+    }
+}
+
 Device::Device()
 {
     // Set up GLFW
@@ -57,7 +98,7 @@ Device::~Device()
     for (auto& pipeline : m_Pipelines)
     {
         vkDestroyPipeline(m_Device, pipeline->handle, nullptr);
-        vkDestroyDescriptorSetLayout(m_Device, pipeline->setLayout, nullptr);
+        vkDestroyDescriptorSetLayout(m_Device, pipeline->setLayouts[0], nullptr);
         vkDestroyPipelineLayout(m_Device, pipeline->layout, nullptr);
     }
 
@@ -72,6 +113,8 @@ Device::~Device()
     {
         vkFreeCommandBuffers(m_Device, ctx->m_CommandPool, 1, &ctx->m_CommandBuffer);
         vkDestroyCommandPool(m_Device, ctx->m_CommandPool, nullptr);
+
+        vkDestroyDescriptorPool(m_Device, ctx->m_DescPool, nullptr);
     }
 
     // Destroy swapchain
@@ -506,6 +549,7 @@ Pipeline* Device::CreatePipeline(const PipelineInfo& info)
         .pAttachments = &colorBlendAttachmentInfo
     };
 
+    // TODO: CHANGE
     // Create pipeline layout & descriptor layout
     auto descBinding = VkDescriptorSetLayoutBinding{
         .binding = 0,
@@ -519,13 +563,13 @@ Pipeline* Device::CreatePipeline(const PipelineInfo& info)
         .bindingCount = 1,
         .pBindings = &descBinding
     };
-    result = vkCreateDescriptorSetLayout(m_Device, &descSetInfo, nullptr, &pipe.setLayout);
+    result = vkCreateDescriptorSetLayout(m_Device, &descSetInfo, nullptr, &pipe.setLayouts[0]);
     LC_ASSERT(result == VK_SUCCESS);
 
     auto pipelineLayoutInfo = VkPipelineLayoutCreateInfo{
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO//,
-        //.setLayoutCount = 1,
-        //.pSetLayouts = &pipe.setLayout
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = 1,
+        .pSetLayouts = &pipe.setLayouts[0]
     };
     result = vkCreatePipelineLayout(m_Device, &pipelineLayoutInfo, nullptr, &pipe.layout);
     LC_ASSERT(result == VK_SUCCESS);
@@ -555,34 +599,6 @@ Pipeline* Device::CreatePipeline(const PipelineInfo& info)
     return &pipe;
 }
 
-static VkBufferUsageFlags BufferTypeToFlags(BufferType type)
-{
-    VkBufferUsageFlags flags = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-
-    switch (type)
-    {
-    case BufferType::Vertex:
-    {
-        flags |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-    }
-        break;
-
-    case BufferType::Index:
-    {
-        flags |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-    }
-        break;
-
-    case BufferType::Uniform:
-    {
-        flags |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-    }
-        break;
-    }
-
-    return flags;
-}
-
 Buffer* Device::CreateBuffer(BufferType type, size_t size)
 {
     auto& buff = *m_Buffers.emplace_back(std::make_unique<Buffer>());
@@ -609,8 +625,9 @@ Buffer* Device::CreateBuffer(BufferType type, size_t size)
 
 Context* Device::CreateContext()
 {
-    auto& ctx = *m_Contexts.emplace_back(std::make_unique<Context>());
+    auto& ctx = *m_Contexts.emplace_back(std::make_unique<Context>(*this));
 
+    // Create command pool
     auto poolCreateInfo = VkCommandPoolCreateInfo{
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .queueFamilyIndex = m_GraphicsQueue.familyIndex
@@ -633,6 +650,28 @@ Context* Device::CreateContext()
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
     };
     result = vkBeginCommandBuffer(ctx.m_CommandBuffer, &beginInfo);
+    LC_ASSERT(result == VK_SUCCESS);
+
+    // Create descriptor pool
+    VkDescriptorPoolSize descPoolSizes[] = {
+        {
+            .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .descriptorCount = 1024
+        },
+        {
+            .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .descriptorCount = 1024
+        }
+    };
+
+    auto descPoolInfo = VkDescriptorPoolCreateInfo{
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .maxSets = 1024,
+        .poolSizeCount = LC_ARRAY_SIZE(descPoolSizes),
+        .pPoolSizes = descPoolSizes
+    };
+
+    result = vkCreateDescriptorPool(m_Device, &descPoolInfo, nullptr, &ctx.m_DescPool);
     LC_ASSERT(result == VK_SUCCESS);
 
     return &ctx;
@@ -688,7 +727,9 @@ void Device::Present()
     vkQueueWaitIdle(m_PresentQueue.handle);
 }
 
-void Buffer::Upload(void* data, size_t size)
+// Buffer
+
+void Buffer::Upload(void* data, size_t size) const
 {
     // TODO: Use staging buffer
     void* ptr;
@@ -697,6 +738,8 @@ void Buffer::Upload(void* data, size_t size)
     vmaUnmapMemory(device->m_Allocator, allocation);
     vmaFlushAllocation(device->m_Allocator, allocation, 0, VK_WHOLE_SIZE);
 }
+
+// Context
 
 void Context::BeginRenderPass(const Framebuffer& fbuffer) const
 {
@@ -721,9 +764,10 @@ void Context::EndRenderPass() const
     vkCmdEndRenderPass(m_CommandBuffer);
 }
 
-void Context::Bind(const Pipeline& pipeline) const
+void Context::Bind(Pipeline& pipeline)
 {
     vkCmdBindPipeline(m_CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
+    m_BoundPipeline = &pipeline;
 }
 
 void Context::Bind(const Buffer& vertexBuffer, const Buffer& indexBuffer) const
@@ -736,6 +780,59 @@ void Context::Bind(const Buffer& vertexBuffer, const Buffer& indexBuffer) const
 void Context::Draw(uint32_t indexCount) const
 {
     vkCmdDrawIndexed(m_CommandBuffer, indexCount, 1, 0, 0, 0);
+}
+
+// Descriptor sets (temp)
+DescriptorSet* Context::CreateDescriptorSet(const Pipeline& pipeline, uint32_t index)
+{
+    auto& set = m_DescSets.emplace_back(std::make_unique<DescriptorSet>());
+    set->index = index;
+
+    auto setAllocInfo = VkDescriptorSetAllocateInfo{
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .descriptorPool = m_DescPool,
+        .descriptorSetCount = 1,
+        .pSetLayouts = &pipeline.setLayouts[index]
+    };
+
+    auto result = vkAllocateDescriptorSets(m_Device.m_Device, &setAllocInfo, &set->handle);
+    LC_ASSERT(result == VK_SUCCESS);
+
+    return set.get();
+}
+
+void Context::WriteSet(DescriptorSet* set, uint32_t binding, const Buffer& buffer)
+{
+    auto buffInfo = VkDescriptorBufferInfo{
+        .buffer = buffer.handle,
+        .offset = 0,
+        .range = VK_WHOLE_SIZE
+    };
+
+    auto descWrite = VkWriteDescriptorSet{
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = set->handle,
+        .dstBinding = binding,
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType = BufferTypeToDescriptorType(buffer.type),
+        .pBufferInfo = &buffInfo
+    };
+
+    vkUpdateDescriptorSets(m_Device.m_Device, 1, &descWrite, 0, nullptr);
+}
+void Context::BindSet(const DescriptorSet* set)
+{
+    LC_ASSERT(m_BoundPipeline != nullptr);
+
+    vkCmdBindDescriptorSets(m_CommandBuffer,
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        m_BoundPipeline->layout,
+        set->index,
+        1,
+        &set->handle,
+        0,
+        nullptr);
 }
 
 }

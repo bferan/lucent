@@ -4,6 +4,10 @@
 #include <fstream>
 
 #include "GLFW/glfw3.h"
+#include "assimp/Importer.hpp"
+#include "assimp/scene.h"
+#include "assimp/postprocess.h"
+#include "assimp/pbrmaterial.h"
 
 #include "device/Device.hpp"
 #include "core/Vector3.hpp"
@@ -33,21 +37,24 @@ void BasicDemo::Init()
         .fragmentShader = ReadFile("C:/Code/lucent/src/rendering/frag.glsl")
     });
 
-    Vector3 vertices[] = {
-        Vector3{ 0.0f, -1.0f, 0.0f },
-        Vector3{ 1.0f, 0.0f, 0.0f },
-        Vector3{ 1.0f, 1.0f, 0.0f },
-    };
-
-    uint32_t indices[] = { 0, 1, 2 };
-
-    m_VertexBuffer = m_Device.CreateBuffer(BufferType::Vertex, sizeof(vertices));
-    m_VertexBuffer->Upload(vertices, sizeof(vertices));
-
-    m_IndexBuffer = m_Device.CreateBuffer(BufferType::Index, sizeof(indices));
-    m_IndexBuffer->Upload(indices, sizeof(indices));
+    ImportModel();
 
     m_Context = m_Device.CreateContext();
+
+    // Create UBO
+    m_UniformBuffer = m_Device.CreateBuffer(BufferType::Uniform, sizeof(UBO));
+
+    UBO ubo = {
+        .model = Matrix4::Identity(),
+        .view = Matrix4::Translation(Vector3{0.0f, 0.0f, -5.0f}),
+        .proj = Matrix4::Perspective(1, 1600.0f/900.0f, 0.01, 10000),
+        .col = Vector3{0.0f, 0.0f, 1.0f}
+    };
+
+    m_UniformBuffer->Upload(&ubo, sizeof(UBO));
+
+    m_DescSet = m_Context->CreateDescriptorSet(*m_Pipeline, 0);
+    m_Context->WriteSet(m_DescSet, 0, *m_UniformBuffer);
 }
 
 void BasicDemo::Draw()
@@ -59,13 +66,43 @@ void BasicDemo::Draw()
     ctx.BeginRenderPass(fb);
 
     ctx.Bind(*m_Pipeline);
+    ctx.BindSet(m_DescSet);
     ctx.Bind(*m_VertexBuffer, *m_IndexBuffer);
-    ctx.Draw(3);
+    ctx.Draw(m_numIndices);
 
     ctx.EndRenderPass();
 
     m_Device.Submit(&ctx);
     m_Device.Present();
+}
+
+void BasicDemo::ImportModel()
+{
+    Assimp::Importer importer;
+    importer.ReadFile("models/DamagedHelmet.glb", aiProcess_Triangulate | aiProcess_EmbedTextures);
+
+    auto model = importer.GetScene();
+    auto& mesh = *model->mMeshes[0];
+
+    std::vector<uint32_t> indices;
+    indices.reserve(mesh.mNumFaces * 3);
+    for (int i = 0; i < mesh.mNumFaces; ++i)
+    {
+        auto& face = mesh.mFaces[i];
+        indices.push_back(face.mIndices[0]);
+        indices.push_back(face.mIndices[1]);
+        indices.push_back(face.mIndices[2]);
+    }
+
+    m_numIndices = indices.size();
+    VkDeviceSize vertSize = mesh.mNumVertices * 3 * sizeof(float);
+    VkDeviceSize indexSize = indices.size() * sizeof(uint32_t);
+
+    m_VertexBuffer = m_Device.CreateBuffer(BufferType::Vertex, vertSize);
+    m_IndexBuffer = m_Device.CreateBuffer(BufferType::Index, indexSize);
+
+    m_VertexBuffer->Upload(mesh.mVertices, vertSize);
+    m_IndexBuffer->Upload(indices.data(), indexSize);
 }
 
 }

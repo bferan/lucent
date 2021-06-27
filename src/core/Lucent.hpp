@@ -9,3 +9,5 @@
 #else
 #define LC_ASSERT(...) ((void)0)
 #endif
+
+#define LC_ARRAY_SIZE(a) sizeof(a)/sizeof(a[0])
