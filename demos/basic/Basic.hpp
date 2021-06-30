@@ -4,10 +4,7 @@
 #include "core/Matrix4.hpp"
 #include "core/Vector4.hpp"
 #include "device/Device.hpp"
-
-// Descriptor management
-// Uniform buffer MVP
-// Textures
+#include "scene/Scene.hpp"
 
 namespace lucent::demos
 {
@@ -24,29 +21,18 @@ class BasicDemo
 {
 public:
     void Init();
-    void Draw();
-
-private:
-    void ImportModel();
+    void Draw(float dt);
 
 public:
     Device m_Device;
-
     Pipeline* m_Pipeline;
     Context* m_Context;
 
-    // MODEL
-    Buffer* m_VertexBuffer;
-    Buffer* m_IndexBuffer;
-    Buffer* m_UVBuffer;
-    uint32_t m_numIndices;
-
-    Texture* m_BaseColor;
-
     // UBO
+    DescriptorSet* m_GlobalSet;
     Buffer* m_UniformBuffer;
-    DescriptorSet* m_DescSet;
 
+    Scene m_Scene{};
 };
 
 }

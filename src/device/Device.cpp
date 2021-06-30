@@ -2,9 +2,15 @@
 
 #include <set>
 #include <algorithm>
+#include <iostream>
 
 #include "GLFW/glfw3.h"
 #include "shaderc/shaderc.hpp"
+
+#include "glslang/Public/ShaderLang.h"
+#include "glslang/MachineIndependent/localintermediate.h"
+#include "glslang/Include/Types.h"
+#include "glslang/Include/intermediate.h"
 
 #include "core/Lucent.hpp"
 
@@ -12,7 +18,6 @@ namespace lucent
 {
 
 // Device
-
 static VkBufferUsageFlags BufferTypeToFlags(BufferType type)
 {
     VkBufferUsageFlags flags = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
@@ -50,7 +55,7 @@ static VkDescriptorType BufferTypeToDescriptorType(BufferType type)
     switch (type)
     {
     case BufferType::Uniform:
-        return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
 
     default:
         LC_ASSERT(false);
@@ -106,6 +111,8 @@ Device::Device()
     if (!glfwInit())
         return;
 
+    glslang::InitializeProcess();
+
     // Create window
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     m_Window = glfwCreateWindow(
@@ -146,6 +153,28 @@ Device::Device()
     auto result = vkCreateCommandPool(m_Device, &poolInfo, nullptr, &m_OneShotCmdPool);
     LC_ASSERT(result == VK_SUCCESS);
 
+    // Create descriptor pool
+    VkDescriptorPoolSize descPoolSizes[] = {
+        {
+            .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .descriptorCount = 1024
+        },
+        {
+            .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .descriptorCount = 1024
+        }
+    };
+
+    auto descPoolInfo = VkDescriptorPoolCreateInfo{
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .maxSets = 1024,
+        .poolSizeCount = LC_ARRAY_SIZE(descPoolSizes),
+        .pPoolSizes = descPoolSizes
+    };
+
+    result = vkCreateDescriptorPool(m_Device, &descPoolInfo, nullptr, &m_DescPool);
+    LC_ASSERT(result == VK_SUCCESS);
+
     CreateSwapchain();
 }
 
@@ -158,6 +187,7 @@ Device::~Device()
     {
         vkDestroyPipeline(m_Device, pipeline->handle, nullptr);
         vkDestroyDescriptorSetLayout(m_Device, pipeline->setLayouts[0], nullptr);
+        vkDestroyDescriptorSetLayout(m_Device, pipeline->setLayouts[1], nullptr);
         vkDestroyPipelineLayout(m_Device, pipeline->layout, nullptr);
     }
 
@@ -180,9 +210,9 @@ Device::~Device()
     {
         vkFreeCommandBuffers(m_Device, ctx->m_CommandPool, 1, &ctx->m_CommandBuffer);
         vkDestroyCommandPool(m_Device, ctx->m_CommandPool, nullptr);
-
-        vkDestroyDescriptorPool(m_Device, ctx->m_DescPool, nullptr);
     }
+
+    vkDestroyDescriptorPool(m_Device, m_DescPool, nullptr);
 
     // Destroy swapchain
     vkDestroyRenderPass(m_Device, m_Swapchain.framebuffers[0].renderPass, nullptr);
@@ -206,6 +236,8 @@ Device::~Device()
     vkDestroyDevice(m_Device, nullptr);
     vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
     vkDestroyInstance(m_Instance, nullptr);
+
+    glslang::FinalizeProcess();
 
     glfwTerminate();
 }
@@ -520,9 +552,175 @@ void Device::CreateSwapchain()
     }
 }
 
+void Device::CreateShader(const std::string& vertText, const std::string& fragText)
+{
+    TBuiltInResource res = {
+        /*.maxLights = */ 8,         // From OpenGL 3.0 table 6.46.
+        /*.maxClipPlanes = */ 6,     // From OpenGL 3.0 table 6.46.
+        /*.maxTextureUnits = */ 2,   // From OpenGL 3.0 table 6.50.
+        /*.maxTextureCoords = */ 8,  // From OpenGL 3.0 table 6.50.
+        /*.maxVertexAttribs = */ 16,
+        /*.maxVertexUniformComponents = */ 4096,
+        /*.maxVaryingFloats = */ 60,  // From OpenGLES 3.1 table 6.44.
+        /*.maxVertexTextureImageUnits = */ 16,
+        /*.maxCombinedTextureImageUnits = */ 80,
+        /*.maxTextureImageUnits = */ 16,
+        /*.maxFragmentUniformComponents = */ 1024,
+
+        // glslang has 32 maxDrawBuffers.
+        // Pixel phone Vulkan driver in Android N has 8
+        // maxFragmentOutputAttachments.
+        /*.maxDrawBuffers = */ 8,
+
+        /*.maxVertexUniformVectors = */ 256,
+        /*.maxVaryingVectors = */ 15,  // From OpenGLES 3.1 table 6.44.
+        /*.maxFragmentUniformVectors = */ 256,
+        /*.maxVertexOutputVectors = */ 16,   // maxVertexOutputComponents / 4
+        /*.maxFragmentInputVectors = */ 15,  // maxFragmentInputComponents / 4
+        /*.minProgramTexelOffset = */ -8,
+        /*.maxProgramTexelOffset = */ 7,
+        /*.maxClipDistances = */ 8,
+        /*.maxComputeWorkGroupCountX = */ 65535,
+        /*.maxComputeWorkGroupCountY = */ 65535,
+        /*.maxComputeWorkGroupCountZ = */ 65535,
+        /*.maxComputeWorkGroupSizeX = */ 1024,
+        /*.maxComputeWorkGroupSizeX = */ 1024,
+        /*.maxComputeWorkGroupSizeZ = */ 64,
+        /*.maxComputeUniformComponents = */ 512,
+        /*.maxComputeTextureImageUnits = */ 16,
+        /*.maxComputeImageUniforms = */ 8,
+        /*.maxComputeAtomicCounters = */ 8,
+        /*.maxComputeAtomicCounterBuffers = */ 1,  // From OpenGLES 3.1 Table 6.43
+        /*.maxVaryingComponents = */ 60,
+        /*.maxVertexOutputComponents = */ 64,
+        /*.maxGeometryInputComponents = */ 64,
+        /*.maxGeometryOutputComponents = */ 128,
+        /*.maxFragmentInputComponents = */ 128,
+        /*.maxImageUnits = */ 8,  // This does not seem to be defined anywhere,
+        // set to ImageUnits.
+        /*.maxCombinedImageUnitsAndFragmentOutputs = */ 8,
+        /*.maxCombinedShaderOutputResources = */ 8,
+        /*.maxImageSamples = */ 0,
+        /*.maxVertexImageUniforms = */ 0,
+        /*.maxTessControlImageUniforms = */ 0,
+        /*.maxTessEvaluationImageUniforms = */ 0,
+        /*.maxGeometryImageUniforms = */ 0,
+        /*.maxFragmentImageUniforms = */ 8,
+        /*.maxCombinedImageUniforms = */ 8,
+        /*.maxGeometryTextureImageUnits = */ 16,
+        /*.maxGeometryOutputVertices = */ 256,
+        /*.maxGeometryTotalOutputComponents = */ 1024,
+        /*.maxGeometryUniformComponents = */ 512,
+        /*.maxGeometryVaryingComponents = */ 60,  // Does not seem to be defined
+        // anywhere, set equal to
+        // maxVaryingComponents.
+        /*.maxTessControlInputComponents = */ 128,
+        /*.maxTessControlOutputComponents = */ 128,
+        /*.maxTessControlTextureImageUnits = */ 16,
+        /*.maxTessControlUniformComponents = */ 1024,
+        /*.maxTessControlTotalOutputComponents = */ 4096,
+        /*.maxTessEvaluationInputComponents = */ 128,
+        /*.maxTessEvaluationOutputComponents = */ 128,
+        /*.maxTessEvaluationTextureImageUnits = */ 16,
+        /*.maxTessEvaluationUniformComponents = */ 1024,
+        /*.maxTessPatchComponents = */ 120,
+        /*.maxPatchVertices = */ 32,
+        /*.maxTessGenLevel = */ 64,
+        /*.maxViewports = */ 16,
+        /*.maxVertexAtomicCounters = */ 0,
+        /*.maxTessControlAtomicCounters = */ 0,
+        /*.maxTessEvaluationAtomicCounters = */ 0,
+        /*.maxGeometryAtomicCounters = */ 0,
+        /*.maxFragmentAtomicCounters = */ 8,
+        /*.maxCombinedAtomicCounters = */ 8,
+        /*.maxAtomicCounterBindings = */ 1,
+        /*.maxVertexAtomicCounterBuffers = */ 0,  // From OpenGLES 3.1 Table 6.41.
+
+        // ARB_shader_atomic_counters.
+        /*.maxTessControlAtomicCounterBuffers = */ 0,
+        /*.maxTessEvaluationAtomicCounterBuffers = */ 0,
+        /*.maxGeometryAtomicCounterBuffers = */ 0,
+        // /ARB_shader_atomic_counters.
+
+        /*.maxFragmentAtomicCounterBuffers = */ 0,  // From OpenGLES 3.1 Table 6.43.
+        /*.maxCombinedAtomicCounterBuffers = */ 1,
+        /*.maxAtomicCounterBufferSize = */ 32,
+        /*.maxTransformFeedbackBuffers = */ 4,
+        /*.maxTransformFeedbackInterleavedComponents = */ 64,
+        /*.maxCullDistances = */ 8,                 // ARB_cull_distance.
+        /*.maxCombinedClipAndCullDistances = */ 8,  // ARB_cull_distance.
+        /*.maxSamples = */ 4,
+        /* .maxMeshOutputVerticesNV = */ 256,
+        /* .maxMeshOutputPrimitivesNV = */ 512,
+        /* .maxMeshWorkGroupSizeX_NV = */ 32,
+        /* .maxMeshWorkGroupSizeY_NV = */ 1,
+        /* .maxMeshWorkGroupSizeZ_NV = */ 1,
+        /* .maxTaskWorkGroupSizeX_NV = */ 32,
+        /* .maxTaskWorkGroupSizeY_NV = */ 1,
+        /* .maxTaskWorkGroupSizeZ_NV = */ 1,
+        /* .maxMeshViewCountNV = */ 4,
+        /* .maxDualSourceDrawBuffersEXT = */ 1,
+        // This is the glslang TLimits structure.
+        // It defines whether or not the following features are enabled.
+        // We want them to all be enabled.
+        /*.limits = */ {
+            /*.nonInductiveForLoops = */ 1,
+            /*.whileLoops = */ 1,
+            /*.doWhileLoops = */ 1,
+            /*.generalUniformIndexing = */ 1,
+            /*.generalAttributeMatrixVectorIndexing = */ 1,
+            /*.generalVaryingIndexing = */ 1,
+            /*.generalSamplerIndexing = */ 1,
+            /*.generalVariableIndexing = */ 1,
+            /*.generalConstantMatrixVectorIndexing = */ 1,
+        }};
+
+    glslang::TShader vertShader(EShLangVertex);
+    auto vertStr = vertText.c_str();
+    vertShader.setStrings(&vertStr, 1);
+    vertShader.parse(&res, 450, true, EShMsgDefault);
+
+    glslang::TShader fragShader(EShLangFragment);
+    auto fragStr = fragText.c_str();
+    fragShader.setStrings(&fragStr, 1);
+    fragShader.parse(&res, 450, true, EShMsgDefault);
+
+    glslang::TProgram program;
+    program.addShader(&vertShader);
+    program.addShader(&fragShader);
+    program.link(EShMsgDefault);
+
+    auto vInter = fragShader.getIntermediate();
+    auto root = vInter->getTreeRoot();
+
+    for (auto node : root->getAsAggregate()->getSequence())
+    {
+        auto agg = node->getAsAggregate();
+        if (agg->getOp() == glslang::EOpLinkerObjects)
+        {
+            for (auto obj : agg->getSequence())
+            {
+                auto symbol = obj->getAsSymbolNode();
+                auto& type = symbol->getType();
+                auto& qualifier = type.getQualifier();
+
+                if (qualifier.hasUniformLayout())
+                {
+                    std::cout << "Name: " << symbol->getName() << "\n"
+                              << "Set: " << qualifier.layoutSet << "\n"
+                              << "Binding: " << qualifier.layoutBinding << "\n" << std::endl;
+                }
+            }
+        }
+    }
+
+}
+
 Pipeline* Device::CreatePipeline(const PipelineInfo& info)
 {
     auto& pipe = *m_Pipelines.emplace_back(std::make_unique<Pipeline>());
+
+    CreateShader(info.vertexShader, info.fragmentShader);
 
     // Create shader modules
     shaderc::Compiler compiler;
@@ -572,12 +770,7 @@ Pipeline* Device::CreatePipeline(const PipelineInfo& info)
     VkVertexInputBindingDescription vertexBindingInfos[] = {
         {
             .binding = 0,
-            .stride = 3 * sizeof(float),
-            .inputRate = VK_VERTEX_INPUT_RATE_VERTEX
-        },
-        {
-            .binding = 1,
-            .stride = 2 * sizeof(float),
+            .stride = sizeof(Vertex),
             .inputRate = VK_VERTEX_INPUT_RATE_VERTEX
         }
     };
@@ -587,13 +780,25 @@ Pipeline* Device::CreatePipeline(const PipelineInfo& info)
             .location = 0,
             .binding = 0,
             .format = VK_FORMAT_R32G32B32_SFLOAT,
-            .offset = 0
+            .offset = (uint32_t)offsetof(Vertex, position)
         },
         {
             .location = 1,
-            .binding = 1,
+            .binding = 0,
+            .format = VK_FORMAT_R32G32B32_SFLOAT,
+            .offset = (uint32_t)offsetof(Vertex, normal)
+        },
+        {
+            .location = 2,
+            .binding = 0,
+            .format = VK_FORMAT_R32G32B32_SFLOAT,
+            .offset = (uint32_t)offsetof(Vertex, tangent)
+        },
+        {
+            .location = 3,
+            .binding = 0,
             .format = VK_FORMAT_R32G32_SFLOAT,
-            .offset = 0
+            .offset = (uint32_t)offsetof(Vertex, texCoord0)
         }
     };
 
@@ -672,33 +877,45 @@ Pipeline* Device::CreatePipeline(const PipelineInfo& info)
 
     // TODO: CHANGE
     // Create pipeline layout & descriptor layout
-    VkDescriptorSetLayoutBinding descBindings[] = {
+    VkDescriptorSetLayoutBinding descBindings0[] = {
         {
             .binding = 0,
-            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
             .descriptorCount = 1,
             .stageFlags = VK_SHADER_STAGE_ALL
-        },
+        }
+    };
+
+    VkDescriptorSetLayoutBinding descBindings1[] = {
         {
-            .binding = 1,
+            .binding = 0,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
             .descriptorCount = 1,
             .stageFlags = VK_SHADER_STAGE_ALL
-        },
+        }
     };
 
-    auto descSetInfo = VkDescriptorSetLayoutCreateInfo{
+    auto descSetInfo0 = VkDescriptorSetLayoutCreateInfo{
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = LC_ARRAY_SIZE(descBindings),
-        .pBindings = descBindings
+        .bindingCount = LC_ARRAY_SIZE(descBindings0),
+        .pBindings = descBindings0
     };
-    result = vkCreateDescriptorSetLayout(m_Device, &descSetInfo, nullptr, &pipe.setLayouts[0]);
+    result = vkCreateDescriptorSetLayout(m_Device, &descSetInfo0, nullptr, &pipe.setLayouts[0]);
     LC_ASSERT(result == VK_SUCCESS);
+
+    auto descSetInfo1 = VkDescriptorSetLayoutCreateInfo{
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .bindingCount = LC_ARRAY_SIZE(descBindings1),
+        .pBindings = descBindings1
+    };
+    result = vkCreateDescriptorSetLayout(m_Device, &descSetInfo1, nullptr, &pipe.setLayouts[1]);
+    LC_ASSERT(result == VK_SUCCESS);
+
 
     auto pipelineLayoutInfo = VkPipelineLayoutCreateInfo{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .setLayoutCount = 1,
-        .pSetLayouts = &pipe.setLayouts[0]
+        .setLayoutCount = 2,
+        .pSetLayouts = pipe.setLayouts
     };
     result = vkCreatePipelineLayout(m_Device, &pipelineLayoutInfo, nullptr, &pipe.layout);
     LC_ASSERT(result == VK_SUCCESS);
@@ -958,6 +1175,7 @@ Context* Device::CreateContext()
     // Create command pool
     auto poolCreateInfo = VkCommandPoolCreateInfo{
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
         .queueFamilyIndex = m_GraphicsQueue.familyIndex
     };
 
@@ -972,34 +1190,6 @@ Context* Device::CreateContext()
     };
 
     result = vkAllocateCommandBuffers(m_Device, &bufferAllocInfo, &ctx.m_CommandBuffer);
-    LC_ASSERT(result == VK_SUCCESS);
-
-    auto beginInfo = VkCommandBufferBeginInfo{
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
-    };
-    result = vkBeginCommandBuffer(ctx.m_CommandBuffer, &beginInfo);
-    LC_ASSERT(result == VK_SUCCESS);
-
-    // Create descriptor pool
-    VkDescriptorPoolSize descPoolSizes[] = {
-        {
-            .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .descriptorCount = 1024
-        },
-        {
-            .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .descriptorCount = 1024
-        }
-    };
-
-    auto descPoolInfo = VkDescriptorPoolCreateInfo{
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-        .maxSets = 1024,
-        .poolSizeCount = LC_ARRAY_SIZE(descPoolSizes),
-        .pPoolSizes = descPoolSizes
-    };
-
-    result = vkCreateDescriptorPool(m_Device, &descPoolInfo, nullptr, &ctx.m_DescPool);
     LC_ASSERT(result == VK_SUCCESS);
 
     return &ctx;
@@ -1020,9 +1210,6 @@ const Framebuffer& Device::AcquireFramebuffer()
 
 void Device::Submit(Context* context)
 {
-    auto result = vkEndCommandBuffer(context->m_CommandBuffer);
-    LC_ASSERT(result == VK_SUCCESS);
-
     VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
 
     auto submitInfo = VkSubmitInfo{
@@ -1036,7 +1223,7 @@ void Device::Submit(Context* context)
         .pSignalSemaphores = &m_RenderFinished
     };
 
-    result = vkQueueSubmit(m_GraphicsQueue.handle, 1, &submitInfo, VK_NULL_HANDLE);
+    auto result = vkQueueSubmit(m_GraphicsQueue.handle, 1, &submitInfo, VK_NULL_HANDLE);
     LC_ASSERT(result == VK_SUCCESS);
 }
 
@@ -1052,24 +1239,130 @@ void Device::Present()
         .pImageIndices = &m_NextImageIndex
     };
     vkQueuePresentKHR(m_PresentQueue.handle, &presentInfo);
-    vkQueueWaitIdle(m_PresentQueue.handle);
+    vkDeviceWaitIdle(m_Device);
+}
+
+// Descriptor sets (temp)
+DescriptorSet* Device::CreateDescriptorSet(const Pipeline& pipeline, uint32_t index)
+{
+    auto& set = m_DescSets.emplace_back(std::make_unique<DescriptorSet>());
+    set->index = index;
+
+    auto setAllocInfo = VkDescriptorSetAllocateInfo{
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .descriptorPool = m_DescPool,
+        .descriptorSetCount = 1,
+        .pSetLayouts = &pipeline.setLayouts[index]
+    };
+
+    auto result = vkAllocateDescriptorSets(m_Device, &setAllocInfo, &set->handle);
+    LC_ASSERT(result == VK_SUCCESS);
+
+    return set.get();
+}
+
+void Device::WriteSet(DescriptorSet* set, uint32_t binding, const Buffer& buffer)
+{
+    auto buffInfo = VkDescriptorBufferInfo{
+        .buffer = buffer.handle,
+        .offset = 0,
+        .range = VK_WHOLE_SIZE
+    };
+
+    auto descWrite = VkWriteDescriptorSet{
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = set->handle,
+        .dstBinding = binding,
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType = BufferTypeToDescriptorType(buffer.type),
+        .pBufferInfo = &buffInfo
+    };
+
+    vkUpdateDescriptorSets(m_Device, 1, &descWrite, 0, nullptr);
+}
+
+void Device::WriteSet(DescriptorSet* set, uint32_t binding, const Texture& texture)
+{
+    auto imgInfo = VkDescriptorImageInfo{
+        .sampler = texture.sampler,
+        .imageView = texture.imageView,
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    };
+
+    auto descWrite = VkWriteDescriptorSet{
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = set->handle,
+        .dstBinding = binding,
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        .pImageInfo = &imgInfo
+    };
+
+    vkUpdateDescriptorSets(m_Device, 1, &descWrite, 0, nullptr);
+}
+
+void Context::BindSet(const DescriptorSet* set)
+{
+    LC_ASSERT(m_BoundPipeline != nullptr);
+
+    vkCmdBindDescriptorSets(m_CommandBuffer,
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        m_BoundPipeline->layout,
+        set->index,
+        1,
+        &set->handle,
+        0,
+        nullptr);
+}
+
+void Context::BindSet(const DescriptorSet* set, uint32_t dynamicOffset)
+{
+    LC_ASSERT(m_BoundPipeline != nullptr);
+
+    vkCmdBindDescriptorSets(m_CommandBuffer,
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        m_BoundPipeline->layout,
+        set->index,
+        1,
+        &set->handle,
+        1,
+        &dynamicOffset);
 }
 
 // Buffer
-
-void Buffer::Upload(void* data, size_t size) const
+void Buffer::Upload(void* data, size_t size, size_t offset) const
 {
-    LC_ASSERT(size <= bufSize);
+    LC_ASSERT(offset + size <= bufSize);
 
     // TODO: Use staging buffer
-    void* ptr;
-    vmaMapMemory(device->m_Allocator, allocation, &ptr);
+    uint8_t* ptr;
+    vmaMapMemory(device->m_Allocator, allocation, (void**)&ptr);
+    ptr += offset;
     memcpy(ptr, data, size);
     vmaUnmapMemory(device->m_Allocator, allocation);
-    vmaFlushAllocation(device->m_Allocator, allocation, 0, VK_WHOLE_SIZE);
+    vmaFlushAllocation(device->m_Allocator, allocation, offset, size);
 }
 
 // Context
+void Context::Begin() const
+{
+    vkResetCommandPool(m_Device.m_Device, m_CommandPool, 0);
+
+    auto beginInfo = VkCommandBufferBeginInfo{
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+    };
+    auto result = vkBeginCommandBuffer(m_CommandBuffer, &beginInfo);
+    LC_ASSERT(result == VK_SUCCESS);
+}
+
+void Context::End() const
+{
+    auto result = vkEndCommandBuffer(m_CommandBuffer);
+    LC_ASSERT(result == VK_SUCCESS);
+}
 
 void Context::BeginRenderPass(const Framebuffer& fbuffer) const
 {
@@ -1117,81 +1410,6 @@ void Context::Bind(const Buffer* vertexBuffer, uint32_t binding)
 void Context::Draw(uint32_t indexCount) const
 {
     vkCmdDrawIndexed(m_CommandBuffer, indexCount, 1, 0, 0, 0);
-}
-
-// Descriptor sets (temp)
-DescriptorSet* Context::CreateDescriptorSet(const Pipeline& pipeline, uint32_t index)
-{
-    auto& set = m_DescSets.emplace_back(std::make_unique<DescriptorSet>());
-    set->index = index;
-
-    auto setAllocInfo = VkDescriptorSetAllocateInfo{
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-        .descriptorPool = m_DescPool,
-        .descriptorSetCount = 1,
-        .pSetLayouts = &pipeline.setLayouts[index]
-    };
-
-    auto result = vkAllocateDescriptorSets(m_Device.m_Device, &setAllocInfo, &set->handle);
-    LC_ASSERT(result == VK_SUCCESS);
-
-    return set.get();
-}
-
-void Context::WriteSet(DescriptorSet* set, uint32_t binding, const Buffer& buffer)
-{
-    auto buffInfo = VkDescriptorBufferInfo{
-        .buffer = buffer.handle,
-        .offset = 0,
-        .range = VK_WHOLE_SIZE
-    };
-
-    auto descWrite = VkWriteDescriptorSet{
-        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstSet = set->handle,
-        .dstBinding = binding,
-        .dstArrayElement = 0,
-        .descriptorCount = 1,
-        .descriptorType = BufferTypeToDescriptorType(buffer.type),
-        .pBufferInfo = &buffInfo
-    };
-
-    vkUpdateDescriptorSets(m_Device.m_Device, 1, &descWrite, 0, nullptr);
-}
-
-void Context::WriteSet(DescriptorSet* set, uint32_t binding, const Texture& texture)
-{
-    auto imgInfo = VkDescriptorImageInfo{
-        .sampler = texture.sampler,
-        .imageView = texture.imageView,
-        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-    };
-
-    auto descWrite = VkWriteDescriptorSet{
-        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstSet = set->handle,
-        .dstBinding = binding,
-        .dstArrayElement = 0,
-        .descriptorCount = 1,
-        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-        .pImageInfo = &imgInfo
-    };
-
-    vkUpdateDescriptorSets(m_Device.m_Device, 1, &descWrite, 0, nullptr);
-}
-
-void Context::BindSet(const DescriptorSet* set)
-{
-    LC_ASSERT(m_BoundPipeline != nullptr);
-
-    vkCmdBindDescriptorSets(m_CommandBuffer,
-        VK_PIPELINE_BIND_POINT_GRAPHICS,
-        m_BoundPipeline->layout,
-        set->index,
-        1,
-        &set->handle,
-        0,
-        nullptr);
 }
 
 }

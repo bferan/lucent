@@ -7,6 +7,9 @@
 #include "vulkan/vulkan.h"
 #include "vk_mem_alloc.h"
 
+#include "core/Vector3.hpp"
+#include "core/Vector4.hpp"
+
 struct GLFWwindow;
 
 namespace lucent
@@ -14,6 +17,20 @@ namespace lucent
 
 class Device;
 struct Texture;
+
+struct TexCoord
+{
+    float u;
+    float v;
+};
+
+struct Vertex
+{
+    Vector3 position;
+    Vector3 normal;
+    Vector3 tangent;
+    TexCoord texCoord0;
+};
 
 struct DeviceQueue
 {
@@ -87,7 +104,7 @@ enum class BufferType
 
 struct Buffer
 {
-    void Upload(void* data, size_t size) const;
+    void Upload(void* data, size_t size, size_t offset = 0) const;
 
     Device* device;
     VkBuffer handle;
@@ -109,6 +126,9 @@ public:
         : m_Device(device)
     {}
 
+    void Begin() const;
+    void End() const;
+
     void BeginRenderPass(const Framebuffer& fbuffer) const;
     void EndRenderPass() const;
 
@@ -117,10 +137,8 @@ public:
     void Bind(const Buffer* indexBuffer);
     void Bind(const Buffer* vertexBuffer, uint32_t binding);
 
-    DescriptorSet* CreateDescriptorSet(const Pipeline& pipeline, uint32_t set);
-    void WriteSet(DescriptorSet* set, uint32_t binding, const Buffer& buffer);
-    void WriteSet(DescriptorSet* set, uint32_t binding, const Texture& texture);
     void BindSet(const DescriptorSet* set);
+    void BindSet(const DescriptorSet* set, uint32_t dynamicOffset);
 
     void Draw(uint32_t indexCount) const;
 
@@ -130,12 +148,8 @@ public:
     VkCommandPool m_CommandPool{};
     VkCommandBuffer m_CommandBuffer{};
 
-    VkDescriptorPool m_DescPool{};
-    std::vector<std::unique_ptr<DescriptorSet>> m_DescSets;
-
     // Active state
     Pipeline* m_BoundPipeline{};
-
 };
 
 class Device
@@ -152,6 +166,10 @@ public:
 
     const Framebuffer& AcquireFramebuffer();
 
+    DescriptorSet* CreateDescriptorSet(const Pipeline& pipeline, uint32_t set);
+    void WriteSet(DescriptorSet* set, uint32_t binding, const Buffer& buffer);
+    void WriteSet(DescriptorSet* set, uint32_t binding, const Texture& texture);
+
     Context* CreateContext();
     void Submit(Context* context);
 
@@ -165,6 +183,7 @@ private:
     void CreateInstance();
     void CreateDevice();
     void CreateSwapchain();
+    void CreateShader(const std::string& vertex, const std::string& frag);
 
 public:
     GLFWwindow* m_Window;
@@ -192,6 +211,10 @@ public:
 
     Buffer* m_TransferBuffer;
     VkCommandPool m_OneShotCmdPool;
+
+    VkDescriptorPool m_DescPool{};
+    std::vector<std::unique_ptr<DescriptorSet>> m_DescSets;
+
 };
 
 }

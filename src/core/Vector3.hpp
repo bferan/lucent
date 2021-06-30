@@ -16,7 +16,7 @@ public:
     inline static Vector3 Back() { return Vector3(0.0f, 0.0f, 1.0f); }
 
 public:
-    explicit Vector3(float x = 0.0f, float y = 0.0f, float z = 0.0f)
+    Vector3(float x = 0.0f, float y = 0.0f, float z = 0.0f)
         : X(x), Y(y), Z(z)
     {}
     Vector3(const Vector3&) = default;
