@@ -11,16 +11,16 @@ struct Vector4
 {
 public:
     explicit Vector4(float x = 0.0f, float y = 0.0f, float z = 0.0f, float w = 1.0f)
-        : X(x), Y(y), Z(z), W(w)
+        : x(x), y(y), z(z), w(w)
     {}
 
     explicit Vector4(const Vector3& v, float w = 1.0f)
-        : X(v.X), Y(v.Y), Z(v.Z), W(w)
+        : x(v.x), y(v.y), z(v.z), w(w)
     {}
 
     explicit operator Vector3() const
     {
-        return Vector3(X, Y, Z);
+        return Vector3(x, y, z);
     }
 
     Vector4(const Vector4&) = default;
@@ -29,51 +29,51 @@ public:
     Vector4& operator=(const Vector4&) = default;
     Vector4& operator=(Vector4&&) = default;
 
-    float operator[](int index) const { return (&X)[index]; }
+    float operator[](int index) const { return (&x)[index]; }
 
-    float& operator[](int index) { return (&X)[index]; }
+    float& operator[](int index) { return (&x)[index]; }
 
     Vector4& operator+=(const Vector4& rhs)
     {
-        X += rhs.X;
-        Y += rhs.Y;
-        Z += rhs.Z;
-        W += rhs.W;
+        x += rhs.x;
+        y += rhs.y;
+        z += rhs.z;
+        w += rhs.w;
         return *this;
     }
 
     Vector4& operator-=(const Vector4& rhs)
     {
-        X -= rhs.X;
-        Y -= rhs.Y;
-        Z -= rhs.Z;
-        W -= rhs.W;
+        x -= rhs.x;
+        y -= rhs.y;
+        z -= rhs.z;
+        w -= rhs.w;
         return *this;
     }
 
     Vector4& operator*=(float rhs)
     {
-        X *= rhs;
-        Y *= rhs;
-        Z *= rhs;
-        W *= rhs;
+        x *= rhs;
+        y *= rhs;
+        z *= rhs;
+        w *= rhs;
         return *this;
     }
 
     Vector4& operator/=(float rhs)
     {
-        X /= rhs;
-        Y /= rhs;
-        Z /= rhs;
-        W /= rhs;
+        x /= rhs;
+        y /= rhs;
+        z /= rhs;
+        w /= rhs;
         return *this;
     }
 
 public:
-    float X;
-    float Y;
-    float Z;
-    float W;
+    float x;
+    float y;
+    float z;
+    float w;
 };
 
 inline Vector4 operator*(Vector4 lhs, float rhs)
@@ -89,7 +89,7 @@ inline Vector4 operator*(float lhs, Vector4 rhs)
 // Negation
 inline Vector4 operator-(const Vector4& rhs)
 {
-    return Vector4(-rhs.X, -rhs.Y, -rhs.Z, -rhs.W);
+    return Vector4(-rhs.x, -rhs.y, -rhs.z, -rhs.w);
 }
 
 inline Vector4 operator+(Vector4 lhs, const Vector4& rhs)

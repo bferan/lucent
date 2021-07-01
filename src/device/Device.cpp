@@ -122,6 +122,9 @@ Device::Device()
 
     LC_ASSERT(m_Window != nullptr);
 
+    // Init input
+    m_Input = std::make_unique<Input>(m_Window);
+
     CreateInstance();
     glfwCreateWindowSurface(m_Instance, m_Window, nullptr, &m_Surface);
     CreateDevice();

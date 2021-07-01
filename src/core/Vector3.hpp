@@ -17,7 +17,7 @@ public:
 
 public:
     Vector3(float x = 0.0f, float y = 0.0f, float z = 0.0f)
-        : X(x), Y(y), Z(z)
+        : x(x), y(y), z(z)
     {}
     Vector3(const Vector3&) = default;
     Vector3(Vector3&&) = default;
@@ -25,43 +25,43 @@ public:
     Vector3& operator=(const Vector3&) = default;
     Vector3& operator=(Vector3&&) = default;
 
-    float operator[](int index) const { return (&X)[index]; }
-    float& operator[](int index) { return (&X)[index]; }
+    float operator[](int index) const { return (&x)[index]; }
+    float& operator[](int index) { return (&x)[index]; }
 
     float Length() const
     {
-        return Sqrt(X * X + Y * Y + Z * Z);
+        return Sqrt(x * x + y * y + z * z);
     }
 
     Vector3& operator+=(const Vector3& rhs)
     {
-        X += rhs.X;
-        Y += rhs.Y;
-        Z += rhs.Z;
+        x += rhs.x;
+        y += rhs.y;
+        z += rhs.z;
         return *this;
     }
 
     Vector3& operator-=(const Vector3& rhs)
     {
-        X -= rhs.X;
-        Y -= rhs.Y;
-        Z -= rhs.Z;
+        x -= rhs.x;
+        y -= rhs.y;
+        z -= rhs.z;
         return *this;
     }
 
     Vector3& operator*=(float rhs)
     {
-        X *= rhs;
-        Y *= rhs;
-        Z *= rhs;
+        x *= rhs;
+        y *= rhs;
+        z *= rhs;
         return *this;
     }
 
 
 public:
-    float X;
-    float Y;
-    float Z;
+    float x;
+    float y;
+    float z;
 };
 
 inline Vector3 operator*(Vector3 lhs, float rhs)
@@ -76,7 +76,7 @@ inline Vector3 operator*(float lhs, Vector3 rhs)
 
 inline Vector3 operator-(const Vector3& rhs)
 {
-    return Vector3(-rhs.X, -rhs.Y, -rhs.Z);
+    return Vector3(-rhs.x, -rhs.y, -rhs.z);
 }
 
 inline Vector3 operator+(Vector3 lhs, const Vector3& rhs)

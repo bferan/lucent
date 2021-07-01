@@ -14,34 +14,34 @@ public:
     {
         auto c = Cos(angle * 0.5f);
         auto s = Sin(angle * 0.5f);
-        return { s * axis.X, s * axis.Y, s * axis.Z, c };
+        return { s * axis.x, s * axis.y, s * axis.z, c };
     }
 
 public:
     Quaternion(float x, float y, float z, float w)
-        : X(x), Y(y), Z(z), W(w)
+        : x(x), y(y), z(z), w(w)
     {}
 
     Quaternion Inverse() const
     {
-        return { -X, -Y, -Z, W };
+        return { -x, -y, -z, w };
     }
 
 public:
-    float X;
-    float Y;
-    float Z;
-    float W;
+    float x;
+    float y;
+    float z;
+    float w;
 };
 
 inline Quaternion operator*(Quaternion q, Quaternion r)
 {
     return
         {
-            q.Y * r.Z - q.Z * r.Y + r.W * q.X + q.W * r.X,
-            q.Z * r.X - q.X * r.Z + r.W * q.Y + q.W * r.Y,
-            q.X * r.Y - q.Y * r.X + r.W * q.Z + q.W * r.Z,
-            q.W * r.W - q.X * r.X - q.Y * r.Y - q.Z * r.Z
+            q.y * r.z - q.z * r.y + r.w * q.x + q.w * r.x,
+            q.z * r.x - q.x * r.z + r.w * q.y + q.w * r.y,
+            q.x * r.y - q.y * r.x + r.w * q.z + q.w * r.z,
+            q.w * r.w - q.x * r.x - q.y * r.y - q.z * r.z
         };
 }
 

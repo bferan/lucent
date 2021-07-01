@@ -11,6 +11,9 @@ target_sources(lucent PRIVATE
 
         device/Device.cpp
         device/Device.hpp
+        device/Input.cpp
+        device/Input.hpp
+        device/Keys.hpp
 
         scene/ComponentPool.hpp
         scene/EntityPool.hpp

@@ -5,6 +5,7 @@
 
 #include "GLFW/glfw3.h"
 
+#include "core/Utility.hpp"
 #include "device/Device.hpp"
 #include "core/Vector3.hpp"
 #include "scene/Scene.hpp"
@@ -12,21 +13,6 @@
 
 namespace lucent::demos
 {
-
-static std::string ReadFile(const std::string& path)
-{
-    std::ifstream file(path);
-    std::string buf;
-
-    file.seekg(0, std::ios::end);
-    buf.reserve(file.tellg());
-    file.seekg(0, std::ios::beg);
-
-    buf.assign((std::istreambuf_iterator<char>(file)),
-        std::istreambuf_iterator<char>());
-
-    return buf;
-}
 
 void BasicDemo::Init()
 {
@@ -38,7 +24,7 @@ void BasicDemo::Init()
     Importer importer(&m_Device, m_Pipeline);
 
     auto helm = importer.Import(m_Scene, "models/DamagedHelmet.glb");
-    m_Scene.transforms[helm].position.X = -1.0f;
+    m_Scene.transforms[helm].position.x = -1.0f;
 
     auto avo = importer.Import(m_Scene, "models/Avocado.glb");
     m_Scene.transforms[avo].scale = 40.0f;

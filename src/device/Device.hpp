@@ -9,6 +9,7 @@
 
 #include "core/Vector3.hpp"
 #include "core/Vector4.hpp"
+#include "device/Input.hpp"
 
 struct GLFWwindow;
 
@@ -215,6 +216,7 @@ public:
     VkDescriptorPool m_DescPool{};
     std::vector<std::unique_ptr<DescriptorSet>> m_DescSets;
 
+    std::unique_ptr<Input> m_Input;
 };
 
 }

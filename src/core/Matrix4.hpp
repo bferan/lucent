@@ -38,7 +38,7 @@ public:
             Vector4(1.0f, 0.0f, 0.f, 0.0f),
             Vector4(0.0f, 1.0f, 0.f, 0.0f),
             Vector4(0.0f, 0.0f, 1.f, 0.0f),
-            Vector4(by.X, by.Y, by.Z, 1.0f));
+            Vector4(by.x, by.y, by.z, 1.0f));
     }
 
     static Matrix4 RotationX(float angle)
@@ -77,9 +77,9 @@ public:
     static Matrix4 Rotation(Quaternion q)
     {
         return Matrix4(
-            Vector4(1.0f - 2 * (q.Y * q.Y + q.Z * q.Z), 2 * (q.X * q.Y + q.Z * q.W), 2 * (q.X * q.Z - q.Y * q.W), 0.0f),
-            Vector4(2 * (q.X * q.Y - q.Z * q.W), 1.0f - 2 * (q.X * q.X + q.Z * q.Z), 2 * (q.Y * q.Z + q.X * q.W), 0.0f),
-            Vector4(2 * (q.X * q.Z + q.Y * q.W), 2 * (q.Y * q.Z - q.X * q.W), 1.0f - 2 * (q.X * q.X + q.Y * q.Y), 0.0f),
+            Vector4(1.0f - 2 * (q.y * q.y + q.z * q.z), 2 * (q.x * q.y + q.z * q.w), 2 * (q.x * q.z - q.y * q.w), 0.0f),
+            Vector4(2 * (q.x * q.y - q.z * q.w), 1.0f - 2 * (q.x * q.x + q.z * q.z), 2 * (q.y * q.z + q.x * q.w), 0.0f),
+            Vector4(2 * (q.x * q.z + q.y * q.w), 2 * (q.y * q.z - q.x * q.w), 1.0f - 2 * (q.x * q.x + q.y * q.y), 0.0f),
             Vector4(0.0f, 0.0f, 0.0f, 1.0f)
         );
     }
@@ -116,7 +116,7 @@ public:
     {}
 
     Matrix4(Vector4 c1, Vector4 c2, Vector4 c3, Vector4 c4)
-        : C1(c1), C2(c2), C3(c3), C4(c4)
+        : c1(c1), c2(c2), c3(c3), c4(c4)
     {}
 
     Matrix4& operator=(const Matrix4&) = default;
@@ -124,20 +124,20 @@ public:
 
     const Vector4& operator[](int index) const
     {
-        return (&C1)[index];
+        return (&c1)[index];
     }
     Vector4& operator[](int index)
     {
-        return (&C1)[index];
+        return (&c1)[index];
     }
 
     Matrix4 Transpose()
     {
         return Matrix4(
-            Vector4(C1.X, C2.X, C3.X, C4.X),
-            Vector4(C1.Y, C2.Y, C3.Y, C4.Y),
-            Vector4(C1.Z, C2.Z, C3.Z, C4.Z),
-            Vector4(C1.W, C2.W, C3.W, C4.W));
+            Vector4(c1.x, c2.x, c3.x, c4.x),
+            Vector4(c1.y, c2.y, c3.y, c4.y),
+            Vector4(c1.z, c2.z, c3.z, c4.z),
+            Vector4(c1.w, c2.w, c3.w, c4.w));
     }
 
     void Decompose(Vector3& pos, Quaternion& rot, Vector3& scale) const
@@ -145,35 +145,35 @@ public:
         auto m = *this;
 
         // Translation
-        pos = Vector3(m.C4);
-        m.C4 = Vector4();
+        pos = Vector3(m.c4);
+        m.c4 = Vector4();
 
         // Scale
-        scale.X = Vector3(m.C1).Length();
-        scale.Y = Vector3(m.C2).Length();
-        scale.Z = Vector3(m.C3).Length();
-        m.C1 /= scale.X;
-        m.C2 /= scale.Y;
-        m.C3 /= scale.Z;
+        scale.x = Vector3(m.c1).Length();
+        scale.y = Vector3(m.c2).Length();
+        scale.z = Vector3(m.c3).Length();
+        m.c1 /= scale.x;
+        m.c2 /= scale.y;
+        m.c3 /= scale.z;
 
         // Rotation
         // https://www.euclideanspace.com/maths/geometry/rotations/conversions/matrixToQuaternion/
 
-        rot.W = Sqrt(Max(0.0f, 1.0f + m[0][0] + m[1][1] + m[2][2])) / 2.0f;
-        rot.X = Sqrt(Max(0.0f, 1.0f + m[0][0] - m[1][1] - m[2][2])) / 2.0f;
-        rot.Y = Sqrt(Max(0.0f, 1.0f - m[0][0] + m[1][1] - m[2][2])) / 2.0f;
-        rot.Z = Sqrt(Max(0.0f, 1.0f - m[0][0] - m[1][1] + m[2][2])) / 2.0f;
+        rot.w = Sqrt(Max(0.0f, 1.0f + m[0][0] + m[1][1] + m[2][2])) / 2.0f;
+        rot.x = Sqrt(Max(0.0f, 1.0f + m[0][0] - m[1][1] - m[2][2])) / 2.0f;
+        rot.y = Sqrt(Max(0.0f, 1.0f - m[0][0] + m[1][1] - m[2][2])) / 2.0f;
+        rot.z = Sqrt(Max(0.0f, 1.0f - m[0][0] - m[1][1] + m[2][2])) / 2.0f;
 
-        rot.X = CopySign(rot.X, m[1][2] - m[2][1]);
-        rot.Y = CopySign(rot.Y, m[2][0] - m[0][2]);
-        rot.Z = CopySign(rot.Z, m[0][1] - m[1][0]);
+        rot.x = CopySign(rot.x, m[1][2] - m[2][1]);
+        rot.y = CopySign(rot.y, m[2][0] - m[0][2]);
+        rot.z = CopySign(rot.z, m[0][1] - m[1][0]);
     }
 
 public:
-    Vector4 C1;
-    Vector4 C2;
-    Vector4 C3;
-    Vector4 C4;
+    Vector4 c1;
+    Vector4 c2;
+    Vector4 c3;
+    Vector4 c4;
 };
 
 inline Matrix4 operator*(const Matrix4& l, const Matrix4& r)
