@@ -42,13 +42,25 @@ struct Mesh
     DescriptorSet* descSet;
 };
 
+struct Camera
+{
+    float horizontalFov = 1.0f;
+    float aspectRatio = 1.0f;
+    float near = 0.01f;
+    float far = 10000.0f;
+
+    float pitch = 0.0f;
+    float yaw = 0.0f;
+};
+
 struct Scene
 {
     EntityPool entities;
 
     ComponentPool<Transform> transforms;
-    ComponentPool<MeshInstance> meshInstances;
     ComponentPool<Parent> parents;
+    ComponentPool<MeshInstance> meshInstances;
+    ComponentPool<Camera> cameras;
 
     std::vector<Mesh> meshes;
 };

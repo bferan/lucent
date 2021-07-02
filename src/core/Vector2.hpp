@@ -1,5 +1,7 @@
 #pragma once
 
+#include <iostream>
+
 #include "Math.hpp"
 
 namespace lucent
@@ -81,6 +83,13 @@ inline Vector2 operator+(Vector2 lhs, const Vector2& rhs)
 inline Vector2 operator-(Vector2 lhs, const Vector2& rhs)
 {
     return (lhs -= rhs);
+}
+
+// TODO: Remove
+inline std::ostream& operator<<(std::ostream& out, const Vector2& v)
+{
+    out << "(" << v[0] << ", " << v[1] << ")";
+    return out;
 }
 
 }

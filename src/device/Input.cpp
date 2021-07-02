@@ -9,10 +9,16 @@ Input::Input(GLFWwindow* window)
 {
     glfwSetWindowUserPointer(window, this);
 
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+
     glfwSetKeyCallback(window, KeyCallback);
     glfwSetCursorPosCallback(window, CursorPosCallback);
     glfwSetMouseButtonCallback(window, MouseButtonCallback);
     glfwSetScrollCallback(window, ScrollCallback);
+
+    double x, y;
+    glfwGetCursorPos(window, &x, &y);
+    m_State.cursorPos = { (float)x, (float)y };
 }
 
 void Input::KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
@@ -27,7 +33,10 @@ void Input::CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
 {
     auto& state = ((Input*)glfwGetWindowUserPointer(window))->m_State;
 
-    state.cursorPos = { (float)xpos, (float)ypos };
+    auto pos = Vector2{ (float)xpos, (float)ypos };
+
+    state.cursorDelta = pos - state.cursorPos;
+    state.cursorPos = pos;
 }
 
 void Input::MouseButtonCallback(GLFWwindow* window, int button, int action, int mods)

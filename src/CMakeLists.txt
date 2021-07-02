@@ -15,6 +15,9 @@ target_sources(lucent PRIVATE
         device/Input.hpp
         device/Keys.hpp
 
+        rendering/SceneRenderer.cpp
+        rendering/SceneRenderer.hpp
+
         scene/ComponentPool.hpp
         scene/EntityPool.hpp
         scene/Importer.cpp

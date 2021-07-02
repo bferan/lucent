@@ -4,18 +4,11 @@
 #include "core/Matrix4.hpp"
 #include "core/Vector4.hpp"
 #include "device/Device.hpp"
+#include "rendering/SceneRenderer.hpp"
 #include "scene/Scene.hpp"
 
 namespace lucent::demos
 {
-
-struct UBO
-{
-    Matrix4 model;
-    Matrix4 view;
-    Matrix4 proj;
-    Vector3 col;
-};
 
 class BasicDemo
 {
@@ -24,15 +17,11 @@ public:
     void Draw(float dt);
 
 public:
-    Device m_Device;
-    Pipeline* m_Pipeline;
-    Context* m_Context;
-
-    // UBO
-    DescriptorSet* m_GlobalSet;
-    Buffer* m_UniformBuffer;
+    Device m_Device {};
+    std::unique_ptr<SceneRenderer> m_Renderer;
 
     Scene m_Scene{};
+    Entity m_Player;
 };
 
 }

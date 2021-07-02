@@ -5,10 +5,6 @@
 
 #include "GLFW/glfw3.h"
 
-#include "core/Utility.hpp"
-#include "device/Device.hpp"
-#include "core/Vector3.hpp"
-#include "scene/Scene.hpp"
 #include "scene/Importer.hpp"
 
 namespace lucent::demos
@@ -16,25 +12,23 @@ namespace lucent::demos
 
 void BasicDemo::Init()
 {
-    m_Pipeline = m_Device.CreatePipeline(PipelineInfo{
-        .vertexShader = ReadFile("C:/Code/lucent/src/rendering/vert.glsl"),
-        .fragmentShader = ReadFile("C:/Code/lucent/src/rendering/frag.glsl")
-    });
+    m_Renderer = std::make_unique<SceneRenderer>(&m_Device);
 
-    Importer importer(&m_Device, m_Pipeline);
+    Importer importer(&m_Device, m_Renderer->m_Pipeline);
+
+    importer.Import(m_Scene, "models/Plane.glb");
 
     auto helm = importer.Import(m_Scene, "models/DamagedHelmet.glb");
-    m_Scene.transforms[helm].position.x = -1.0f;
+    m_Scene.transforms[helm].position = { -2.0f, 2.0f, 0.0f };
 
     auto avo = importer.Import(m_Scene, "models/Avocado.glb");
     m_Scene.transforms[avo].scale = 40.0f;
+    m_Scene.transforms[avo].position = { 2.0f, 2.0f, 0.0f };
 
-    m_Context = m_Device.CreateContext();
-    m_GlobalSet = m_Device.CreateDescriptorSet(*m_Pipeline, 0);
-
-    // Create UBO
-    m_UniformBuffer = m_Device.CreateBuffer(BufferType::Uniform, 65535);
-    m_Device.WriteSet(m_GlobalSet, 0, *m_UniformBuffer);
+    // Create camera entity
+    m_Player = m_Scene.entities.Create();
+    m_Scene.transforms.Assign(m_Player, Transform{});
+    m_Scene.cameras.Assign(m_Player, Camera{ .horizontalFov = kHalfPi, .aspectRatio = 1600.0f / 900.0f });
 }
 
 void BasicDemo::Draw(float dt)
@@ -42,54 +36,41 @@ void BasicDemo::Draw(float dt)
     static float timer = 0.0f;
     timer += dt;
 
-    // Draw
-    auto& ctx = *m_Context;
-    auto& fb = m_Device.AcquireFramebuffer();
+    // Update camera pos
+    auto& input = m_Device.m_Input->GetState();
+    auto& transform = m_Scene.transforms[m_Player];
+    auto& camera = m_Scene.cameras[m_Player];
 
-    ctx.Begin();
-    ctx.BeginRenderPass(fb);
+    const float hSensitivity = 0.8f;
+    const float vSensitivity = 1.0f;
+    camera.yaw += dt * hSensitivity * -input.cursorDelta.x;
+    camera.pitch += dt * vSensitivity * -input.cursorDelta.y;
+    camera.pitch = Clamp(camera.pitch, -kHalfPi, kHalfPi);
 
-    ctx.Bind(*m_Pipeline);
+    auto rotation = Matrix4::RotationY(camera.yaw);
 
-    const size_t uniformAlignment = m_Device.m_DeviceProperties.limits.minUniformBufferOffsetAlignment;
-    uint32_t uniformOffset = 0;
+    Vector3 velocity;
+    if (input.KeyDown(LC_KEY_W)) velocity += Vector3::Forward();
+    if (input.KeyDown(LC_KEY_S)) velocity += Vector3::Back();
+    if (input.KeyDown(LC_KEY_A)) velocity += Vector3::Left();
+    if (input.KeyDown(LC_KEY_D)) velocity += Vector3::Right();
 
-    for (auto entity : m_Scene.meshInstances)
-    {
-        auto& mesh = m_Scene.meshes[m_Scene.meshInstances[entity].meshIndex];
-        auto& local = m_Scene.transforms[entity];
+    velocity.Normalize();
+    auto velocityWorld = Vector3(rotation * Vector4(velocity));
 
-        auto model = Matrix4::Translation(local.position) *
-            Matrix4::Rotation(local.rotation) *
-            Matrix4::Scale(local.scale, local.scale, local.scale);
+    if (input.KeyDown(LC_KEY_SPACE)) velocityWorld += Vector3::Up();
+    if (input.KeyDown(LC_KEY_LEFT_SHIFT)) velocityWorld += Vector3::Down();
 
-        UBO ubo = {
-            .model = model * Matrix4::RotationY(kPi * timer * 0.1f),
-            .view = Matrix4::Translation(Vector3{ 0.0f, 0.0f, -3.0f }),
-            .proj = Matrix4::Perspective(1, 1600.0f / 900.0f, 0.01, 10000),
-            .col = Vector3{ 0.0f, 0.0f, 1.0f }
-        };
+    if (input.KeyDown(LC_KEY_ESCAPE)) exit(0);
 
-        m_UniformBuffer->Upload(&ubo, sizeof(UBO), uniformOffset);
+    float multiplier = input.KeyDown(LC_KEY_LEFT_CONTROL) ? 3.0f : 1.0f;
 
-        ctx.BindSet(m_GlobalSet, uniformOffset);
-        ctx.BindSet(mesh.descSet);
+    const float speed = 5.0f;
+    transform.position += dt * speed * multiplier * velocityWorld;
 
-        ctx.Bind(mesh.vertexBuffer, 0);
-        ctx.Bind(mesh.indexBuffer);
+    m_Renderer->Render(m_Scene);
 
-        ctx.Draw(mesh.numIndices);
-
-        uniformOffset += sizeof(UBO);
-        // Align up
-        uniformOffset += (uniformAlignment - (uniformOffset % uniformAlignment)) % uniformAlignment;
-    }
-
-    ctx.EndRenderPass();
-    ctx.End();
-
-    m_Device.Submit(&ctx);
-    m_Device.Present();
+    m_Device.m_Input->Reset();
 }
 
 }

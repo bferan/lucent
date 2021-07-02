@@ -820,9 +820,9 @@ Pipeline* Device::CreatePipeline(const PipelineInfo& info)
     };
 
     auto viewport = VkViewport{
-        .x = 0.0f, .y = 0.0f,
+        .x = 0.0f, .y = static_cast<float>(m_Swapchain.framebuffers[0].extent.height),
         .width = static_cast<float>(m_Swapchain.framebuffers[0].extent.width),
-        .height = static_cast<float>(m_Swapchain.framebuffers[0].extent.height),
+        .height = -static_cast<float>(m_Swapchain.framebuffers[0].extent.height),
         .minDepth = 0.0f, .maxDepth = 1.0f
     };
 
@@ -845,7 +845,7 @@ Pipeline* Device::CreatePipeline(const PipelineInfo& info)
         .rasterizerDiscardEnable = VK_FALSE,
         .polygonMode = VK_POLYGON_MODE_FILL,
         .cullMode = VK_CULL_MODE_BACK_BIT,
-        .frontFace = VK_FRONT_FACE_CLOCKWISE,
+        .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
         .lineWidth = 1.0f,
     };
 

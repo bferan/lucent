@@ -14,6 +14,8 @@ class ComponentPool
 public:
     bool Contains(Entity entity) const;
 
+    auto Size();
+
     template<typename C>
     void Assign(Entity entity, C&& component);
 
@@ -93,6 +95,12 @@ void ComponentPool<T>::Clear()
     m_SparseArray.clear();
     m_DenseArray.clear();
     m_Components.clear();
+}
+
+template<typename T>
+auto ComponentPool<T>::Size()
+{
+    return m_DenseArray.size();
 }
 
 }

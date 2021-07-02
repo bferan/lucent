@@ -18,6 +18,6 @@ layout(set = 0, binding = 0) uniform MyBuffer
 
 void main()
 {
-    gl_Position = uProj * uView * uModel * vec4(vPosition, 1.0);
+    gl_Position = uProj * uView * uModel * vec4(vPosition, 1.0);;
     oUV = vUV;
 }
