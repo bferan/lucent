@@ -17,6 +17,7 @@ namespace lucent
 {
 
 class Device;
+class ShaderCache;
 struct Texture;
 
 struct TexCoord
@@ -57,10 +58,15 @@ struct Swapchain
     std::vector<Framebuffer> framebuffers;
 };
 
+struct ProgramInfo
+{
+    std::string vertShader;
+    std::string fragShader;
+};
+
 struct PipelineInfo
 {
-    std::string vertexShader;
-    std::string fragmentShader;
+    ProgramInfo programInfo;
 };
 
 struct Pipeline
@@ -217,6 +223,10 @@ public:
     std::vector<std::unique_ptr<DescriptorSet>> m_DescSets;
 
     std::unique_ptr<Input> m_Input;
+
+    Texture* m_DefaultTexture;
+
+    std::unique_ptr<ShaderCache> m_ShaderCache;
 };
 
 }

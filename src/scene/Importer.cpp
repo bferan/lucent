@@ -1,9 +1,9 @@
 #include "Importer.hpp"
 
+#include <iostream>
+
 #include "assimp/Importer.hpp"
-#include "assimp/scene.h"
 #include "assimp/postprocess.h"
-#include "assimp/pbrmaterial.h"
 #include "stb_image.h"
 
 namespace lucent
@@ -11,15 +11,21 @@ namespace lucent
 
 Importer::Importer(Device* device, Pipeline* pipeline)
     : m_Device(device), m_Pipeline(pipeline)
-{}
+{
+}
 
 Entity Importer::Import(Scene& scene, const std::string& modelFile)
 {
     Clear();
 
+    std::cout << "Importing " << modelFile << "\n";
+
     Assimp::Importer importer;
     importer.ReadFile(modelFile,
-        aiProcess_Triangulate | aiProcess_EmbedTextures | aiProcess_FlipUVs | aiProcess_CalcTangentSpace);
+        aiProcess_Triangulate |
+            aiProcess_EmbedTextures |
+            aiProcess_FlipUVs |
+            aiProcess_CalcTangentSpace);
 
     auto& modelScene = *importer.GetScene();
 
@@ -30,6 +36,29 @@ Entity Importer::Import(Scene& scene, const std::string& modelFile)
     return root;
 }
 
+static Texture* ImportTexture(Device* device, const aiTexture* texture)
+{
+    if (!texture)
+    {
+        return device->m_DefaultTexture;
+    }
+
+    int reqChannels = 4;
+    int x, y, n;
+    auto imgData = stbi_load_from_memory(
+        reinterpret_cast<const stbi_uc*>(texture->pcData),
+        static_cast<int>(texture->mWidth), &x, &y, &n, reqChannels);
+
+    auto importedTexture = device->CreateTexture(TextureInfo{
+        .width = static_cast<uint32_t>(x),
+        .height = static_cast<uint32_t>(y),
+    }, x * y * reqChannels, imgData);
+
+    stbi_image_free(imgData);
+
+    return importedTexture;
+}
+
 void Importer::ImportMaterials(Scene& scene, const aiScene& model)
 {
     aiString path;
@@ -38,20 +67,32 @@ void Importer::ImportMaterials(Scene& scene, const aiScene& model)
     {
         auto& mat = *model.mMaterials[i];
 
+        std::cout << "Model " << model.mName.C_Str() << " material " << i << ":\n";
+
+        for (int p = 0; p < mat.mNumProperties; ++p)
+        {
+            auto& prop = *mat.mProperties[p];
+            std::cout << "\t"
+                      << prop.mKey.C_Str()
+                      << ":  Semantic: "
+                      << prop.mSemantic
+                      << ";  Index: "
+                      << prop.mIndex
+                      << "; Type: "
+                      << prop.mType;
+
+            if (prop.mType == aiPTI_String)
+            {
+                aiString string;
+                aiGetMaterialString(&mat, prop.mKey.C_Str(), prop.mSemantic, prop.mIndex, &string);
+                std::cout << " S: " << string.C_Str();
+            }
+            std::cout << "\n";
+        }
+
         // Create textures
         mat.GetTexture(aiTextureType_DIFFUSE, 0, &path);
-        auto tex = model.GetEmbeddedTexture(path.C_Str());
-
-        int reqChannels = 4;
-        int x, y, n;
-        auto imgData = stbi_load_from_memory(
-            reinterpret_cast<const stbi_uc*>(tex->pcData),
-            tex->mWidth, &x, &y, &n, reqChannels);
-
-        auto baseColTex = m_Device->CreateTexture(TextureInfo{
-            .width = static_cast<uint32_t>(x),
-            .height = static_cast<uint32_t>(y),
-        }, x * y * reqChannels, imgData);
+        auto baseColTex = ImportTexture(m_Device, model.GetEmbeddedTexture(path.C_Str()));
 
         // Create descriptor set for material textures
         auto descSet = m_Device->CreateDescriptorSet(*m_Pipeline, 1);
@@ -59,7 +100,6 @@ void Importer::ImportMaterials(Scene& scene, const aiScene& model)
 
         m_MaterialSets.push_back(descSet);
 
-        stbi_image_free(imgData);
     }
 }
 

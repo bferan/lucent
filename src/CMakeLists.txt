@@ -2,6 +2,7 @@
 target_include_directories(lucent PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_sources(lucent PRIVATE
+        core/Hash.hpp
         core/Lucent.hpp
         core/Math.hpp
         core/Matrix4.hpp
@@ -14,6 +15,9 @@ target_sources(lucent PRIVATE
         device/Input.cpp
         device/Input.hpp
         device/Keys.hpp
+        device/ResourceLimits.hpp
+        device/ShaderCache.cpp
+        device/ShaderCache.hpp
 
         rendering/SceneRenderer.cpp
         rendering/SceneRenderer.hpp

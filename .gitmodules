@@ -1,6 +1,3 @@
-[submodule "extern/shaderc"]
-	path = extern/shaderc
-	url = https://github.com/google/shaderc
 [submodule "extern/glslang"]
 	path = extern/glslang
 	url = https://github.com/KhronosGroup/glslang

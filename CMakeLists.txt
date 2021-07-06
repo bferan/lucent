@@ -27,6 +27,7 @@ target_link_libraries(VulkanMemoryAllocator PRIVATE Vulkan::Vulkan)
 #glslang
 add_subdirectory(extern/glslang)
 target_link_libraries(lucent PRIVATE glslang)
+target_link_libraries(lucent PRIVATE SPIRV)
 
 # SPIRV
 add_subdirectory(extern/SPIRV-Headers)
@@ -34,11 +35,6 @@ target_link_libraries(lucent PRIVATE SPIRV-Headers)
 
 add_subdirectory(extern/SPIRV-Tools)
 target_link_libraries(lucent PRIVATE SPIRV-Tools)
-
-# Shaderc
-set(SHADERC_SKIP_TESTS ON)
-add_subdirectory(extern/shaderc)
-target_link_libraries(lucent PRIVATE shaderc)
 
 # glfw
 add_subdirectory(extern/glfw)

@@ -2,17 +2,12 @@
 
 #include <set>
 #include <algorithm>
-#include <iostream>
 
 #include "GLFW/glfw3.h"
-#include "shaderc/shaderc.hpp"
-
 #include "glslang/Public/ShaderLang.h"
-#include "glslang/MachineIndependent/localintermediate.h"
-#include "glslang/Include/Types.h"
-#include "glslang/Include/intermediate.h"
 
 #include "core/Lucent.hpp"
+#include "device/ShaderCache.hpp"
 
 namespace lucent
 {
@@ -156,6 +151,9 @@ Device::Device()
     auto result = vkCreateCommandPool(m_Device, &poolInfo, nullptr, &m_OneShotCmdPool);
     LC_ASSERT(result == VK_SUCCESS);
 
+    // Create shader cache
+    m_ShaderCache = std::make_unique<ShaderCache>(this);
+
     // Create descriptor pool
     VkDescriptorPoolSize descPoolSizes[] = {
         {
@@ -216,6 +214,9 @@ Device::~Device()
     }
 
     vkDestroyDescriptorPool(m_Device, m_DescPool, nullptr);
+
+    // Destroy shaders
+    m_ShaderCache->Clear();
 
     // Destroy swapchain
     vkDestroyRenderPass(m_Device, m_Swapchain.framebuffers[0].renderPass, nullptr);
@@ -555,219 +556,25 @@ void Device::CreateSwapchain()
     }
 }
 
-void Device::CreateShader(const std::string& vertText, const std::string& fragText)
-{
-    TBuiltInResource res = {
-        /*.maxLights = */ 8,         // From OpenGL 3.0 table 6.46.
-        /*.maxClipPlanes = */ 6,     // From OpenGL 3.0 table 6.46.
-        /*.maxTextureUnits = */ 2,   // From OpenGL 3.0 table 6.50.
-        /*.maxTextureCoords = */ 8,  // From OpenGL 3.0 table 6.50.
-        /*.maxVertexAttribs = */ 16,
-        /*.maxVertexUniformComponents = */ 4096,
-        /*.maxVaryingFloats = */ 60,  // From OpenGLES 3.1 table 6.44.
-        /*.maxVertexTextureImageUnits = */ 16,
-        /*.maxCombinedTextureImageUnits = */ 80,
-        /*.maxTextureImageUnits = */ 16,
-        /*.maxFragmentUniformComponents = */ 1024,
-
-        // glslang has 32 maxDrawBuffers.
-        // Pixel phone Vulkan driver in Android N has 8
-        // maxFragmentOutputAttachments.
-        /*.maxDrawBuffers = */ 8,
-
-        /*.maxVertexUniformVectors = */ 256,
-        /*.maxVaryingVectors = */ 15,  // From OpenGLES 3.1 table 6.44.
-        /*.maxFragmentUniformVectors = */ 256,
-        /*.maxVertexOutputVectors = */ 16,   // maxVertexOutputComponents / 4
-        /*.maxFragmentInputVectors = */ 15,  // maxFragmentInputComponents / 4
-        /*.minProgramTexelOffset = */ -8,
-        /*.maxProgramTexelOffset = */ 7,
-        /*.maxClipDistances = */ 8,
-        /*.maxComputeWorkGroupCountX = */ 65535,
-        /*.maxComputeWorkGroupCountY = */ 65535,
-        /*.maxComputeWorkGroupCountZ = */ 65535,
-        /*.maxComputeWorkGroupSizeX = */ 1024,
-        /*.maxComputeWorkGroupSizeX = */ 1024,
-        /*.maxComputeWorkGroupSizeZ = */ 64,
-        /*.maxComputeUniformComponents = */ 512,
-        /*.maxComputeTextureImageUnits = */ 16,
-        /*.maxComputeImageUniforms = */ 8,
-        /*.maxComputeAtomicCounters = */ 8,
-        /*.maxComputeAtomicCounterBuffers = */ 1,  // From OpenGLES 3.1 Table 6.43
-        /*.maxVaryingComponents = */ 60,
-        /*.maxVertexOutputComponents = */ 64,
-        /*.maxGeometryInputComponents = */ 64,
-        /*.maxGeometryOutputComponents = */ 128,
-        /*.maxFragmentInputComponents = */ 128,
-        /*.maxImageUnits = */ 8,  // This does not seem to be defined anywhere,
-        // set to ImageUnits.
-        /*.maxCombinedImageUnitsAndFragmentOutputs = */ 8,
-        /*.maxCombinedShaderOutputResources = */ 8,
-        /*.maxImageSamples = */ 0,
-        /*.maxVertexImageUniforms = */ 0,
-        /*.maxTessControlImageUniforms = */ 0,
-        /*.maxTessEvaluationImageUniforms = */ 0,
-        /*.maxGeometryImageUniforms = */ 0,
-        /*.maxFragmentImageUniforms = */ 8,
-        /*.maxCombinedImageUniforms = */ 8,
-        /*.maxGeometryTextureImageUnits = */ 16,
-        /*.maxGeometryOutputVertices = */ 256,
-        /*.maxGeometryTotalOutputComponents = */ 1024,
-        /*.maxGeometryUniformComponents = */ 512,
-        /*.maxGeometryVaryingComponents = */ 60,  // Does not seem to be defined
-        // anywhere, set equal to
-        // maxVaryingComponents.
-        /*.maxTessControlInputComponents = */ 128,
-        /*.maxTessControlOutputComponents = */ 128,
-        /*.maxTessControlTextureImageUnits = */ 16,
-        /*.maxTessControlUniformComponents = */ 1024,
-        /*.maxTessControlTotalOutputComponents = */ 4096,
-        /*.maxTessEvaluationInputComponents = */ 128,
-        /*.maxTessEvaluationOutputComponents = */ 128,
-        /*.maxTessEvaluationTextureImageUnits = */ 16,
-        /*.maxTessEvaluationUniformComponents = */ 1024,
-        /*.maxTessPatchComponents = */ 120,
-        /*.maxPatchVertices = */ 32,
-        /*.maxTessGenLevel = */ 64,
-        /*.maxViewports = */ 16,
-        /*.maxVertexAtomicCounters = */ 0,
-        /*.maxTessControlAtomicCounters = */ 0,
-        /*.maxTessEvaluationAtomicCounters = */ 0,
-        /*.maxGeometryAtomicCounters = */ 0,
-        /*.maxFragmentAtomicCounters = */ 8,
-        /*.maxCombinedAtomicCounters = */ 8,
-        /*.maxAtomicCounterBindings = */ 1,
-        /*.maxVertexAtomicCounterBuffers = */ 0,  // From OpenGLES 3.1 Table 6.41.
-
-        // ARB_shader_atomic_counters.
-        /*.maxTessControlAtomicCounterBuffers = */ 0,
-        /*.maxTessEvaluationAtomicCounterBuffers = */ 0,
-        /*.maxGeometryAtomicCounterBuffers = */ 0,
-        // /ARB_shader_atomic_counters.
-
-        /*.maxFragmentAtomicCounterBuffers = */ 0,  // From OpenGLES 3.1 Table 6.43.
-        /*.maxCombinedAtomicCounterBuffers = */ 1,
-        /*.maxAtomicCounterBufferSize = */ 32,
-        /*.maxTransformFeedbackBuffers = */ 4,
-        /*.maxTransformFeedbackInterleavedComponents = */ 64,
-        /*.maxCullDistances = */ 8,                 // ARB_cull_distance.
-        /*.maxCombinedClipAndCullDistances = */ 8,  // ARB_cull_distance.
-        /*.maxSamples = */ 4,
-        /* .maxMeshOutputVerticesNV = */ 256,
-        /* .maxMeshOutputPrimitivesNV = */ 512,
-        /* .maxMeshWorkGroupSizeX_NV = */ 32,
-        /* .maxMeshWorkGroupSizeY_NV = */ 1,
-        /* .maxMeshWorkGroupSizeZ_NV = */ 1,
-        /* .maxTaskWorkGroupSizeX_NV = */ 32,
-        /* .maxTaskWorkGroupSizeY_NV = */ 1,
-        /* .maxTaskWorkGroupSizeZ_NV = */ 1,
-        /* .maxMeshViewCountNV = */ 4,
-        /* .maxDualSourceDrawBuffersEXT = */ 1,
-        // This is the glslang TLimits structure.
-        // It defines whether or not the following features are enabled.
-        // We want them to all be enabled.
-        /*.limits = */ {
-            /*.nonInductiveForLoops = */ 1,
-            /*.whileLoops = */ 1,
-            /*.doWhileLoops = */ 1,
-            /*.generalUniformIndexing = */ 1,
-            /*.generalAttributeMatrixVectorIndexing = */ 1,
-            /*.generalVaryingIndexing = */ 1,
-            /*.generalSamplerIndexing = */ 1,
-            /*.generalVariableIndexing = */ 1,
-            /*.generalConstantMatrixVectorIndexing = */ 1,
-        }};
-
-    glslang::TShader vertShader(EShLangVertex);
-    auto vertStr = vertText.c_str();
-    vertShader.setStrings(&vertStr, 1);
-    vertShader.parse(&res, 450, true, EShMsgDefault);
-
-    glslang::TShader fragShader(EShLangFragment);
-    auto fragStr = fragText.c_str();
-    fragShader.setStrings(&fragStr, 1);
-    fragShader.parse(&res, 450, true, EShMsgDefault);
-
-    glslang::TProgram program;
-    program.addShader(&vertShader);
-    program.addShader(&fragShader);
-    program.link(EShMsgDefault);
-
-    auto vInter = fragShader.getIntermediate();
-    auto root = vInter->getTreeRoot();
-
-    for (auto node : root->getAsAggregate()->getSequence())
-    {
-        auto agg = node->getAsAggregate();
-        if (agg->getOp() == glslang::EOpLinkerObjects)
-        {
-            for (auto obj : agg->getSequence())
-            {
-                auto symbol = obj->getAsSymbolNode();
-                auto& type = symbol->getType();
-                auto& qualifier = type.getQualifier();
-
-                if (qualifier.hasUniformLayout())
-                {
-                    std::cout << "Name: " << symbol->getName() << "\n"
-                              << "Set: " << qualifier.layoutSet << "\n"
-                              << "Binding: " << qualifier.layoutBinding << "\n" << std::endl;
-                }
-            }
-        }
-    }
-
-}
-
 Pipeline* Device::CreatePipeline(const PipelineInfo& info)
 {
-    auto& pipe = *m_Pipelines.emplace_back(std::make_unique<Pipeline>());
+    auto& pipeline = *m_Pipelines.emplace_back(std::make_unique<Pipeline>());
+    auto& program = m_ShaderCache->Compile(info.programInfo);
 
-    CreateShader(info.vertexShader, info.fragmentShader);
+    VkPipelineShaderStageCreateInfo stageInfos[CompiledProgram::kMaxStages];
+    for (int i = 0; i < program.numStages; ++i)
+    {
+        auto& stage = program.stages[i];
+        stageInfos[i] = VkPipelineShaderStageCreateInfo {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .stage = stage.stageBit,
+            .module = stage.module,
+            .pName = "main"
+        };
+    }
 
-    // Create shader modules
-    shaderc::Compiler compiler;
-    auto vertResult = compiler.CompileGlslToSpv(info.vertexShader, shaderc_vertex_shader, "vert.glsl");
-    auto fragResult = compiler.CompileGlslToSpv(info.fragmentShader, shaderc_fragment_shader, "frag.glsl");
-
-    auto vertModuleInfo = VkShaderModuleCreateInfo{
-        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-        .codeSize = static_cast<size_t>(std::distance(vertResult.begin(), vertResult.end())
-            * sizeof(*vertResult.begin())),
-        .pCode = vertResult.begin()
-    };
-
-    auto fragModuleInfo = VkShaderModuleCreateInfo{
-        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-        .codeSize = static_cast<size_t>(std::distance(fragResult.begin(), fragResult.end())
-            * sizeof(*fragResult.begin())),
-        .pCode = fragResult.begin()
-    };
-
-    VkShaderModule vertModule, fragModule;
-
-    auto result = vkCreateShaderModule(m_Device, &vertModuleInfo, nullptr, &vertModule);
-    LC_ASSERT(result == VK_SUCCESS);
-
-    result = vkCreateShaderModule(m_Device, &fragModuleInfo, nullptr, &fragModule);
-    LC_ASSERT(result == VK_SUCCESS);
-
-    // Create shader stages
-    auto vertStageInfo = VkPipelineShaderStageCreateInfo{
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-        .stage = VK_SHADER_STAGE_VERTEX_BIT,
-        .module = vertModule,
-        .pName = "main"
-    };
-
-    auto fragStageInfo = VkPipelineShaderStageCreateInfo{
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-        .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-        .module = fragModule,
-        .pName = "main"
-    };
-
-    VkPipelineShaderStageCreateInfo stages[] = { vertStageInfo, fragStageInfo };
+    memcpy(pipeline.setLayouts, program.setLayouts, sizeof(program.setLayouts));
+    pipeline.layout = program.layout;
 
     // Configure pipeline fixed functions
     VkVertexInputBindingDescription vertexBindingInfos[] = {
@@ -878,55 +685,10 @@ Pipeline* Device::CreatePipeline(const PipelineInfo& info)
         .pAttachments = &colorBlendAttachmentInfo
     };
 
-    // TODO: CHANGE
-    // Create pipeline layout & descriptor layout
-    VkDescriptorSetLayoutBinding descBindings0[] = {
-        {
-            .binding = 0,
-            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
-            .descriptorCount = 1,
-            .stageFlags = VK_SHADER_STAGE_ALL
-        }
-    };
-
-    VkDescriptorSetLayoutBinding descBindings1[] = {
-        {
-            .binding = 0,
-            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .descriptorCount = 1,
-            .stageFlags = VK_SHADER_STAGE_ALL
-        }
-    };
-
-    auto descSetInfo0 = VkDescriptorSetLayoutCreateInfo{
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = LC_ARRAY_SIZE(descBindings0),
-        .pBindings = descBindings0
-    };
-    result = vkCreateDescriptorSetLayout(m_Device, &descSetInfo0, nullptr, &pipe.setLayouts[0]);
-    LC_ASSERT(result == VK_SUCCESS);
-
-    auto descSetInfo1 = VkDescriptorSetLayoutCreateInfo{
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = LC_ARRAY_SIZE(descBindings1),
-        .pBindings = descBindings1
-    };
-    result = vkCreateDescriptorSetLayout(m_Device, &descSetInfo1, nullptr, &pipe.setLayouts[1]);
-    LC_ASSERT(result == VK_SUCCESS);
-
-
-    auto pipelineLayoutInfo = VkPipelineLayoutCreateInfo{
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .setLayoutCount = 2,
-        .pSetLayouts = pipe.setLayouts
-    };
-    result = vkCreatePipelineLayout(m_Device, &pipelineLayoutInfo, nullptr, &pipe.layout);
-    LC_ASSERT(result == VK_SUCCESS);
-
     auto pipelineCreateInfo = VkGraphicsPipelineCreateInfo{
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-        .stageCount = 2,
-        .pStages = stages,
+        .stageCount = program.numStages,
+        .pStages = stageInfos,
         .pVertexInputState = &vertexInputInfo,
         .pInputAssemblyState = &inputAssemblyInfo,
         .pViewportState = &viewportStateInfo,
@@ -934,19 +696,15 @@ Pipeline* Device::CreatePipeline(const PipelineInfo& info)
         .pMultisampleState = &multisampleInfo,
         .pDepthStencilState = &depthStencilInfo,
         .pColorBlendState = &colorBlendInfo,
-        .layout = pipe.layout,
+        .layout = pipeline.layout,
         .renderPass = m_Swapchain.framebuffers[0].renderPass,
         .subpass = 0
     };
 
-    result = vkCreateGraphicsPipelines(m_Device, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &pipe.handle);
+    auto result = vkCreateGraphicsPipelines(m_Device, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &pipeline.handle);
     LC_ASSERT(result == VK_SUCCESS);
 
-    // Destroy shader modules
-    vkDestroyShaderModule(m_Device, vertModule, nullptr);
-    vkDestroyShaderModule(m_Device, fragModule, nullptr);
-
-    return &pipe;
+    return &pipeline;
 }
 
 Buffer* Device::CreateBuffer(BufferType type, size_t size)

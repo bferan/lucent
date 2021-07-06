@@ -10,8 +10,10 @@ SceneRenderer::SceneRenderer(Device* device)
     : m_Device(device)
 {
     m_Pipeline = m_Device->CreatePipeline(PipelineInfo{
-        .vertexShader = ReadFile("C:/Code/lucent/src/rendering/vert.glsl"),
-        .fragmentShader = ReadFile("C:/Code/lucent/src/rendering/frag.glsl")
+        .programInfo = {
+            .vertShader = ReadFile("C:/Code/lucent/src/rendering/vert.glsl"),
+            .fragShader = ReadFile("C:/Code/lucent/src/rendering/frag.glsl")
+        }
     });
 
     m_Context = m_Device->CreateContext();

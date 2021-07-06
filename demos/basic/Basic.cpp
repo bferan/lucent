@@ -27,7 +27,7 @@ void BasicDemo::Init()
 
     // Create camera entity
     m_Player = m_Scene.entities.Create();
-    m_Scene.transforms.Assign(m_Player, Transform{});
+    m_Scene.transforms.Assign(m_Player, Transform{.position = {0.0f, 2.0f, 2.0f }});
     m_Scene.cameras.Assign(m_Player, Camera{ .horizontalFov = kHalfPi, .aspectRatio = 1600.0f / 900.0f });
 }
 
