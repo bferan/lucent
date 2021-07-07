@@ -9,6 +9,11 @@ namespace lucent
 
 struct Entity
 {
+    bool Empty() const
+    {
+        return index == 0;
+    }
+
     uint32_t index: 24 {};
     uint32_t version: 8 {};
 };
@@ -21,6 +26,12 @@ inline bool operator==(Entity lhs, Entity rhs)
 class EntityPool
 {
 public:
+    EntityPool()
+    {
+        // Add the null entity
+        m_Entities.push_back(Entity{ 0, 1 });
+    }
+
     Entity Create()
     {
         if (m_NumFree > 0)

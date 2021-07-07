@@ -2,8 +2,10 @@
 #extension GL_ARB_separate_shader_objects : enable
 
 layout(location = 0) in vec2 iUV;
-layout(location = 1) in vec3 iNorm;
-layout(location = 2) in vec3 iPos;
+layout(location = 1) in vec3 iTangent;
+layout(location = 2) in vec3 iBitangent;
+layout(location = 3) in vec3 iNormal;
+layout(location = 4) in vec3 iPos;
 
 layout(location = 0) out vec4 outColor;
 
@@ -33,6 +35,13 @@ void main()
     vec4 metallicRoughness = texture(sMetalRoughness, iUV);
     vec3 base = texture(sBaseColor, iUV).rgb;
 
+    vec3 t = normalize(iTangent);
+    vec3 b = normalize(iBitangent);
+    vec3 n = normalize(iNormal);
+
+    vec3 nTex = texture(sNormal, iUV).rgb * 2.0 - vec3(1.0);
+    vec3 N = mat3(t, b, n) * normalize(nTex);
+
     float metal = metallicRoughness.b;
     float rough = metallicRoughness.g;
 
@@ -42,7 +51,6 @@ void main()
     vec3 F0 = mix(kDielectricSpecular, base, metal);
     float a2 = rough * rough * rough * rough;
 
-    vec3 N = normalize(iNorm);
     vec3 V = normalize(uCameraPos - iPos);
     float NdotV = clamp(dot(N, V), 0.0, 1.0);
 
@@ -55,13 +63,15 @@ void main()
     R.y = -R.y; // TMP
     vec3 envSpecular = textureLod(sEnvSpecular, R, rough * 5.0).rgb;
 
-    vec2 brdf = texture(sBRDF, vec2(max(dot(N, V), 0.0), rough)).rg;
+    vec2 brdf = texture(sBRDF, vec2(NdotV, rough)).rg;
 
     N.y = -N.y; // TMP
     vec3 ambient = kD * albedo * texture(sEnvIrradiance, N).rgb;
     ambient += envSpecular * (F * brdf.x + brdf.y);
 
-    shaded += ambient;
+    float ao = 1.0; //texture(sAO, iUV).r;
+
+    shaded += ao * ambient;
     shaded += texture(sEmissive, iUV).rgb;
 
     outColor = vec4(shaded, 1.0);

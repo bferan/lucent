@@ -32,6 +32,7 @@ struct Vertex
     Vector3 position;
     Vector3 normal;
     Vector3 tangent;
+    Vector3 bitangent;
     TexCoord texCoord0;
 };
 
@@ -64,6 +65,7 @@ struct Pipeline
 
 enum class TextureFormat
 {
+    kRGBA8_SRGB,
     kRGBA8,
     kRGBA32F,
     kDepth
@@ -73,6 +75,13 @@ enum class TextureShape
 {
     k2D,
     kCube
+};
+
+
+enum class TextureAddressMode
+{
+    kRepeat,
+    kClampToEdge
 };
 
 struct Texture
@@ -95,6 +104,7 @@ struct TextureInfo
     uint32_t levels = 1;
     TextureFormat format = TextureFormat::kRGBA8;
     TextureShape shape = TextureShape::k2D;
+    TextureAddressMode addressMode = TextureAddressMode::kRepeat;
 };
 
 enum class FramebufferUsage

@@ -32,12 +32,12 @@ Entity Importer::Import(Scene& scene, const std::string& modelFile)
 
     ImportMaterials(scene, modelScene);
     ImportMeshes(scene, modelScene);
-    auto root = ImportEntities(scene, modelScene);
+    auto root = ImportEntities(scene, *modelScene.mRootNode, Entity{});
 
     return root;
 }
 
-static Texture* ImportTexture(Device* device, const aiTexture* texture, aiReturn result)
+static Texture* ImportTexture(Device* device, const aiTexture* texture, aiReturn result, bool linear = true)
 {
     if (result != aiReturn_SUCCESS || !texture)
     {
@@ -52,6 +52,7 @@ static Texture* ImportTexture(Device* device, const aiTexture* texture, aiReturn
     auto importedTexture = device->CreateTexture(TextureInfo{
         .width = static_cast<uint32_t>(x),
         .height = static_cast<uint32_t>(y),
+        .format = linear ? TextureFormat::kRGBA8 : TextureFormat::kRGBA8_SRGB
     }, x * y * reqChannels, imgData);
 
     stbi_image_free(imgData);
@@ -67,32 +68,9 @@ void Importer::ImportMaterials(Scene& scene, const aiScene& model)
     {
         auto& mat = *model.mMaterials[i];
 
-//        std::cout << "Model " << model.mName.C_Str() << " material " << i << ":\n";
-//
-//        for (int p = 0; p < mat.mNumProperties; ++p)
-//        {
-//            auto& prop = *mat.mProperties[p];
-//            std::cout << "\t"
-//                      << prop.mKey.C_Str()
-//                      << ":  Semantic: "
-//                      << prop.mSemantic
-//                      << ";  Index: "
-//                      << prop.mIndex
-//                      << "; Type: "
-//                      << prop.mType;
-//
-//            if (prop.mType == aiPTI_String)
-//            {
-//                aiString string;
-//                aiGetMaterialString(&mat, prop.mKey.C_Str(), prop.mSemantic, prop.mIndex, &string);
-//                std::cout << " S: " << string.C_Str();
-//            }
-//            std::cout << "\n";
-//        }
-
         // Create textures
         auto result = mat.GetTexture(aiTextureType_DIFFUSE, 0, &path);
-        auto baseColTex = ImportTexture(m_Device, model.GetEmbeddedTexture(path.C_Str()), result);
+        auto baseColTex = ImportTexture(m_Device, model.GetEmbeddedTexture(path.C_Str()), result, false);
 
         result = mat.GetTexture(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLICROUGHNESS_TEXTURE, &path);
         auto metalRoughTex = ImportTexture(m_Device, model.GetEmbeddedTexture(path.C_Str()), result);
@@ -104,7 +82,7 @@ void Importer::ImportMaterials(Scene& scene, const aiScene& model)
         auto aoTex = ImportTexture(m_Device, model.GetEmbeddedTexture(path.C_Str()), result);
 
         result = mat.GetTexture(aiTextureType_EMISSIVE, 0, &path);
-        auto emissiveTex = ImportTexture(m_Device, model.GetEmbeddedTexture(path.C_Str()), result);
+        auto emissiveTex = ImportTexture(m_Device, model.GetEmbeddedTexture(path.C_Str()), result, false);
 
         // Create descriptor set for material textures
         auto descSet = m_Device->CreateDescriptorSet(*m_Pipeline, 1);
@@ -115,7 +93,6 @@ void Importer::ImportMaterials(Scene& scene, const aiScene& model)
         m_Device->WriteSet(descSet, 4, *emissiveTex);
 
         m_MaterialSets.push_back(descSet);
-
     }
 }
 
@@ -137,12 +114,14 @@ void Importer::ImportMeshes(Scene& scene, const aiScene& model)
             auto pos = mesh.mVertices[v];
             auto norm = mesh.mNormals[v];
             auto tan = mesh.mTangents[v];
+            auto bit = mesh.mBitangents[v];
             auto uv = mesh.mTextureCoords[0][v];
 
             vertices.emplace_back(Vertex{
                 .position = { pos.x, pos.y, pos.z },
                 .normal = { norm.x, norm.y, norm.z },
                 .tangent = { tan.x, tan.y, tan.z },
+                .bitangent = { bit.x, bit.y, bit.z },
                 .texCoord0 = { uv.x, uv.y }
             });
         }
@@ -174,9 +153,8 @@ void Importer::ImportMeshes(Scene& scene, const aiScene& model)
     }
 }
 
-Entity Importer::ImportEntities(Scene& scene, const aiScene& model)
+Entity Importer::ImportEntities(Scene& scene, const aiNode& node, Entity parent)
 {
-    auto& node = *model.mRootNode;
     auto entity = scene.entities.Create();
 
     aiVector3D pos;
@@ -187,12 +165,23 @@ Entity Importer::ImportEntities(Scene& scene, const aiScene& model)
     scene.transforms.Assign(entity, Transform{
         .rotation = { rot.x, rot.y, rot.z, rot.w },
         .position = { pos.x, pos.y, pos.z },
-        .scale = scale.x
+        .scale = scale.x,
+        .parent = parent
     });
 
     if (node.mNumMeshes > 0)
     {
         scene.meshInstances.Assign(entity, MeshInstance{ .meshIndex = m_MeshIndices[node.mMeshes[0]] });
+    }
+
+    if (node.mNumChildren > 0)
+    {
+        Parent parentComponent(node.mNumChildren);
+        for (int i = 0; i < node.mNumChildren; ++i)
+        {
+            parentComponent.children[i] = ImportEntities(scene, *node.mChildren[i], entity);
+        }
+        scene.parents.Assign(entity, std::move(parentComponent));
     }
 
     return entity;

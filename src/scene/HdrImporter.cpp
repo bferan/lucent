@@ -211,7 +211,8 @@ Environment HdrImporter::Import(const std::string& hdrFile)
     env.BRDF = m_Device->CreateTexture(TextureInfo{
         .width = kBRDFSize,
         .height = kBRDFSize,
-        .format = TextureFormat::kRGBA32F
+        .format = TextureFormat::kRGBA32F,
+        .addressMode = TextureAddressMode::kClampToEdge
     });
     RenderToQuad(m_GenBRDF, env.BRDF, kBRDFSize);
 

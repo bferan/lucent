@@ -16,22 +16,28 @@ void BasicDemo::Init()
     m_Renderer = std::make_unique<SceneRenderer>(&m_Device);
 
     Importer importer(&m_Device, m_Renderer->m_DefaultPipeline);
-    importer.Import(m_Scene, "models/Plane.glb");
+    //importer.Import(m_Scene, "models/Plane.glb");
 
     HdrImporter hdrImporter(&m_Device);
     m_Scene.environment = hdrImporter.Import("textures/shanghai_bund_4k.hdr");
+    //m_Scene.environment = hdrImporter.Import("textures/studio_small_03_4k.hdr");
     //m_Scene.environment = hdrImporter.Import("textures/rooitou_park_4k.hdr");
 
     auto helm = importer.Import(m_Scene, "models/DamagedHelmet.glb");
     m_Scene.transforms[helm].position = { -2.0f, 2.0f, 0.0f };
+    m_Rotate = helm;
 
+//    auto lantern = importer.Import(m_Scene, "models/Lantern.glb");
+//
     auto avo = importer.Import(m_Scene, "models/Avocado.glb");
     m_Scene.transforms[avo].scale = 40.0f;
     m_Scene.transforms[avo].position = { 2.0f, 2.0f, 0.0f };
 
+    auto test = importer.Import(m_Scene, "models/NormalTangentMirrorTest.glb");
+
     // Create camera entity
     m_Player = m_Scene.entities.Create();
-    m_Scene.transforms.Assign(m_Player, Transform{.position = {0.0f, 2.0f, 2.0f }});
+    m_Scene.transforms.Assign(m_Player, Transform{ .position = { 0.0f, 2.0f, 2.0f }});
     m_Scene.cameras.Assign(m_Player, Camera{ .horizontalFov = kHalfPi, .aspectRatio = 1600.0f / 900.0f });
 }
 
@@ -39,6 +45,11 @@ void BasicDemo::Draw(float dt)
 {
     static float timer = 0.0f;
     timer += dt;
+
+    // Rotate rotator
+    auto& rotTransform = m_Scene.transforms[m_Rotate];
+    rotTransform.rotation = Quaternion::AxisAngle(Vector3::Up(), timer * 0.5f)
+        * Quaternion::AxisAngle(Vector3::Right(), kHalfPi);
 
     // Update camera pos
     auto& input = m_Device.m_Input->GetState();

@@ -24,6 +24,10 @@ struct Transform
 
 struct Parent
 {
+    Parent(size_t numChildren)
+        : children(numChildren)
+    {
+    }
     std::vector<Entity> children;
 };
 

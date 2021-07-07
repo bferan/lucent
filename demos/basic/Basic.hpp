@@ -22,6 +22,7 @@ public:
 
     Scene m_Scene{};
     Entity m_Player;
+    Entity m_Rotate;
 };
 
 }

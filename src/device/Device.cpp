@@ -62,8 +62,11 @@ static VkFormat TextureFormatToVkFormat(TextureFormat format)
 {
     switch (format)
     {
-    case TextureFormat::kRGBA8:
+    case TextureFormat::kRGBA8_SRGB:
         return VK_FORMAT_R8G8B8A8_SRGB;
+
+    case TextureFormat::kRGBA8:
+        return VK_FORMAT_R8G8B8A8_UNORM;
 
     case TextureFormat::kRGBA32F:
         return VK_FORMAT_R32G32B32A32_SFLOAT;
@@ -92,6 +95,7 @@ static VkImageUsageFlags TextureFormatToUsage(TextureFormat format)
 {
     switch (format)
     {
+    case TextureFormat::kRGBA8_SRGB:
     case TextureFormat::kRGBA8:
     case TextureFormat::kRGBA32F:
         // TODO: Narrow this down
@@ -104,6 +108,7 @@ static VkImageUsageFlags TextureFormatToUsage(TextureFormat format)
         return VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
     default:
+        LC_ASSERT(0 && "Invalid texture format");
         return 0;
     }
 }
@@ -121,6 +126,22 @@ static VkImageViewType TextureShapeToViewType(TextureShape shape)
     default:
         LC_ASSERT(0 && "Invalid texture shape");
         return VK_IMAGE_VIEW_TYPE_MAX_ENUM;
+    }
+}
+
+static VkSamplerAddressMode TextureAddressModeToVk(TextureAddressMode mode)
+{
+    switch (mode)
+    {
+    case TextureAddressMode::kRepeat:
+        return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+
+    case TextureAddressMode::kClampToEdge:
+        return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+
+    default:
+        LC_ASSERT(0 && "Invalid address mode");
+        return VK_SAMPLER_ADDRESS_MODE_MAX_ENUM;
     }
 }
 
@@ -706,6 +727,12 @@ Pipeline* Device::CreatePipeline(const PipelineInfo& info)
         {
             .location = 3,
             .binding = 0,
+            .format = VK_FORMAT_R32G32B32_SFLOAT,
+            .offset = (uint32_t)offsetof(Vertex, bitangent)
+        },
+        {
+            .location = 4,
+            .binding = 0,
             .format = VK_FORMAT_R32G32_SFLOAT,
             .offset = (uint32_t)offsetof(Vertex, texCoord0)
         }
@@ -851,6 +878,7 @@ Texture* Device::CreateTexture(const TextureInfo& info, size_t size, void* data)
     auto aspect = TextureFormatToAspect(info.format);
     auto usage = TextureFormatToUsage(info.format);
     auto viewType = TextureShapeToViewType(info.shape);
+    auto addressMode = TextureAddressModeToVk(info.addressMode);
 
     VkFlags flags = 0;
     uint32_t arrayLayers = 1;
@@ -917,14 +945,14 @@ Texture* Device::CreateTexture(const TextureInfo& info, size_t size, void* data)
         .magFilter = VK_FILTER_LINEAR,
         .minFilter = VK_FILTER_LINEAR,
         .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-        .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-        .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-        .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .addressModeU = addressMode,
+        .addressModeV = addressMode,
+        .addressModeW = addressMode,
         .mipLodBias = 0,
         .anisotropyEnable = VK_FALSE, // TODO: Enable anisotropy
         .maxAnisotropy = m_DeviceProperties.limits.maxSamplerAnisotropy,
         .compareEnable = VK_FALSE,
-        .compareOp = VK_COMPARE_OP_ALWAYS,
+        .compareOp = VK_COMPARE_OP_ALWAYS, // TODO: Change for shadow maps
         .minLod = 0.0f,
         .maxLod = VK_LOD_CLAMP_NONE,
         .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
