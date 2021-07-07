@@ -53,6 +53,14 @@ struct Camera
     float yaw = 0.0f;
 };
 
+struct Environment
+{
+    Texture* cubeMap;
+    Texture* irradianceMap;
+    Texture* specularMap;
+    Texture* BRDF;
+};
+
 struct Scene
 {
     EntityPool entities;
@@ -63,6 +71,8 @@ struct Scene
     ComponentPool<Camera> cameras;
 
     std::vector<Mesh> meshes;
+
+    Environment environment;
 };
 
 }

@@ -64,7 +64,6 @@ ShaderCache::ShaderCache(Device* device)
 CompiledProgram& ShaderCache::Compile(const ProgramInfo& info)
 {
     auto hash = HashProgramText(info);
-
     if (m_Programs.contains(hash))
     {
         return *m_Programs[hash];
@@ -138,7 +137,8 @@ bool ShaderCache::PopulateProgram(const ProgramInfo& info, CompiledProgram& comp
         shader.setEnvClient(client, clientVersion);
         shader.setEnvTarget(targetLang, targetLangVersion);
 
-        shader.parse(&builtInResource, defaultVersion, true, EShMsgDefault);
+        auto result = shader.parse(&builtInResource, defaultVersion, true, EShMsgDefault);
+        LC_ASSERT(result);
 
         program.addShader(&shader);
 
@@ -150,7 +150,8 @@ bool ShaderCache::PopulateProgram(const ProgramInfo& info, CompiledProgram& comp
     addShader(info.vertShader, EShLangVertex, VK_SHADER_STAGE_VERTEX_BIT);
     addShader(info.fragShader, EShLangFragment, VK_SHADER_STAGE_FRAGMENT_BIT);
 
-    program.link(EShMsgDefault);
+    auto result = program.link(EShMsgDefault);
+    LC_ASSERT(result);
 
     PipelineLayout layout;
     for (int i = 0; i < compiled.numStages; ++i)
@@ -166,7 +167,7 @@ bool ShaderCache::PopulateProgram(const ProgramInfo& info, CompiledProgram& comp
             .pCode = m_SpirvBuffer.data()
         };
 
-        auto result = vkCreateShaderModule(m_Device->m_Device, &moduleInfo, nullptr, &compiled.stages[i].module);
+        result = vkCreateShaderModule(m_Device->m_Device, &moduleInfo, nullptr, &compiled.stages[i].module);
         LC_ASSERT(result == VK_SUCCESS);
 
         ScanLayout(*inter.getTreeRoot(), layout);

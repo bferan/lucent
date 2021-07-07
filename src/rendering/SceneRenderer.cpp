@@ -9,17 +9,26 @@ namespace lucent
 SceneRenderer::SceneRenderer(Device* device)
     : m_Device(device)
 {
-    m_Pipeline = m_Device->CreatePipeline(PipelineInfo{
+    m_DefaultPipeline = m_Device->CreatePipeline(PipelineInfo{
         .programInfo = {
-            .vertShader = ReadFile("C:/Code/lucent/src/rendering/vert.glsl"),
-            .fragShader = ReadFile("C:/Code/lucent/src/rendering/frag.glsl")
+            .vertShader = ReadFile("C:/Code/lucent/src/rendering/shaders/vert.glsl"),
+            .fragShader = ReadFile("C:/Code/lucent/src/rendering/shaders/frag.glsl")
+        }
+    });
+
+    m_SkyboxPipeline = m_Device->CreatePipeline(PipelineInfo{
+        .programInfo = {
+            .vertShader = ReadFile("C:/Code/lucent/src/rendering/shaders/Skybox.vert"),
+            .fragShader = ReadFile("C:/Code/lucent/src/rendering/shaders/Skybox.frag"),
         }
     });
 
     m_Context = m_Device->CreateContext();
 
     // Create UBO
-    m_GlobalSet = m_Device->CreateDescriptorSet(*m_Pipeline, 0);
+    m_GlobalSet = m_Device->CreateDescriptorSet(*m_DefaultPipeline, 0);
+    m_SkyboxSet = m_Device->CreateDescriptorSet(*m_SkyboxPipeline, 1);
+
     m_UniformBuffer = m_Device->CreateBuffer(BufferType::Uniform, 65535);
     m_Device->WriteSet(m_GlobalSet, 0, *m_UniformBuffer);
 }
@@ -40,6 +49,12 @@ void SceneRenderer::Render(Scene& scene)
 
     auto proj = Matrix4::Perspective(camera.horizontalFov, camera.aspectRatio, camera.near, camera.far);
 
+    m_Device->WriteSet(m_GlobalSet, 1, *scene.environment.irradianceMap);
+    m_Device->WriteSet(m_GlobalSet, 2, *scene.environment.specularMap);
+    m_Device->WriteSet(m_GlobalSet, 3, *scene.environment.BRDF);
+
+    m_Device->WriteSet(m_SkyboxSet, 0, *scene.environment.cubeMap);
+
     // Draw
     auto& ctx = *m_Context;
     auto& fb = m_Device->AcquireFramebuffer();
@@ -47,11 +62,12 @@ void SceneRenderer::Render(Scene& scene)
     ctx.Begin();
     ctx.BeginRenderPass(fb);
 
-    ctx.Bind(*m_Pipeline);
+    ctx.Bind(*m_DefaultPipeline);
 
     const size_t uniformAlignment = m_Device->m_DeviceProperties.limits.minUniformBufferOffsetAlignment;
     uint32_t uniformOffset = 0;
 
+    // Draw entities
     for (auto entity : scene.meshInstances)
     {
         auto& mesh = scene.meshes[scene.meshInstances[entity].meshIndex];
@@ -65,7 +81,7 @@ void SceneRenderer::Render(Scene& scene)
             .model = model,
             .view = view,
             .proj = proj,
-            .col = Vector3{ 0.0f, 0.0f, 1.0f }
+            .cameraPos = transform.position
         };
 
         m_UniformBuffer->Upload(&ubo, sizeof(UBO), uniformOffset);
@@ -82,6 +98,21 @@ void SceneRenderer::Render(Scene& scene)
         // Align up
         uniformOffset += (uniformAlignment - (uniformOffset % uniformAlignment)) % uniformAlignment;
     }
+
+    // Draw skybox
+    UBO ubo = {
+        .model = Matrix4::Identity(),
+        .view = view,
+        .proj = proj
+    };
+    m_UniformBuffer->Upload(&ubo, sizeof(UBO), uniformOffset);
+    ctx.Bind(*m_SkyboxPipeline);
+    ctx.BindSet(m_GlobalSet, uniformOffset);
+    ctx.BindSet(m_SkyboxSet);
+
+    ctx.Bind(m_Device->m_Cube.indices);
+    ctx.Bind(m_Device->m_Cube.vertices, 0);
+    ctx.Draw(m_Device->m_Cube.numIndices);
 
     ctx.EndRenderPass();
     ctx.End();

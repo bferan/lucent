@@ -19,6 +19,7 @@ namespace lucent
 class Device;
 class ShaderCache;
 struct Texture;
+struct Framebuffer;
 
 struct TexCoord
 {
@@ -40,24 +41,6 @@ struct DeviceQueue
     uint32_t familyIndex;
 };
 
-struct Framebuffer
-{
-    VkFramebuffer handle;
-    VkRenderPass renderPass;
-    VkExtent2D extent;
-    VkFormat format;
-    VkImage image;
-    VkImageView imageView;
-
-    Texture* depthTexture;
-};
-
-struct Swapchain
-{
-    VkSwapchainKHR handle;
-    std::vector<Framebuffer> framebuffers;
-};
-
 struct ProgramInfo
 {
     std::string vertShader;
@@ -67,6 +50,7 @@ struct ProgramInfo
 struct PipelineInfo
 {
     ProgramInfo programInfo;
+    Framebuffer* framebuffer = nullptr;
 };
 
 struct Pipeline
@@ -80,8 +64,15 @@ struct Pipeline
 
 enum class TextureFormat
 {
-    RGBA,
-    Depth
+    kRGBA8,
+    kRGBA32F,
+    kDepth
+};
+
+enum class TextureShape
+{
+    k2D,
+    kCube
 };
 
 struct Texture
@@ -90,15 +81,52 @@ struct Texture
     VkImageView imageView;
     VmaAllocation alloc;
 
+    VkExtent2D extent;
+    VkFormat format;
+
     VkSampler sampler;
-    TextureFormat format;
+    TextureFormat texFormat;
 };
 
 struct TextureInfo
 {
     uint32_t width = 1;
     uint32_t height = 1;
-    TextureFormat format = TextureFormat::RGBA;
+    uint32_t levels = 1;
+    TextureFormat format = TextureFormat::kRGBA8;
+    TextureShape shape = TextureShape::k2D;
+};
+
+enum class FramebufferUsage
+{
+    SwapchainImage,
+    Default
+};
+
+struct FramebufferInfo
+{
+    FramebufferUsage usage = FramebufferUsage::Default;
+    Texture* colorTexture = nullptr;
+    Texture* depthTexture = nullptr;
+};
+
+struct Framebuffer
+{
+    VkFramebuffer handle;
+    VkRenderPass renderPass;
+    VkExtent2D extent;
+
+    FramebufferUsage usage;
+
+    Texture* colorTexture;
+    Texture* depthTexture;
+};
+
+struct Swapchain
+{
+    VkSwapchainKHR handle;
+    std::vector<Framebuffer> framebuffers;
+    std::vector<Texture> textures;
 };
 
 enum class BufferType
@@ -131,12 +159,13 @@ class Context
 public:
     explicit Context(Device& device)
         : m_Device(device)
-    {}
+    {
+    }
 
     void Begin() const;
     void End() const;
 
-    void BeginRenderPass(const Framebuffer& fbuffer) const;
+    void BeginRenderPass(const Framebuffer& fbuffer, VkExtent2D extent = {});
     void EndRenderPass() const;
 
     void Bind(Pipeline& pipeline);
@@ -149,6 +178,11 @@ public:
 
     void Draw(uint32_t indexCount) const;
 
+    void CopyTexture(
+        Texture* src, int srcLayer, int srcLevel,
+        Texture* dst, int dstLayer, int dstLevel,
+        uint32_t width, uint32_t height);
+
 public:
     Device& m_Device;
 
@@ -156,6 +190,7 @@ public:
     VkCommandBuffer m_CommandBuffer{};
 
     // Active state
+    bool m_SwapchainWritten{};
     Pipeline* m_BoundPipeline{};
 };
 
@@ -171,6 +206,8 @@ public:
 
     Texture* CreateTexture(const TextureInfo& info, size_t size = 0, void* data = nullptr);
 
+    Framebuffer* CreateFramebuffer(const FramebufferInfo& info);
+
     const Framebuffer& AcquireFramebuffer();
 
     DescriptorSet* CreateDescriptorSet(const Pipeline& pipeline, uint32_t set);
@@ -182,7 +219,6 @@ public:
 
     void Present();
 
-
 public:
     friend class Buffer;
 
@@ -190,7 +226,6 @@ private:
     void CreateInstance();
     void CreateDevice();
     void CreateSwapchain();
-    void CreateShader(const std::string& vertex, const std::string& frag);
 
 public:
     GLFWwindow* m_Window;
@@ -210,6 +245,7 @@ public:
     std::vector<std::unique_ptr<Pipeline>> m_Pipelines;
     std::vector<std::unique_ptr<Buffer>> m_Buffers;
     std::vector<std::unique_ptr<Texture>> m_Textures;
+    std::vector<std::unique_ptr<Framebuffer>> m_Framebuffers;
     std::vector<std::unique_ptr<Context>> m_Contexts;
 
     VkSemaphore m_ImageAvailable{};
@@ -227,6 +263,25 @@ public:
     Texture* m_DefaultTexture;
 
     std::unique_ptr<ShaderCache> m_ShaderCache;
+
+public:
+    void CreateCube();
+    void CreateQuad();
+
+    struct Cube
+    {
+        Buffer* vertices;
+        Buffer* indices;
+        uint32_t numIndices;
+    } m_Cube;
+
+    struct Quad
+    {
+        Buffer* vertices;
+        Buffer* indices;
+        uint32_t numIndices;
+    } m_Quad;
+
 };
 
 }

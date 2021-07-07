@@ -4,6 +4,7 @@
 
 #include "assimp/Importer.hpp"
 #include "assimp/postprocess.h"
+#include "assimp/pbrmaterial.h"
 #include "stb_image.h"
 
 namespace lucent
@@ -36,13 +37,12 @@ Entity Importer::Import(Scene& scene, const std::string& modelFile)
     return root;
 }
 
-static Texture* ImportTexture(Device* device, const aiTexture* texture)
+static Texture* ImportTexture(Device* device, const aiTexture* texture, aiReturn result)
 {
-    if (!texture)
+    if (result != aiReturn_SUCCESS || !texture)
     {
         return device->m_DefaultTexture;
     }
-
     int reqChannels = 4;
     int x, y, n;
     auto imgData = stbi_load_from_memory(
@@ -67,36 +67,52 @@ void Importer::ImportMaterials(Scene& scene, const aiScene& model)
     {
         auto& mat = *model.mMaterials[i];
 
-        std::cout << "Model " << model.mName.C_Str() << " material " << i << ":\n";
-
-        for (int p = 0; p < mat.mNumProperties; ++p)
-        {
-            auto& prop = *mat.mProperties[p];
-            std::cout << "\t"
-                      << prop.mKey.C_Str()
-                      << ":  Semantic: "
-                      << prop.mSemantic
-                      << ";  Index: "
-                      << prop.mIndex
-                      << "; Type: "
-                      << prop.mType;
-
-            if (prop.mType == aiPTI_String)
-            {
-                aiString string;
-                aiGetMaterialString(&mat, prop.mKey.C_Str(), prop.mSemantic, prop.mIndex, &string);
-                std::cout << " S: " << string.C_Str();
-            }
-            std::cout << "\n";
-        }
+//        std::cout << "Model " << model.mName.C_Str() << " material " << i << ":\n";
+//
+//        for (int p = 0; p < mat.mNumProperties; ++p)
+//        {
+//            auto& prop = *mat.mProperties[p];
+//            std::cout << "\t"
+//                      << prop.mKey.C_Str()
+//                      << ":  Semantic: "
+//                      << prop.mSemantic
+//                      << ";  Index: "
+//                      << prop.mIndex
+//                      << "; Type: "
+//                      << prop.mType;
+//
+//            if (prop.mType == aiPTI_String)
+//            {
+//                aiString string;
+//                aiGetMaterialString(&mat, prop.mKey.C_Str(), prop.mSemantic, prop.mIndex, &string);
+//                std::cout << " S: " << string.C_Str();
+//            }
+//            std::cout << "\n";
+//        }
 
         // Create textures
-        mat.GetTexture(aiTextureType_DIFFUSE, 0, &path);
-        auto baseColTex = ImportTexture(m_Device, model.GetEmbeddedTexture(path.C_Str()));
+        auto result = mat.GetTexture(aiTextureType_DIFFUSE, 0, &path);
+        auto baseColTex = ImportTexture(m_Device, model.GetEmbeddedTexture(path.C_Str()), result);
+
+        result = mat.GetTexture(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLICROUGHNESS_TEXTURE, &path);
+        auto metalRoughTex = ImportTexture(m_Device, model.GetEmbeddedTexture(path.C_Str()), result);
+
+        result = mat.GetTexture(aiTextureType_NORMALS, 0, &path);
+        auto normalTex = ImportTexture(m_Device, model.GetEmbeddedTexture(path.C_Str()), result);
+
+        result = mat.GetTexture(aiTextureType_LIGHTMAP, 0, &path);
+        auto aoTex = ImportTexture(m_Device, model.GetEmbeddedTexture(path.C_Str()), result);
+
+        result = mat.GetTexture(aiTextureType_EMISSIVE, 0, &path);
+        auto emissiveTex = ImportTexture(m_Device, model.GetEmbeddedTexture(path.C_Str()), result);
 
         // Create descriptor set for material textures
         auto descSet = m_Device->CreateDescriptorSet(*m_Pipeline, 1);
         m_Device->WriteSet(descSet, 0, *baseColTex);
+        m_Device->WriteSet(descSet, 1, *metalRoughTex);
+        m_Device->WriteSet(descSet, 2, *normalTex);
+        m_Device->WriteSet(descSet, 3, *aoTex);
+        m_Device->WriteSet(descSet, 4, *emissiveTex);
 
         m_MaterialSets.push_back(descSet);
 

@@ -24,6 +24,8 @@ target_sources(lucent PRIVATE
 
         scene/ComponentPool.hpp
         scene/EntityPool.hpp
+        scene/HdrImporter.cpp
+        scene/HdrImporter.hpp
         scene/Importer.cpp
         scene/Importer.hpp
         scene/Scene.hpp

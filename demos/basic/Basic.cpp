@@ -6,6 +6,7 @@
 #include "GLFW/glfw3.h"
 
 #include "scene/Importer.hpp"
+#include "scene/HdrImporter.hpp"
 
 namespace lucent::demos
 {
@@ -14,9 +15,12 @@ void BasicDemo::Init()
 {
     m_Renderer = std::make_unique<SceneRenderer>(&m_Device);
 
-    Importer importer(&m_Device, m_Renderer->m_Pipeline);
-
+    Importer importer(&m_Device, m_Renderer->m_DefaultPipeline);
     importer.Import(m_Scene, "models/Plane.glb");
+
+    HdrImporter hdrImporter(&m_Device);
+    m_Scene.environment = hdrImporter.Import("textures/shanghai_bund_4k.hdr");
+    //m_Scene.environment = hdrImporter.Import("textures/rooitou_park_4k.hdr");
 
     auto helm = importer.Import(m_Scene, "models/DamagedHelmet.glb");
     m_Scene.transforms[helm].position = { -2.0f, 2.0f, 0.0f };
