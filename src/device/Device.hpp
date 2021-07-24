@@ -52,6 +52,7 @@ struct PipelineInfo
 {
     ProgramInfo programInfo;
     Framebuffer* framebuffer = nullptr;
+    bool depthTestEnable = true;
 };
 
 struct Pipeline
@@ -65,6 +66,7 @@ struct Pipeline
 
 enum class TextureFormat
 {
+    kR8,
     kRGBA8_SRGB,
     kRGBA8,
     kRGBA32F,
@@ -105,6 +107,7 @@ struct TextureInfo
     TextureFormat format = TextureFormat::kRGBA8;
     TextureShape shape = TextureShape::k2D;
     TextureAddressMode addressMode = TextureAddressMode::kRepeat;
+    bool generateMips = false;
 };
 
 enum class FramebufferUsage
@@ -180,6 +183,7 @@ public:
 
     void Bind(Pipeline& pipeline);
 
+    // TODO: One entrypoint, determine binding point from buffer type
     void Bind(const Buffer* indexBuffer);
     void Bind(const Buffer* vertexBuffer, uint32_t binding);
 
@@ -270,8 +274,6 @@ public:
 
     std::unique_ptr<Input> m_Input;
 
-    Texture* m_DefaultTexture;
-
     std::unique_ptr<ShaderCache> m_ShaderCache;
 
 public:
@@ -291,6 +293,11 @@ public:
         Buffer* indices;
         uint32_t numIndices;
     } m_Quad;
+
+    Texture* m_BlackTexture;
+    Texture* m_WhiteTexture;
+    Texture* m_GrayTexture;
+    Texture* m_GreenTexture;
 
 };
 

@@ -31,6 +31,9 @@ SceneRenderer::SceneRenderer(Device* device)
 
     m_UniformBuffer = m_Device->CreateBuffer(BufferType::Uniform, 65535);
     m_Device->WriteSet(m_GlobalSet, 0, *m_UniformBuffer);
+
+    // Create debug console (temp)
+    m_DebugConsole = std::make_unique<DebugConsole>(m_Device);
 }
 
 void SceneRenderer::Render(Scene& scene)
@@ -70,8 +73,8 @@ void SceneRenderer::Render(Scene& scene)
     // Draw entities
     for (auto entity : scene.meshInstances)
     {
-        auto& mesh = scene.meshes[scene.meshInstances[entity].meshIndex];
         auto& local = scene.transforms[entity];
+        auto& instance = scene.meshInstances[entity];
 
         auto model = Matrix4::Translation(local.position) *
             Matrix4::Rotation(local.rotation) *
@@ -86,13 +89,18 @@ void SceneRenderer::Render(Scene& scene)
 
         m_UniformBuffer->Upload(&ubo, sizeof(UBO), uniformOffset);
 
-        ctx.BindSet(m_GlobalSet, uniformOffset);
-        ctx.BindSet(mesh.descSet);
+        for (auto idx : instance.meshes)
+        {
+            auto& mesh = scene.meshes[idx];
+            auto& material = scene.materials[mesh.materialIdx];
 
-        ctx.Bind(mesh.vertexBuffer, 0);
-        ctx.Bind(mesh.indexBuffer);
+            ctx.BindSet(m_GlobalSet, uniformOffset);
+            ctx.BindSet(material.descSet);
 
-        ctx.Draw(mesh.numIndices);
+            ctx.Bind(mesh.vertexBuffer, 0);
+            ctx.Bind(mesh.indexBuffer);
+            ctx.Draw(mesh.numIndices);
+        }
 
         uniformOffset += sizeof(UBO);
         // Align up
@@ -113,6 +121,9 @@ void SceneRenderer::Render(Scene& scene)
     ctx.Bind(m_Device->m_Cube.indices);
     ctx.Bind(m_Device->m_Cube.vertices, 0);
     ctx.Draw(m_Device->m_Cube.numIndices);
+
+    // Draw console
+    m_DebugConsole->Render(ctx);
 
     ctx.EndRenderPass();
     ctx.End();

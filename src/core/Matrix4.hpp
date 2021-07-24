@@ -105,7 +105,7 @@ public:
             Vector4(0.0f, 0.0f, -(2.0f * f * n) / (f - n), 0.0f)
         );
 
-        //return Perspective(-n / e, n / e, aspectRatio * n / e, -aspectRatio * n / e, n, f);
+        //return Perspective(-b / e, b / e, aspectRatio * b / e, -aspectRatio * b / e, b, f);
     }
 
 public:

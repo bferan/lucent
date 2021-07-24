@@ -34,6 +34,7 @@ void main()
 {
     vec4 metallicRoughness = texture(sMetalRoughness, iUV);
     vec3 base = texture(sBaseColor, iUV).rgb;
+    base *= vec3(0.588);
 
     vec3 t = normalize(iTangent);
     vec3 b = normalize(iBitangent);
@@ -69,7 +70,7 @@ void main()
     vec3 ambient = kD * albedo * texture(sEnvIrradiance, N).rgb;
     ambient += envSpecular * (F * brdf.x + brdf.y);
 
-    float ao = 1.0; //texture(sAO, iUV).r;
+    float ao = texture(sAO, iUV).r;
 
     shaded += ao * ambient;
     shaded += texture(sEmissive, iUV).rgb;

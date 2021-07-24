@@ -2,6 +2,7 @@
 target_include_directories(lucent PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_sources(lucent PRIVATE
+        core/Color.hpp
         core/Hash.hpp
         core/Lucent.hpp
         core/Math.hpp
@@ -9,6 +10,13 @@ target_sources(lucent PRIVATE
         core/Quaternion.hpp
         core/Vector3.hpp
         core/Vector4.hpp
+
+        debug/DebugConsole.cpp
+        debug/DebugConsole.hpp
+        debug/Font.cpp
+        debug/Font.hpp
+        debug/TextMesh.cpp
+        debug/TextMesh.hpp
 
         device/Device.cpp
         device/Device.hpp

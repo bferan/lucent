@@ -6,6 +6,7 @@
 #include "GLFW/glfw3.h"
 #include "glslang/Public/ShaderLang.h"
 
+#include "core/Color.hpp"
 #include "core/Lucent.hpp"
 #include "device/ShaderCache.hpp"
 
@@ -62,6 +63,9 @@ static VkFormat TextureFormatToVkFormat(TextureFormat format)
 {
     switch (format)
     {
+    case TextureFormat::kR8:
+        return VK_FORMAT_R8_UNORM;
+
     case TextureFormat::kRGBA8_SRGB:
         return VK_FORMAT_R8G8B8A8_SRGB;
 
@@ -95,6 +99,7 @@ static VkImageUsageFlags TextureFormatToUsage(TextureFormat format)
 {
     switch (format)
     {
+    case TextureFormat::kR8:
     case TextureFormat::kRGBA8_SRGB:
     case TextureFormat::kRGBA8:
     case TextureFormat::kRGBA32F:
@@ -190,7 +195,7 @@ void Device::CreateQuad()
         { .position = { -1.0f, 1.0f, 0.0f }, .texCoord0 = { 0.0f, 0.0f }}
     });
 
-    indices.assign({0, 1, 2, 2, 3, 0});
+    indices.assign({ 0, 1, 2, 2, 3, 0 });
 
     m_Quad.vertices = CreateBuffer(BufferType::Vertex, vertices.size() * sizeof(Vertex));
     m_Quad.vertices->Upload(vertices.data(), vertices.size() * sizeof(Vertex));
@@ -278,9 +283,18 @@ Device::Device()
 
     CreateSwapchain();
 
-    // Create dummy texture
-    uint32_t black = 0;
-    m_DefaultTexture = CreateTexture(TextureInfo{}, sizeof(black), &black);
+    // Create dummy textures
+    uint32_t black = 0xff000000;
+    m_BlackTexture = CreateTexture(TextureInfo{}, sizeof(black), &black);
+
+    uint32_t white = 0xffffffff;
+    m_WhiteTexture = CreateTexture(TextureInfo{}, sizeof(white), &white);
+
+    uint32_t gray = 0xff808080;
+    m_GrayTexture = CreateTexture(TextureInfo{}, sizeof(gray), &gray);
+
+    uint32_t green = 0xff00ff00;
+    m_GreenTexture = CreateTexture(TextureInfo{}, sizeof(green), &green);
 
     // Create primitive meshes
     CreateCube();
@@ -790,9 +804,9 @@ Pipeline* Device::CreatePipeline(const PipelineInfo& info)
 
     auto depthStencilInfo = VkPipelineDepthStencilStateCreateInfo{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-        .depthTestEnable = VK_TRUE,
-        .depthWriteEnable = VK_TRUE,
-        .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
+        .depthTestEnable = static_cast<VkBool32>(info.depthTestEnable ? VK_TRUE : VK_FALSE),
+        .depthWriteEnable = static_cast<VkBool32>(info.depthTestEnable ? VK_TRUE : VK_FALSE),
+        .depthCompareOp = info.depthTestEnable ? VK_COMPARE_OP_LESS_OR_EQUAL : VK_COMPARE_OP_ALWAYS,
         .depthBoundsTestEnable = VK_FALSE,
         .stencilTestEnable = VK_FALSE,
     };
@@ -802,6 +816,21 @@ Pipeline* Device::CreatePipeline(const PipelineInfo& info)
         .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT
             | VK_COLOR_COMPONENT_A_BIT
     };
+
+    if (!info.depthTestEnable)
+    {
+        colorBlendAttachmentInfo = VkPipelineColorBlendAttachmentState{
+            .blendEnable = VK_TRUE,
+            .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+            .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+            .colorBlendOp = VK_BLEND_OP_ADD,
+            .srcAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+            .dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+            .alphaBlendOp = VK_BLEND_OP_ADD,
+            .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT
+                | VK_COLOR_COMPONENT_A_BIT
+        };
+    }
 
     auto colorBlendInfo = VkPipelineColorBlendStateCreateInfo{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
@@ -1035,6 +1064,11 @@ Texture* Device::CreateTexture(const TextureInfo& info, size_t size, void* data)
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             1,
             &imgCopyRegion);
+
+        if (info.generateMips)
+        {
+            // TODO: Generate mip levels here
+        }
 
         // Transition DST_OPTIMAL -> SHADER_READ_ONLY_OPTIMAL
         auto imgSrcBarrier = VkImageMemoryBarrier{

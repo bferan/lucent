@@ -7,9 +7,9 @@
 namespace lucent
 {
 
-inline std::string ReadFile(const std::string& path)
+inline std::string ReadFile(const std::string& path, std::ios::openmode mode = std::ios::in)
 {
-    std::ifstream file(path);
+    std::ifstream file(path, mode);
     std::string buf;
 
     file.seekg(0, std::ios::end);

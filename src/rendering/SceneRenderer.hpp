@@ -3,6 +3,7 @@
 #include "core/Matrix4.hpp"
 #include "device/Device.hpp"
 #include "scene/Scene.hpp"
+#include "debug/DebugConsole.hpp"
 
 namespace lucent
 {
@@ -35,6 +36,9 @@ public:
     // UBO
     DescriptorSet* m_GlobalSet;
     Buffer* m_UniformBuffer;
+
+    // TEMP
+    std::unique_ptr<DebugConsole> m_DebugConsole;
 };
 
 }

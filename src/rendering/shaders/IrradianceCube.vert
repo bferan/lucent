@@ -22,3 +22,8 @@ void main()
     vec4 pos = uProj * vec4(mat3(uView) * vPosition, 1.0);
     gl_Position = pos.xyww;
 }
+
+void vert()
+{
+
+}
