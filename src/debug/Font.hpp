@@ -31,6 +31,11 @@ public:
 
     Glyph GetGlyph(char c) const;
 
+    float PixelHeight() const
+    {
+        return m_PixelHeight;
+    }
+
     void Bind(Context& context) const;
 
 private:

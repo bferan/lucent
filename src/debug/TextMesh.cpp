@@ -1,13 +1,15 @@
 #include "TextMesh.hpp"
 
+#include "core/Math.hpp"
+
 namespace lucent
 {
 
 constexpr float kScreenWidth = 1600.0f;
 constexpr float kScreenHeight = 900.0f;
 
-constexpr size_t kVertBufferSize = (1 << 16);
-constexpr size_t kIdxBufferSize = (1 << 16);
+constexpr size_t kVertBufferSize = (1 << 18);
+constexpr size_t kIdxBufferSize = (1 << 18);
 
 TextMesh::TextMesh(Device* device, const Font& font)
     : m_Font(font), m_Device(device), m_Dirty(true)
@@ -16,7 +18,19 @@ TextMesh::TextMesh(Device* device, const Font& font)
     m_IndexBuffer = m_Device->CreateBuffer(BufferType::Index, kIdxBufferSize);
 }
 
-float TextMesh::Draw(char c, float screenX, float screenY)
+float TextMesh::Draw(const std::string& str, float x, float y, PackedColor color)
+{
+    float originX = x;
+
+    for (auto c : str)
+    {
+        x = Round(x);
+        x += Draw(c, x, y, color);
+    }
+    return x - originX;
+}
+
+float TextMesh::Draw(char c, float screenX, float screenY, PackedColor color)
 {
     const auto& glyph = m_Font.GetGlyph(c);
 
@@ -32,10 +46,10 @@ float TextMesh::Draw(char c, float screenX, float screenY)
 
     auto idx = m_Vertices.size();
 
-    m_Vertices.push_back({ .position = { min.x, min.y }, . texCoord0 = { minTC.x, minTC.y }});
-    m_Vertices.push_back({ .position = { max.x, min.y }, . texCoord0 = { maxTC.x, minTC.y }});
-    m_Vertices.push_back({ .position = { max.x, max.y }, . texCoord0 = { maxTC.x, maxTC.y }});
-    m_Vertices.push_back({ .position = { min.x, max.y }, . texCoord0 = { minTC.x, maxTC.y }});
+    m_Vertices.push_back({ .position = { min.x, min.y }, . texCoord0 = { minTC.x, minTC.y }, .color = color });
+    m_Vertices.push_back({ .position = { max.x, min.y }, . texCoord0 = { maxTC.x, minTC.y }, .color = color });
+    m_Vertices.push_back({ .position = { max.x, max.y }, . texCoord0 = { maxTC.x, maxTC.y }, .color = color });
+    m_Vertices.push_back({ .position = { min.x, max.y }, . texCoord0 = { minTC.x, maxTC.y }, .color = color });
 
     m_Indices.push_back(idx + 0);
     m_Indices.push_back(idx + 1);

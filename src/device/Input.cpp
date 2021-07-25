@@ -17,6 +17,7 @@ Input::Input(GLFWwindow* window)
     glfwSetCursorPosCallback(window, CursorPosCallback);
     glfwSetMouseButtonCallback(window, MouseButtonCallback);
     glfwSetScrollCallback(window, ScrollCallback);
+    glfwSetCharCallback(window, CharCallback);
 
     double x, y;
     glfwGetCursorPos(window, &x, &y);
@@ -30,6 +31,7 @@ void Input::KeyCallback(GLFWwindow* window, int key, int scancode, int action, i
     if (key == GLFW_KEY_UNKNOWN) return;
 
     state.keysDown[key] = action != GLFW_RELEASE;
+    state.keysPressed[key] |= action == GLFW_PRESS;
 }
 void Input::CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
 {
@@ -48,6 +50,7 @@ void Input::MouseButtonCallback(GLFWwindow* window, int button, int action, int 
     if (button >= GLFW_MOUSE_BUTTON_LAST || button < 0) return;
 
     state.mouseButtonsDown[button] = action != GLFW_RELEASE;
+    state.mouseButtonsPressed[button] |= action == GLFW_PRESS;
 }
 
 void Input::ScrollCallback(GLFWwindow* window, double xoffset, double yoffset)
@@ -55,6 +58,17 @@ void Input::ScrollCallback(GLFWwindow* window, double xoffset, double yoffset)
     auto& state = ((Input*)glfwGetWindowUserPointer(window))->m_State;
 
     state.scroll = { (float)xoffset, (float)yoffset };
+}
+
+void Input::CharCallback(GLFWwindow* window, uint32_t codepoint)
+{
+    auto& state = ((Input*)glfwGetWindowUserPointer(window))->m_State;
+
+    constexpr int kFirstAscii = 32;
+    auto c = (char)codepoint;
+
+    if (c >= kFirstAscii)
+        state.textBuffer += c;
 }
 
 }

@@ -37,42 +37,41 @@ void BasicDemo::Draw(float dt)
     static float timer = 0.0f;
     timer += dt;
 
-    // Rotate rotator
-//    auto& rotTransform = m_Scene.transforms[m_Rotate];
-//    rotTransform.rotation = Quaternion::AxisAngle(Vector3::Up(), timer * 0.5f)
-//        * Quaternion::AxisAngle(Vector3::Right(), kHalfPi);
-
-    // Update camera pos
     auto& input = m_Device.m_Input->GetState();
     auto& transform = m_Scene.transforms[m_Player];
     auto& camera = m_Scene.cameras[m_Player];
 
-    const float hSensitivity = 0.8f;
-    const float vSensitivity = 1.0f;
-    camera.yaw += dt * hSensitivity * -input.cursorDelta.x;
-    camera.pitch += dt * vSensitivity * -input.cursorDelta.y;
-    camera.pitch = Clamp(camera.pitch, -kHalfPi, kHalfPi);
+    if (!m_Renderer->m_DebugConsole->Active())
+    {
+        // Update camera pos
+        const float hSensitivity = 0.8f;
+        const float vSensitivity = 1.0f;
+        camera.yaw += dt * hSensitivity * -input.cursorDelta.x;
+        camera.pitch += dt * vSensitivity * -input.cursorDelta.y;
+        camera.pitch = Clamp(camera.pitch, -kHalfPi, kHalfPi);
 
-    auto rotation = Matrix4::RotationY(camera.yaw);
+        auto rotation = Matrix4::RotationY(camera.yaw);
 
-    Vector3 velocity;
-    if (input.KeyDown(LC_KEY_W)) velocity += Vector3::Forward();
-    if (input.KeyDown(LC_KEY_S)) velocity += Vector3::Back();
-    if (input.KeyDown(LC_KEY_A)) velocity += Vector3::Left();
-    if (input.KeyDown(LC_KEY_D)) velocity += Vector3::Right();
+        Vector3 velocity;
+        if (input.KeyDown(LC_KEY_W)) velocity += Vector3::Forward();
+        if (input.KeyDown(LC_KEY_S)) velocity += Vector3::Back();
+        if (input.KeyDown(LC_KEY_A)) velocity += Vector3::Left();
+        if (input.KeyDown(LC_KEY_D)) velocity += Vector3::Right();
 
-    velocity.Normalize();
-    auto velocityWorld = Vector3(rotation * Vector4(velocity));
+        velocity.Normalize();
+        auto velocityWorld = Vector3(rotation * Vector4(velocity));
 
-    if (input.KeyDown(LC_KEY_SPACE)) velocityWorld += Vector3::Up();
-    if (input.KeyDown(LC_KEY_LEFT_SHIFT)) velocityWorld += Vector3::Down();
+        if (input.KeyDown(LC_KEY_SPACE)) velocityWorld += Vector3::Up();
+        if (input.KeyDown(LC_KEY_LEFT_SHIFT)) velocityWorld += Vector3::Down();
 
-    if (input.KeyDown(LC_KEY_ESCAPE)) exit(0);
+        float multiplier = input.KeyDown(LC_KEY_LEFT_CONTROL) ? 3.0f : 1.0f;
 
-    float multiplier = input.KeyDown(LC_KEY_LEFT_CONTROL) ? 3.0f : 1.0f;
+        const float speed = 5.0f;
+        transform.position += dt * speed * multiplier * velocityWorld;
+    }
 
-    const float speed = 5.0f;
-    transform.position += dt * speed * multiplier * velocityWorld;
+    // Update console
+    m_Renderer->m_DebugConsole->Update(input, dt);
 
     m_Renderer->Render(m_Scene);
 

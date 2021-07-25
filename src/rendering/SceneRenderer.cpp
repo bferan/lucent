@@ -34,6 +34,9 @@ SceneRenderer::SceneRenderer(Device* device)
 
     // Create debug console (temp)
     m_DebugConsole = std::make_unique<DebugConsole>(m_Device);
+    m_DebugConsole->AddEntry("One--------\n-----------\na---------------", Color::Green());
+    m_DebugConsole->AddEntry("Two@@@@@@@@@@@@@@@@@", Color::Red());
+    m_DebugConsole->AddEntry("123456789012345678901234567890", Color::Blue());
 }
 
 void SceneRenderer::Render(Scene& scene)

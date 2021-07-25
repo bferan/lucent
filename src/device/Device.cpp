@@ -749,6 +749,12 @@ Pipeline* Device::CreatePipeline(const PipelineInfo& info)
             .binding = 0,
             .format = VK_FORMAT_R32G32_SFLOAT,
             .offset = (uint32_t)offsetof(Vertex, texCoord0)
+        },
+        {
+            .location = 5,
+            .binding = 0,
+            .format = VK_FORMAT_R8G8B8A8_UNORM,
+            .offset = (uint32_t)offsetof(Vertex, color)
         }
     };
 

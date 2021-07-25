@@ -1,3 +1,4 @@
+
 #pragma once
 
 #include <vector>
@@ -9,6 +10,7 @@
 
 #include "core/Vector3.hpp"
 #include "core/Vector4.hpp"
+#include "core/Color.hpp"
 #include "device/Input.hpp"
 
 struct GLFWwindow;
@@ -34,6 +36,7 @@ struct Vertex
     Vector3 tangent;
     Vector3 bitangent;
     TexCoord texCoord0;
+    PackedColor color = Color::White().Pack();
 };
 
 struct DeviceQueue

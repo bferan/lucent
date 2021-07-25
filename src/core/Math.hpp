@@ -65,6 +65,11 @@ inline float Floor(float value)
     return std::floor(value);
 }
 
+inline float Round(float value)
+{
+    return Floor(value + 0.5f);
+}
+
 inline float Mod(float value, float by)
 {
     return std::fmod(value, by);

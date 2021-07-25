@@ -237,6 +237,7 @@ void ShaderCache::Clear()
             vkDestroyShaderModule(m_Device->m_Device, program->stages[i].module, nullptr);
         }
 
+        // TODO: Check errors here
         vkDestroyPipelineLayout(m_Device->m_Device, program->layout, nullptr);
 
         for (int i = 0; i < program->numSets; ++i)
