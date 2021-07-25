@@ -15,6 +15,8 @@ namespace lucent::demos
 
 void BasicDemo::Init()
 {
+    LC_INFO("Welcome to LUCENT!");
+
     m_Renderer = std::make_unique<SceneRenderer>(&m_Device);
 
     Importer importer(&m_Device, m_Renderer->m_DefaultPipeline);

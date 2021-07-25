@@ -3,6 +3,7 @@
 #include "core/Math.hpp"
 #include "core/Matrix4.hpp"
 #include "core/Vector4.hpp"
+#include "core/Log.hpp"
 #include "device/Device.hpp"
 #include "rendering/SceneRenderer.hpp"
 #include "scene/Scene.hpp"
@@ -17,6 +18,7 @@ public:
     void Draw(float dt);
 
 public:
+    LogStdOut logStdOut {};
     Device m_Device {};
     std::unique_ptr<SceneRenderer> m_Renderer;
 

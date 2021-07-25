@@ -1,3 +1,4 @@
+#include <core/Log.hpp>
 #include "DebugConsole.hpp"
 
 #include "core/Utility.hpp"
@@ -9,7 +10,7 @@ constexpr float kInitLifetime = 5.0f;
 constexpr float kFadeTime = 1.0f;
 const std::string kPromptIndicator = "> ";
 constexpr char kPromptCursor = '_';
-constexpr float kMaxScreenY = 1500.0f;
+constexpr float kMaxScreenY = 800.0f;
 
 DebugConsole::DebugConsole(Device* device, int maxColumns)
     : m_Font(device, "fonts/JetBrainsMono-Medium.ttf", 26.0f)
@@ -18,6 +19,7 @@ DebugConsole::DebugConsole(Device* device, int maxColumns)
     , m_MaxColumns(maxColumns)
     , m_Active(false)
 {
+    Logger::Instance().Register(this);
 }
 
 void DebugConsole::GenerateMesh()
@@ -146,6 +148,10 @@ void DebugConsole::Update(const InputState& input, float dt)
             if (!text.empty())
                 AddEntry(text);
 
+            // TODO: REMOVE
+            if (text == "q")
+                exit(0);
+
             m_Active = false;
             text.clear();
         }
@@ -178,6 +184,11 @@ void DebugConsole::Render(Context& ctx)
 {
     m_TextLog.Render(ctx);
     m_TextPrompt.Render(ctx);
+}
+
+void DebugConsole::OnLog(LogLevel level, const std::string& msg)
+{
+    AddEntry(msg);
 }
 
 }

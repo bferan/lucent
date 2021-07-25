@@ -4,6 +4,8 @@ target_include_directories(lucent PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_sources(lucent PRIVATE
         core/Color.hpp
         core/Hash.hpp
+        core/Log.cpp
+        core/Log.hpp
         core/Lucent.hpp
         core/Math.hpp
         core/Matrix4.hpp

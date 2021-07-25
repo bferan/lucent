@@ -51,3 +51,7 @@ target_link_libraries(lucent PUBLIC assimp)
 # stb
 add_subdirectory(extern/stb)
 target_link_libraries(lucent PUBLIC stb)
+
+# FMT
+add_subdirectory(extern/fmt)
+target_link_libraries(lucent PUBLIC fmt)
