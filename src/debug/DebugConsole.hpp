@@ -3,6 +3,7 @@
 #include <deque>
 
 #include "core/Color.hpp"
+#include "core/Log.hpp"
 #include "device/Device.hpp"
 #include "device/Input.hpp"
 #include "debug/TextMesh.hpp"
@@ -23,7 +24,7 @@ struct DebugPrompt
     std::string text;
 };
 
-class DebugConsole
+class DebugConsole : public LogListener
 {
 public:
     explicit DebugConsole(Device* device, int maxColumns = 120);
@@ -39,7 +40,8 @@ public:
         return m_Active;
     }
 
-private:
+    void OnLog(LogLevel level, const std::string& msg) override;
+
     void GenerateMesh();
 
 private:

@@ -3,18 +3,6 @@
 
 #define PI 3.14159265358979323846
 
-layout(location = 0) in vec3 iDirection;
-
-layout(location = 0) out vec4 oColor;
-
-layout(set = 0, binding = 0) uniform MyBuffer
-{
-    mat4 uView;
-    mat4 uProj;
-    float uRoughness;
-};
-layout(set = 0, binding = 1) uniform samplerCube sEnvCube;
-
 vec2 Hammersley(uint i, uint n)
 {
     // Reverse bits to generate Van der Corput value
@@ -40,9 +28,34 @@ vec3 SampleBiasedGGX(vec2 rand, float roughness)
     return vec3(sinTheta*cos(phi), sinTheta*sin(phi), cosTheta);
 }
 
-void main()
+layout(location = 0) attribute vec3 a_Position;
+layout(location = 1) attribute vec3 a_Normal;
+layout(location = 2) attribute vec3 a_Tangent;
+layout(location = 3) attribute vec3 a_Bitangent;
+layout(location = 4) attribute vec2 a_UV;
+
+layout(location = 0) varying vec3 v_Direction;
+
+layout(location = 0) out vec4 o_Color;
+
+layout(set = 0, binding = 0) uniform Global
 {
-    vec3 N = normalize(iDirection);
+    mat4 u_View;
+    mat4 u_Proj;
+    float u_Roughness;
+};
+layout(set = 0, binding = 1) uniform samplerCube u_EnvCube;
+
+void vert()
+{
+    v_Direction = a_Position;
+    vec4 pos = u_Proj * vec4(mat3(u_View) * a_Position, 1.0);
+    gl_Position = pos.xyww;
+}
+
+void frag()
+{
+    vec3 N = normalize(v_Direction);
     vec3 up = abs(N.y) < 0.999 ? vec3(0.0, 1.0, 0.0) : vec3(0.0, 0.0, 1.0);
     vec3 T1 = normalize(cross(up, N));
     vec3 T2 = cross(N, T1);
@@ -53,16 +66,16 @@ void main()
     const uint sampleCount = 8096;
     for (uint i = 0; i < sampleCount; ++i)
     {
-        vec3 local = SampleBiasedGGX(Hammersley(i, sampleCount), uRoughness);
+        vec3 local = SampleBiasedGGX(Hammersley(i, sampleCount), u_Roughness);
         vec3 H = normalize(local.x * T1 + local.y * T2 + local.z * N);
         vec3 L = normalize(2.0*dot(N, H)* H - N);
 
         float NdotL = dot(N, L);
         if (NdotL > 0.0)
         {
-            filtered += min(texture(sEnvCube, L).rgb, vec3(20.0f)) * NdotL;
+            filtered += min(texture(u_EnvCube, L).rgb, vec3(20.0f)) * NdotL;
             weight += NdotL;
         }
     }
-    oColor = vec4(filtered/weight, 1.0);
+    o_Color = vec4(filtered/weight, 1.0);
 }

@@ -36,34 +36,26 @@ HdrImporter::HdrImporter(Device* device)
     });
 
     m_RectToCube = m_Device->CreatePipeline(PipelineInfo{
-        .programInfo = {
-            .vertShader = ReadFile("C:/Code/lucent/src/rendering/shaders/RectToCube.vert"),
-            .fragShader = ReadFile("C:/Code/lucent/src/rendering/shaders/RectToCube.frag")
-        },
+        .name = "RectToCube.shader",
+        .source = ReadFile("C:/Code/lucent/src/rendering/shaders/RectToCube.shader"),
         .framebuffer = m_Offscreen
     });
 
     m_GenIrradiance = m_Device->CreatePipeline(PipelineInfo{
-        .programInfo = {
-            .vertShader = ReadFile("C:/Code/lucent/src/rendering/shaders/IrradianceCube.vert"),
-            .fragShader = ReadFile("C:/Code/lucent/src/rendering/shaders/IrradianceCube.frag")
-        },
+        .name = "IrradianceCube.shader",
+        .source = ReadFile("C:/Code/lucent/src/rendering/shaders/IrradianceCube.shader"),
         .framebuffer = m_Offscreen
     });
 
     m_GenSpecular = m_Device->CreatePipeline(PipelineInfo{
-        .programInfo = {
-            .vertShader = ReadFile("C:/Code/lucent/src/rendering/shaders/SpecularCube.vert"),
-            .fragShader = ReadFile("C:/Code/lucent/src/rendering/shaders/SpecularCube.frag")
-        },
+        .name = "SpecularCube.shader",
+        .source = ReadFile("C:/Code/lucent/src/rendering/shaders/SpecularCube.shader"),
         .framebuffer = m_Offscreen
     });
 
     m_GenBRDF = m_Device->CreatePipeline(PipelineInfo{
-        .programInfo = {
-            .vertShader = ReadFile("C:/Code/lucent/src/rendering/shaders/BRDF.vert"),
-            .fragShader = ReadFile("C:/Code/lucent/src/rendering/shaders/BRDF.frag")
-        },
+        .name = "BRDF.shader",
+        .source = ReadFile("C:/Code/lucent/src/rendering/shaders/BRDF.shader"),
         .framebuffer = m_Offscreen
     });
 

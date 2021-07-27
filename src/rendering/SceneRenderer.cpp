@@ -10,17 +10,13 @@ SceneRenderer::SceneRenderer(Device* device)
     : m_Device(device)
 {
     m_DefaultPipeline = m_Device->CreatePipeline(PipelineInfo{
-        .programInfo = {
-            .vertShader = ReadFile("C:/Code/lucent/src/rendering/shaders/vert.glsl"),
-            .fragShader = ReadFile("C:/Code/lucent/src/rendering/shaders/frag.glsl")
-        }
+        .name = "Standard.shader",
+        .source = ReadFile("C:/Code/lucent/src/rendering/shaders/Standard.shader")
     });
 
     m_SkyboxPipeline = m_Device->CreatePipeline(PipelineInfo{
-        .programInfo = {
-            .vertShader = ReadFile("C:/Code/lucent/src/rendering/shaders/Skybox.vert"),
-            .fragShader = ReadFile("C:/Code/lucent/src/rendering/shaders/Skybox.frag"),
-        }
+        .name = "Skybox.shader",
+        .source = ReadFile("C:/Code/lucent/src/rendering/shaders/Skybox.shader")
     });
 
     m_Context = m_Device->CreateContext();
@@ -34,9 +30,6 @@ SceneRenderer::SceneRenderer(Device* device)
 
     // Create debug console (temp)
     m_DebugConsole = std::make_unique<DebugConsole>(m_Device);
-    m_DebugConsole->AddEntry("One--------\n-----------\na---------------", Color::Green());
-    m_DebugConsole->AddEntry("Two@@@@@@@@@@@@@@@@@", Color::Red());
-    m_DebugConsole->AddEntry("123456789012345678901234567890", Color::Blue());
 }
 
 void SceneRenderer::Render(Scene& scene)

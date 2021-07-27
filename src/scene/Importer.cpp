@@ -1,6 +1,6 @@
 #include "Importer.hpp"
 
-#include <iostream>
+#include "core/Log.hpp"
 
 #include "assimp/Importer.hpp"
 #include "assimp/postprocess.h"
@@ -20,7 +20,7 @@ Entity Importer::Import(Scene& scene, const std::string& modelFile)
     Clear();
     m_ModelFile = modelFile;
 
-    std::cout << "Importing " << modelFile << "\n";
+    LC_INFO("Importing {}", modelFile);
 
     Assimp::Importer importer;
     importer.ReadFile(modelFile,

@@ -692,7 +692,7 @@ void Device::CreateSwapchain()
 Pipeline* Device::CreatePipeline(const PipelineInfo& info)
 {
     auto& pipeline = *m_Pipelines.emplace_back(std::make_unique<Pipeline>());
-    auto& program = m_ShaderCache->Compile(info.programInfo);
+    auto& program = m_ShaderCache->Compile(info.name, info.source);
     auto& framebuffer = info.framebuffer ? *info.framebuffer : m_Swapchain.framebuffers[0];
 
     VkPipelineShaderStageCreateInfo stageInfos[CompiledProgram::kMaxStages];

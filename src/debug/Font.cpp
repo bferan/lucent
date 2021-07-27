@@ -45,10 +45,8 @@ Font::Font(Device* device, const std::string& fontFile, float pixelHeight)
 
     // Create font pipeline & descriptor set
     m_FontPipeline = m_Device->CreatePipeline(PipelineInfo{
-            .programInfo = {
-                .vertShader = ReadFile("C:/Code/lucent/src/rendering/shaders/DebugFont.vert"),
-                .fragShader = ReadFile("C:/Code/lucent/src/rendering/shaders/DebugFont.frag")
-            },
+            .name = "DebugFont.shader",
+            .source = ReadFile("C:/Code/lucent/src/rendering/shaders/DebugFont.shader"),
             .depthTestEnable = false,
         }
     );

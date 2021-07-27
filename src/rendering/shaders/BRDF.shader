@@ -1,13 +1,6 @@
-#version 450
 #extension GL_ARB_separate_shader_objects : enable
 
 #define PI 3.14159265358979323846
-
-layout(location = 0) in vec2 iTC;
-
-layout(location = 0) out vec4 oColor;
-
-layout(set = 0, binding = 1) uniform samplerCube sEnvCube;
 
 vec2 Hammersley(uint i, uint n)
 {
@@ -18,7 +11,7 @@ vec2 Hammersley(uint i, uint n)
     bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
     bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
     bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
-    float v = float(bits) * 2.3283064365386963e-10; // / 0x100000000
+    float v = float(bits) * 2.3283064365386963e-10;// / 0x100000000
     return vec2(float(i)/float(n), v);
 }
 
@@ -45,10 +38,34 @@ float SmithCorrelatedGGX(float NdotL, float NdotV, float a)
     return 1.0 / (1.0 + lambdaV + lambdaL);
 }
 
-void main()
+layout(location = 0) attribute vec3 a_Position;
+layout(location = 1) attribute vec3 a_Normal;
+layout(location = 2) attribute vec3 a_Tangent;
+layout(location = 3) attribute vec3 a_Bitangent;
+layout(location = 4) attribute vec2 a_UV;
+
+layout(location = 0) varying vec2 v_TC;
+
+layout(location = 0) out vec4 o_Color;
+
+layout(set = 0, binding = 0) uniform MyBuffer
 {
-    float NdotV = iTC.x;
-    float roughness = iTC.y;
+    mat4 u_View;
+    mat4 u_Proj;
+    float u_Roughness;
+};
+layout(set = 0, binding = 1) uniform samplerCube u_EnvCube;
+
+void vert()
+{
+    v_TC = a_UV;
+    gl_Position = vec4(a_Position, 1.0);
+}
+
+void frag()
+{
+    float NdotV = v_TC.x;
+    float roughness = v_TC.y;
 
     vec3 V = vec3(sqrt(1.0 - NdotV*NdotV), 0.0, NdotV);
 
@@ -82,5 +99,5 @@ void main()
     scale /= sampleCount;
     bias /= sampleCount;
 
-    oColor = vec4(scale, bias, 0.0, 1.0);
+    o_Color = vec4(scale, bias, 0.0, 1.0);
 }

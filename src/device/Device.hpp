@@ -45,15 +45,18 @@ struct DeviceQueue
     uint32_t familyIndex;
 };
 
-struct ProgramInfo
+enum class ProgramStage
 {
-    std::string vertShader;
-    std::string fragShader;
+    kVertex,
+    kFragment,
+    kCompute
 };
 
 struct PipelineInfo
 {
-    ProgramInfo programInfo;
+    std::string name;
+    std::string source;
+
     Framebuffer* framebuffer = nullptr;
     bool depthTestEnable = true;
 };

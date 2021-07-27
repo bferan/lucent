@@ -9,22 +9,12 @@
 #include <array>
 
 #include "core/Lucent.hpp"
+#include "core/Log.hpp"
 #include "core/Hash.hpp"
 #include "device/ResourceLimits.hpp"
 
 namespace lucent
 {
-
-// Hashing
-static uint64_t HashProgramText(const ProgramInfo& info)
-{
-    auto hash = FNVTraits<uint64_t>::kOffset;
-
-    hash = Hash(info.vertShader, hash);
-    hash = Hash(info.fragShader, hash);
-
-    return hash;
-}
 
 // Set layout
 static VkDescriptorType BasicTypeToDescriptorType(glslang::TBasicType basicType)
@@ -55,22 +45,141 @@ struct PipelineLayout
     SlotList<SetLayout, CompiledProgram::kMaxSets> sets;
 };
 
+// Shader stripping
+constexpr auto kVertexDefinition = "void vert()";
+constexpr auto kFragmentDefinition = "void frag()";
+constexpr auto kComputeDefinition = "void compute()";
+constexpr auto kMainDefinition = "void main()";
+
+static void ReplaceAll(std::string& text, const std::string& src, const std::string& dst)
+{
+    size_t pos = 0;
+    while ((pos = text.find(src, pos)) != std::string::npos)
+    {
+        text.replace(pos, src.length(), dst);
+    }
+}
+
+static void StripFunction(std::string& text, const std::string& prototype)
+{
+    auto start = text.find(prototype);
+    if (start == std::string::npos) return;
+
+    auto openBracket = text.find('{', start);
+
+    // Find end of function definition
+    auto pos = openBracket + 1;
+    int nesting = 0;
+    int lines = 1;
+    while (pos < text.size())
+    {
+        auto c = text[pos];
+        if (c == '/')
+        {
+            auto next = (pos + 1 < text.size()) ? text[pos + 1] : 0;
+            if (next == '/')
+            {
+                // Skip line comment
+                pos = text.find('\n', pos);
+                ++lines;
+            }
+            else if (next == '*')
+            {
+                // Skip block comment
+                pos = text.find("*/", pos + 2) + 1;
+            }
+        }
+        else if (c == '}')
+        {
+            if (nesting == 0) break;
+            --nesting;
+        }
+        else if (c == '{')
+        {
+            ++nesting;
+        }
+        else if (c == '\n')
+        {
+            ++lines;
+        }
+        ++pos;
+    }
+
+    if (pos >= text.size() || nesting != 0 || text[pos] != '}')
+        return;
+
+    text.replace(start, pos - start + 1, lines, '\n');
+}
+
+static void StripDeclarations(std::string& text, const std::string& keyword)
+{
+    size_t pos = 0;
+    while ((pos = text.find(keyword, pos)) != std::string::npos)
+    {
+        // Seek to end of prev statement
+        auto prevStatementEnd = text.rfind(';', pos);
+        if (prevStatementEnd == std::string::npos) prevStatementEnd = 0;
+
+        auto decStart = text.rfind("layout", pos);
+        auto decEnd = text.find(';', pos);
+
+        // Check layout qualifier exists and does not cross statement boundary
+        if (decStart == std::string::npos || decStart < prevStatementEnd)
+        {
+            pos = decEnd;
+            continue;
+        }
+        text.erase(decStart, decEnd - decStart + 1);
+        pos = decStart;
+    }
+}
+
+static void StripShader(std::string& text, ProgramStage stage)
+{
+    switch (stage)
+    {
+    case ProgramStage::kVertex:
+    {
+        StripFunction(text, kFragmentDefinition);
+        StripDeclarations(text, "out ");
+        ReplaceAll(text, "attribute ", "in ");
+        ReplaceAll(text, "varying ", "out ");
+        ReplaceAll(text, kVertexDefinition, kMainDefinition);
+        break;
+    }
+    case ProgramStage::kFragment:
+    {
+        StripFunction(text, kVertexDefinition);
+        StripDeclarations(text, "attribute ");
+        ReplaceAll(text, "varying ", "in ");
+        ReplaceAll(text, kFragmentDefinition, kMainDefinition);
+        break;
+    }
+    case ProgramStage::kCompute:
+    {
+        ReplaceAll(text, kComputeDefinition, kMainDefinition);
+    }
+    default:
+        break;
+    }
+}
+
 // Shader cache
 ShaderCache::ShaderCache(Device* device)
     : m_Device(device)
 {
 }
 
-CompiledProgram& ShaderCache::Compile(const ProgramInfo& info)
+CompiledProgram& ShaderCache::Compile(const std::string& name, const std::string& source)
 {
-    auto hash = HashProgramText(info);
+    auto hash = Hash<uint64_t>(source);
     if (m_Programs.contains(hash))
     {
         return *m_Programs[hash];
     }
 
     auto& program = *(m_Programs[hash] = std::make_unique<CompiledProgram>());
-    PopulateProgram(info, program);
+    PopulateProgram(name, source, program);
     return program;
 }
 
@@ -111,7 +220,7 @@ static void ScanLayout(const TIntermNode& root, PipelineLayout& layout)
     }
 }
 
-bool ShaderCache::PopulateProgram(const ProgramInfo& info, CompiledProgram& compiled)
+bool ShaderCache::PopulateProgram(const std::string& name, const std::string& source, CompiledProgram& compiled)
 {
     const int defaultVersion = 450;
     const auto inputLang = glslang::EShSourceGlsl;
@@ -124,15 +233,16 @@ bool ShaderCache::PopulateProgram(const ProgramInfo& info, CompiledProgram& comp
     std::vector<std::unique_ptr<glslang::TShader>> shaders;
     glslang::TProgram program;
 
-    auto addShader = [&](std::string_view text, EShLanguage lang, VkShaderStageFlagBits bit)
+    auto addShader = [&](std::string_view text, EShLanguage lang, VkShaderStageFlagBits bit, const char* entry)
     {
         if (text.empty()) return;
 
         auto& shader = *shaders.emplace_back(std::make_unique<glslang::TShader>(lang));
         auto data = text.data();
+        auto names = name.c_str();
         int length = (int)text.length();
 
-        shader.setStringsWithLengths(&data, &length, 1);
+        shader.setStringsWithLengthsAndNames(&data, &length, &names, 1);
         shader.setEnvInput(inputLang, lang, client, defaultVersion);
         shader.setEnvClient(client, clientVersion);
         shader.setEnvTarget(targetLang, targetLangVersion);
@@ -147,8 +257,30 @@ bool ShaderCache::PopulateProgram(const ProgramInfo& info, CompiledProgram& comp
         compiled.numStages++;
     };
 
-    addShader(info.vertShader, EShLangVertex, VK_SHADER_STAGE_VERTEX_BIT);
-    addShader(info.fragShader, EShLangFragment, VK_SHADER_STAGE_FRAGMENT_BIT);
+    // Detect shader types in source
+    if (source.find(kVertexDefinition) != std::string::npos &&
+        source.find(kFragmentDefinition) != std::string::npos)
+    {
+        std::string vert(source);
+        StripShader(vert, ProgramStage::kVertex);
+
+        std::string frag(source);
+        StripShader(frag, ProgramStage::kFragment);
+
+        addShader(vert, EShLangVertex, VK_SHADER_STAGE_VERTEX_BIT, "vert");
+        addShader(frag, EShLangFragment, VK_SHADER_STAGE_FRAGMENT_BIT, "frag");
+    }
+    else if (source.find(kComputeDefinition) != std::string::npos)
+    {
+        std::string compute(source);
+        addShader(compute, EShLangCompute, VK_SHADER_STAGE_COMPUTE_BIT, "compute");
+    }
+    else
+    {
+        LC_ERROR("No entrypoint found in {}", name);
+        return false;
+    }
+
 
     auto result = program.link(EShMsgDefault);
     LC_ASSERT(result);
