@@ -19,6 +19,7 @@ namespace lucent
 {
 
 class Device;
+class Shader;
 class ShaderCache;
 struct Texture;
 struct Framebuffer;
@@ -45,17 +46,16 @@ struct DeviceQueue
     uint32_t familyIndex;
 };
 
-enum class ProgramStage
+enum class ShaderStage
 {
     kVertex,
     kFragment,
     kCompute
 };
 
-struct PipelineInfo
+struct PipelineSettings
 {
-    std::string name;
-    std::string source;
+    std::string shaderName;
 
     Framebuffer* framebuffer = nullptr;
     bool depthTestEnable = true;
@@ -65,9 +65,19 @@ struct Pipeline
 {
     static constexpr uint32_t kMaxSets = 4;
 
-    VkPipeline handle;
-    VkDescriptorSetLayout setLayouts[kMaxSets];
-    VkPipelineLayout layout;
+public:
+    explicit Pipeline(PipelineSettings settings)
+        : settings(std::move(settings))
+    {
+    }
+
+public:
+    PipelineSettings settings;
+
+    Shader* shader{};
+    VkPipeline handle{};
+    VkDescriptorSetLayout setLayouts[kMaxSets]{};
+    VkPipelineLayout layout{};
 };
 
 enum class TextureFormat
@@ -84,7 +94,6 @@ enum class TextureShape
     k2D,
     kCube
 };
-
 
 enum class TextureAddressMode
 {
@@ -105,7 +114,7 @@ struct Texture
     TextureFormat texFormat;
 };
 
-struct TextureInfo
+struct TextureSettings
 {
     uint32_t width = 1;
     uint32_t height = 1;
@@ -122,7 +131,7 @@ enum class FramebufferUsage
     Default
 };
 
-struct FramebufferInfo
+struct FramebufferSettings
 {
     FramebufferUsage usage = FramebufferUsage::Default;
     Texture* colorTexture = nullptr;
@@ -220,13 +229,14 @@ public:
     Device();
     ~Device();
 
-    Pipeline* CreatePipeline(const PipelineInfo& info);
+    Pipeline* CreatePipeline(const PipelineSettings& settings);
+    void ReloadPipelines();
 
     Buffer* CreateBuffer(BufferType type, size_t size);
 
-    Texture* CreateTexture(const TextureInfo& info, size_t size = 0, void* data = nullptr);
+    Texture* CreateTexture(const TextureSettings& info, size_t size = 0, void* data = nullptr);
 
-    Framebuffer* CreateFramebuffer(const FramebufferInfo& info);
+    Framebuffer* CreateFramebuffer(const FramebufferSettings& info);
 
     const Framebuffer& AcquireFramebuffer();
 
@@ -246,6 +256,9 @@ private:
     void CreateInstance();
     void CreateDevice();
     void CreateSwapchain();
+
+    std::unique_ptr<Pipeline> CreatePipeline(const PipelineSettings& settings, Shader* shader);
+    void FreePipeline(Pipeline* pipeline);
 
 public:
     GLFWwindow* m_Window;

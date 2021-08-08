@@ -24,7 +24,7 @@ add_subdirectory(extern/VulkanMemoryAllocator)
 target_link_libraries(lucent PUBLIC VulkanMemoryAllocator)
 target_link_libraries(VulkanMemoryAllocator PRIVATE Vulkan::Vulkan)
 
-#glslang
+# glslang
 add_subdirectory(extern/glslang)
 target_link_libraries(lucent PRIVATE glslang)
 target_link_libraries(lucent PRIVATE SPIRV)

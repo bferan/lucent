@@ -9,15 +9,8 @@ namespace lucent
 SceneRenderer::SceneRenderer(Device* device)
     : m_Device(device)
 {
-    m_DefaultPipeline = m_Device->CreatePipeline(PipelineInfo{
-        .name = "Standard.shader",
-        .source = ReadFile("C:/Code/lucent/src/rendering/shaders/Standard.shader")
-    });
-
-    m_SkyboxPipeline = m_Device->CreatePipeline(PipelineInfo{
-        .name = "Skybox.shader",
-        .source = ReadFile("C:/Code/lucent/src/rendering/shaders/Skybox.shader")
-    });
+    m_DefaultPipeline = m_Device->CreatePipeline(PipelineSettings{ .shaderName = "Standard.shader" });
+    m_SkyboxPipeline = m_Device->CreatePipeline(PipelineSettings{ .shaderName = "Skybox.shader" });
 
     m_Context = m_Device->CreateContext();
 

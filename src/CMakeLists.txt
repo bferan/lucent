@@ -26,8 +26,8 @@ target_sources(lucent PRIVATE
         device/Input.hpp
         device/Keys.hpp
         device/ResourceLimits.hpp
-        device/ShaderCache.cpp
-        device/ShaderCache.hpp
+        device/Shader.cpp
+        device/Shader.hpp
 
         rendering/SceneRenderer.cpp
         rendering/SceneRenderer.hpp

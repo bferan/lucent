@@ -40,11 +40,15 @@ public:
         return m_Active;
     }
 
+    void SetActive(bool active);
+
     void OnLog(LogLevel level, const std::string& msg) override;
 
     void GenerateMesh();
 
 private:
+    Device* m_Device;
+
     Font m_Font;
     TextMesh m_TextLog;
     TextMesh m_TextPrompt;

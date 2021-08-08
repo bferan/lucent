@@ -8,7 +8,7 @@
 
 #include "core/Color.hpp"
 #include "core/Lucent.hpp"
-#include "device/ShaderCache.hpp"
+#include "device/Shader.hpp"
 
 namespace lucent
 {
@@ -285,16 +285,16 @@ Device::Device()
 
     // Create dummy textures
     uint32_t black = 0xff000000;
-    m_BlackTexture = CreateTexture(TextureInfo{}, sizeof(black), &black);
+    m_BlackTexture = CreateTexture(TextureSettings{}, sizeof(black), &black);
 
     uint32_t white = 0xffffffff;
-    m_WhiteTexture = CreateTexture(TextureInfo{}, sizeof(white), &white);
+    m_WhiteTexture = CreateTexture(TextureSettings{}, sizeof(white), &white);
 
     uint32_t gray = 0xff808080;
-    m_GrayTexture = CreateTexture(TextureInfo{}, sizeof(gray), &gray);
+    m_GrayTexture = CreateTexture(TextureSettings{}, sizeof(gray), &gray);
 
     uint32_t green = 0xff00ff00;
-    m_GreenTexture = CreateTexture(TextureInfo{}, sizeof(green), &green);
+    m_GreenTexture = CreateTexture(TextureSettings{}, sizeof(green), &green);
 
     // Create primitive meshes
     CreateCube();
@@ -308,10 +308,7 @@ Device::~Device()
     // Destroy pipelines
     for (auto& pipeline : m_Pipelines)
     {
-        vkDestroyPipeline(m_Device, pipeline->handle, nullptr);
-        vkDestroyDescriptorSetLayout(m_Device, pipeline->setLayouts[0], nullptr);
-        vkDestroyDescriptorSetLayout(m_Device, pipeline->setLayouts[1], nullptr);
-        vkDestroyPipelineLayout(m_Device, pipeline->layout, nullptr);
+        FreePipeline(pipeline.get());
     }
 
     // Destroy buffers
@@ -630,7 +627,7 @@ void Device::CreateSwapchain()
     LC_ASSERT(result == VK_SUCCESS);
 
     // Create depth texture
-    auto depthTexture = CreateTexture(TextureInfo{
+    auto depthTexture = CreateTexture(TextureSettings{
         .width = chosenExtent.width,
         .height = chosenExtent.height,
         .format = TextureFormat::kDepth });
@@ -689,16 +686,27 @@ void Device::CreateSwapchain()
     }
 }
 
-Pipeline* Device::CreatePipeline(const PipelineInfo& info)
+Pipeline* Device::CreatePipeline(const PipelineSettings& settings)
 {
-    auto& pipeline = *m_Pipelines.emplace_back(std::make_unique<Pipeline>());
-    auto& program = m_ShaderCache->Compile(info.name, info.source);
-    auto& framebuffer = info.framebuffer ? *info.framebuffer : m_Swapchain.framebuffers[0];
+    auto shader = m_ShaderCache->Compile(settings.shaderName);
+    return m_Pipelines.emplace_back(CreatePipeline(settings, shader)).get();
+}
 
-    VkPipelineShaderStageCreateInfo stageInfos[CompiledProgram::kMaxStages];
-    for (int i = 0; i < program.numStages; ++i)
+std::unique_ptr<Pipeline> Device::CreatePipeline(const PipelineSettings& settings, Shader* shaderPtr)
+{
+    auto pipelinePtr = std::make_unique<Pipeline>(settings);
+    auto& shader = *shaderPtr;
+    auto& pipeline = *pipelinePtr;
+    auto& framebuffer = settings.framebuffer ? *settings.framebuffer : m_Swapchain.framebuffers[0];
+
+    pipeline.shader = shaderPtr;
+    shader.uses++;
+
+    // Populate pipeline shader stages
+    VkPipelineShaderStageCreateInfo stageInfos[Shader::kMaxStages];
+    for (int i = 0; i < shader.numStages; ++i)
     {
-        auto& stage = program.stages[i];
+        auto& stage = shader.stages[i];
         stageInfos[i] = VkPipelineShaderStageCreateInfo{
             .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             .stage = stage.stageBit,
@@ -707,8 +715,8 @@ Pipeline* Device::CreatePipeline(const PipelineInfo& info)
         };
     }
 
-    memcpy(pipeline.setLayouts, program.setLayouts, sizeof(program.setLayouts));
-    pipeline.layout = program.layout;
+    memcpy(pipeline.setLayouts, shader.setLayouts, sizeof(shader.setLayouts));
+    pipeline.layout = shader.layout;
 
     // Configure pipeline fixed functions
     VkVertexInputBindingDescription vertexBindingInfos[] = {
@@ -725,37 +733,37 @@ Pipeline* Device::CreatePipeline(const PipelineInfo& info)
             .binding = 0,
             .format = VK_FORMAT_R32G32B32_SFLOAT,
             .offset = (uint32_t)offsetof(Vertex, position)
-        },
-        {
+                },
+                {
             .location = 1,
             .binding = 0,
             .format = VK_FORMAT_R32G32B32_SFLOAT,
             .offset = (uint32_t)offsetof(Vertex, normal)
-        },
-        {
+                },
+                {
             .location = 2,
             .binding = 0,
             .format = VK_FORMAT_R32G32B32_SFLOAT,
             .offset = (uint32_t)offsetof(Vertex, tangent)
-        },
-        {
+                },
+                {
             .location = 3,
             .binding = 0,
             .format = VK_FORMAT_R32G32B32_SFLOAT,
             .offset = (uint32_t)offsetof(Vertex, bitangent)
-        },
-        {
+                },
+                {
             .location = 4,
             .binding = 0,
             .format = VK_FORMAT_R32G32_SFLOAT,
             .offset = (uint32_t)offsetof(Vertex, texCoord0)
-        },
-        {
+                },
+                {
             .location = 5,
             .binding = 0,
             .format = VK_FORMAT_R8G8B8A8_UNORM,
             .offset = (uint32_t)offsetof(Vertex, color)
-        }
+                }
     };
 
     auto vertexInputInfo = VkPipelineVertexInputStateCreateInfo{
@@ -800,7 +808,7 @@ Pipeline* Device::CreatePipeline(const PipelineInfo& info)
         .cullMode = VK_CULL_MODE_BACK_BIT,
         .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
         .lineWidth = 1.0f,
-    };
+        };
 
     auto multisampleInfo = VkPipelineMultisampleStateCreateInfo{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
@@ -810,12 +818,12 @@ Pipeline* Device::CreatePipeline(const PipelineInfo& info)
 
     auto depthStencilInfo = VkPipelineDepthStencilStateCreateInfo{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-        .depthTestEnable = static_cast<VkBool32>(info.depthTestEnable ? VK_TRUE : VK_FALSE),
-        .depthWriteEnable = static_cast<VkBool32>(info.depthTestEnable ? VK_TRUE : VK_FALSE),
-        .depthCompareOp = info.depthTestEnable ? VK_COMPARE_OP_LESS_OR_EQUAL : VK_COMPARE_OP_ALWAYS,
+        .depthTestEnable = static_cast<VkBool32>(settings.depthTestEnable ? VK_TRUE : VK_FALSE),
+        .depthWriteEnable = static_cast<VkBool32>(settings.depthTestEnable ? VK_TRUE : VK_FALSE),
+        .depthCompareOp = settings.depthTestEnable ? VK_COMPARE_OP_LESS_OR_EQUAL : VK_COMPARE_OP_ALWAYS,
         .depthBoundsTestEnable = VK_FALSE,
         .stencilTestEnable = VK_FALSE,
-    };
+        };
 
     auto colorBlendAttachmentInfo = VkPipelineColorBlendAttachmentState{
         .blendEnable = VK_FALSE,
@@ -823,7 +831,7 @@ Pipeline* Device::CreatePipeline(const PipelineInfo& info)
             | VK_COLOR_COMPONENT_A_BIT
     };
 
-    if (!info.depthTestEnable)
+    if (!settings.depthTestEnable)
     {
         colorBlendAttachmentInfo = VkPipelineColorBlendAttachmentState{
             .blendEnable = VK_TRUE,
@@ -858,7 +866,7 @@ Pipeline* Device::CreatePipeline(const PipelineInfo& info)
 
     auto pipelineCreateInfo = VkGraphicsPipelineCreateInfo{
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-        .stageCount = program.numStages,
+        .stageCount = shader.numStages,
         .pStages = stageInfos,
         .pVertexInputState = &vertexInputInfo,
         .pInputAssemblyState = &inputAssemblyInfo,
@@ -877,7 +885,31 @@ Pipeline* Device::CreatePipeline(const PipelineInfo& info)
         1, &pipelineCreateInfo, nullptr, &pipeline.handle);
     LC_ASSERT(result == VK_SUCCESS);
 
-    return &pipeline;
+    return pipelinePtr;
+}
+
+void Device::ReloadPipelines()
+{
+    vkDeviceWaitIdle(m_Device);
+    for (auto& pipeline : m_Pipelines)
+    {
+        auto updatedShader = m_ShaderCache->Compile(pipeline->settings.shaderName);
+        if (updatedShader)
+        {
+            if (pipeline->shader != updatedShader)
+            {
+                auto updatedPipeline = CreatePipeline(pipeline->settings, updatedShader);
+                std::swap(*pipeline, *updatedPipeline);
+                FreePipeline(updatedPipeline.get());
+                m_ShaderCache->Release(updatedPipeline->shader);
+            }
+        }
+    }
+}
+
+void Device::FreePipeline(Pipeline* pipeline)
+{
+    vkDestroyPipeline(m_Device, pipeline->handle, nullptr);
 }
 
 Buffer* Device::CreateBuffer(BufferType type, size_t size)
@@ -905,7 +937,7 @@ Buffer* Device::CreateBuffer(BufferType type, size_t size)
     return &buff;
 }
 
-Texture* Device::CreateTexture(const TextureInfo& info, size_t size, void* data)
+Texture* Device::CreateTexture(const TextureSettings& info, size_t size, void* data)
 {
     auto& tex = *m_Textures.emplace_back(std::make_unique<Texture>());
 
@@ -1124,7 +1156,7 @@ Texture* Device::CreateTexture(const TextureInfo& info, size_t size, void* data)
     return &tex;
 }
 
-Framebuffer* Device::CreateFramebuffer(const FramebufferInfo& info)
+Framebuffer* Device::CreateFramebuffer(const FramebufferSettings& info)
 {
     auto& fb = *m_Framebuffers.emplace_back(std::make_unique<Framebuffer>());
 

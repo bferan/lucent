@@ -1,5 +1,8 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
+#extension GL_GOOGLE_include_directive : enable
+
+#include "Test.shader"
 
 layout(location = 0) attribute vec3 a_Position;
 layout(location = 1) attribute vec3 a_Normal;

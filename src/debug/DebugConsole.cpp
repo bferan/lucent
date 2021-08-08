@@ -1,25 +1,27 @@
 #include <core/Log.hpp>
 #include "DebugConsole.hpp"
 
-#include "core/Utility.hpp"
+using namespace std::literals;
 
 namespace lucent
 {
 
 constexpr float kInitLifetime = 5.0f;
 constexpr float kFadeTime = 1.0f;
-const std::string kPromptIndicator = "> ";
+const auto kPromptIndicator = "> "s;
 constexpr char kPromptCursor = '_';
 constexpr float kMaxScreenY = 800.0f;
 
 DebugConsole::DebugConsole(Device* device, int maxColumns)
-    : m_Font(device, "fonts/JetBrainsMono-Medium.ttf", 26.0f)
+    : m_Device(device)
+    , m_Font(device, "fonts/JetBrainsMono-Medium.ttf", 26.0f)
     , m_TextLog(device, m_Font)
     , m_TextPrompt(device, m_Font)
     , m_MaxColumns(maxColumns)
     , m_Active(false)
 {
     Logger::Instance().Register(this);
+    SetActive(m_Active);
 }
 
 void DebugConsole::GenerateMesh()
@@ -108,7 +110,7 @@ void DebugConsole::AddEntry(std::string text, Color color)
         }
     }
 
-    m_Entries.emplace_front(DebugEntry{
+    auto& entry = m_Entries.emplace_front(DebugEntry{
         .text = std::move(text),
         .lines = lines,
         .color = color,
@@ -152,20 +154,21 @@ void DebugConsole::Update(const InputState& input, float dt)
             if (text == "q")
                 exit(0);
 
-            m_Active = false;
-            text.clear();
+            if (text == "r")
+                m_Device->ReloadPipelines();
+
+            SetActive(false);
         }
 
         // Close console with escape
         if (input.KeyPressed(LC_KEY_ESCAPE))
         {
-            m_Active = false;
-            text.clear();
+            SetActive(false);
         }
     }
     else if (input.KeyPressed(LC_KEY_T) || input.KeyPressed(LC_KEY_ENTER))
     {
-        m_Active = true;
+        SetActive(true);
     }
 
     // Fade out new entries
@@ -184,6 +187,13 @@ void DebugConsole::Render(Context& ctx)
 {
     m_TextLog.Render(ctx);
     m_TextPrompt.Render(ctx);
+}
+
+void DebugConsole::SetActive(bool active)
+{
+    m_Active = active;
+    m_Prompt.text.clear();
+    m_Device->m_Input->SetCursorVisible(active);
 }
 
 void DebugConsole::OnLog(LogLevel level, const std::string& msg)

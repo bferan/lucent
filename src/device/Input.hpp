@@ -61,6 +61,8 @@ public:
         return m_State;
     }
 
+    void SetCursorVisible(bool visible);
+
     // Call to clear deltas at end of frame
     void Reset()
     {
@@ -75,6 +77,7 @@ private:
     static void CharCallback(GLFWwindow* window, uint32_t codepoint);
 
 private:
+    GLFWwindow* m_Window;
     InputState m_State;
 
 };

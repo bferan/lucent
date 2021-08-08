@@ -8,10 +8,9 @@ namespace lucent
 // TODO: Flip mouse so screen space has origin at bottom left
 
 Input::Input(GLFWwindow* window)
+    : m_Window(window)
 {
     glfwSetWindowUserPointer(window, this);
-
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
     glfwSetKeyCallback(window, KeyCallback);
     glfwSetCursorPosCallback(window, CursorPosCallback);
@@ -69,6 +68,11 @@ void Input::CharCallback(GLFWwindow* window, uint32_t codepoint)
 
     if (c >= kFirstAscii)
         state.textBuffer += c;
+}
+
+void Input::SetCursorVisible(bool visible)
+{
+    glfwSetInputMode(m_Window, GLFW_CURSOR, visible ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED);
 }
 
 }

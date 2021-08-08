@@ -19,43 +19,39 @@ HdrImporter::HdrImporter(Device* device)
 {
     m_Context = m_Device->CreateContext();
 
-    m_OffscreenColor = m_Device->CreateTexture(TextureInfo{
+    m_OffscreenColor = m_Device->CreateTexture(TextureSettings{
         .width = kCubeSize,
         .height = kCubeSize,
         .format = TextureFormat::kRGBA32F });
 
-    m_OffscreenDepth = m_Device->CreateTexture(TextureInfo{
+    m_OffscreenDepth = m_Device->CreateTexture(TextureSettings{
         .width = kCubeSize,
         .height = kCubeSize,
         .format = TextureFormat::kDepth
     });
 
-    m_Offscreen = m_Device->CreateFramebuffer(FramebufferInfo{
+    m_Offscreen = m_Device->CreateFramebuffer(FramebufferSettings{
         .colorTexture = m_OffscreenColor,
         .depthTexture = m_OffscreenDepth
     });
 
-    m_RectToCube = m_Device->CreatePipeline(PipelineInfo{
-        .name = "RectToCube.shader",
-        .source = ReadFile("C:/Code/lucent/src/rendering/shaders/RectToCube.shader"),
+    m_RectToCube = m_Device->CreatePipeline(PipelineSettings{
+        .shaderName = "RectToCube.shader",
         .framebuffer = m_Offscreen
     });
 
-    m_GenIrradiance = m_Device->CreatePipeline(PipelineInfo{
-        .name = "IrradianceCube.shader",
-        .source = ReadFile("C:/Code/lucent/src/rendering/shaders/IrradianceCube.shader"),
+    m_GenIrradiance = m_Device->CreatePipeline(PipelineSettings{
+        .shaderName = "IrradianceCube.shader",
         .framebuffer = m_Offscreen
     });
 
-    m_GenSpecular = m_Device->CreatePipeline(PipelineInfo{
-        .name = "SpecularCube.shader",
-        .source = ReadFile("C:/Code/lucent/src/rendering/shaders/SpecularCube.shader"),
+    m_GenSpecular = m_Device->CreatePipeline(PipelineSettings{
+        .shaderName = "SpecularCube.shader",
         .framebuffer = m_Offscreen
     });
 
-    m_GenBRDF = m_Device->CreatePipeline(PipelineInfo{
-        .name = "BRDF.shader",
-        .source = ReadFile("C:/Code/lucent/src/rendering/shaders/BRDF.shader"),
+    m_GenBRDF = m_Device->CreatePipeline(PipelineSettings{
+        .shaderName = "BRDF.shader",
         .framebuffer = m_Offscreen
     });
 
@@ -152,7 +148,7 @@ Environment HdrImporter::Import(const std::string& hdrFile)
     int x, y, numChannels;
     float* data = stbi_loadf(hdrFile.c_str(), &x, &y, &numChannels, kDesiredChannels);
 
-    auto envRectangle = m_Device->CreateTexture(TextureInfo{
+    auto envRectangle = m_Device->CreateTexture(TextureSettings{
         .width = static_cast<uint32_t>(x),
         .height = static_cast<uint32_t>(y),
         .format = TextureFormat::kRGBA32F
@@ -161,7 +157,7 @@ Environment HdrImporter::Import(const std::string& hdrFile)
     stbi_image_free(data);
 
     // Convert to cubemap
-    env.cubeMap = m_Device->CreateTexture(TextureInfo{
+    env.cubeMap = m_Device->CreateTexture(TextureSettings{
         .width = kCubeSize,
         .height = kCubeSize,
         .format = TextureFormat::kRGBA32F,
@@ -171,7 +167,7 @@ Environment HdrImporter::Import(const std::string& hdrFile)
     RenderToCube(m_RectToCube, envRectangle, env.cubeMap, 0, kCubeSize);
 
     // Generate irradiance map
-    env.irradianceMap = m_Device->CreateTexture(TextureInfo{
+    env.irradianceMap = m_Device->CreateTexture(TextureSettings{
         .width = kIrradianceSize,
         .height = kIrradianceSize,
         .format = TextureFormat::kRGBA32F,
@@ -181,7 +177,7 @@ Environment HdrImporter::Import(const std::string& hdrFile)
     RenderToCube(m_GenIrradiance, env.cubeMap, env.irradianceMap, 0, kIrradianceSize);
 
     // Generate specular map
-    env.specularMap = m_Device->CreateTexture(TextureInfo{
+    env.specularMap = m_Device->CreateTexture(TextureSettings{
         .width = kSpecularSize,
         .height = kSpecularSize,
         .levels = kSpecularLevels,
@@ -200,7 +196,7 @@ Environment HdrImporter::Import(const std::string& hdrFile)
     }
 
     // Generate BRDF LUT
-    env.BRDF = m_Device->CreateTexture(TextureInfo{
+    env.BRDF = m_Device->CreateTexture(TextureSettings{
         .width = kBRDFSize,
         .height = kBRDFSize,
         .format = TextureFormat::kRGBA32F,

@@ -1,13 +1,21 @@
-#include "ShaderCache.hpp"
+#include "Shader.hpp"
+
+#include <optional>
+#include <array>
+#include <map>
+#include <string_view>
+#include <utility>
+#include <cstdlib>
 
 #include "glslang/Public/ShaderLang.h"
 #include "glslang/Include/Types.h"
 #include "glslang/MachineIndependent/localintermediate.h"
 #include "glslang/SPIRV/GlslangToSpv.h"
 
-#include <optional>
-#include <array>
+#define FMT_CONSTEVAL
+#include "fmt/core.h"
 
+#include "core/Utility.hpp"
 #include "core/Lucent.hpp"
 #include "core/Log.hpp"
 #include "core/Hash.hpp"
@@ -39,10 +47,10 @@ struct PipelineLayout
 
     struct SetLayout
     {
-        SlotList<VkDescriptorType, CompiledProgram::kMaxBindingsPerSet> bindings;
+        SlotList<VkDescriptorType, Shader::kMaxBindingsPerSet> bindings;
     };
 
-    SlotList<SetLayout, CompiledProgram::kMaxSets> sets;
+    SlotList<SetLayout, Shader::kMaxSets> sets;
 };
 
 // Shader stripping
@@ -134,11 +142,11 @@ static void StripDeclarations(std::string& text, const std::string& keyword)
     }
 }
 
-static void StripShader(std::string& text, ProgramStage stage)
+static void StripShader(std::string& text, ShaderStage stage)
 {
     switch (stage)
     {
-    case ProgramStage::kVertex:
+    case ShaderStage::kVertex:
     {
         StripFunction(text, kFragmentDefinition);
         StripDeclarations(text, "out ");
@@ -147,7 +155,7 @@ static void StripShader(std::string& text, ProgramStage stage)
         ReplaceAll(text, kVertexDefinition, kMainDefinition);
         break;
     }
-    case ProgramStage::kFragment:
+    case ShaderStage::kFragment:
     {
         StripFunction(text, kVertexDefinition);
         StripDeclarations(text, "attribute ");
@@ -155,7 +163,7 @@ static void StripShader(std::string& text, ProgramStage stage)
         ReplaceAll(text, kFragmentDefinition, kMainDefinition);
         break;
     }
-    case ProgramStage::kCompute:
+    case ShaderStage::kCompute:
     {
         ReplaceAll(text, kComputeDefinition, kMainDefinition);
     }
@@ -164,26 +172,157 @@ static void StripShader(std::string& text, ProgramStage stage)
     }
 }
 
+// Shader including/resolving
+class DefaultResolver : public ShaderResolver
+{
+public:
+    DefaultResolver()
+    {
+        auto env = std::getenv(kShaderEnvVar);
+        if (env)
+        {
+            LC_DEBUG("Resolving shaders from {}", env);
+            m_RootPath = env;
+            if (!m_RootPath.empty() && !m_RootPath.ends_with(kPathSeparator))
+            {
+                m_RootPath += kPathSeparator;
+            }
+        }
+        else
+        {
+            LC_INFO("Default shader resolver could not locate ENV variable {}\n"
+                    "Using current working directory instead.", kShaderEnvVar);
+        }
+    }
+
+    Result Resolve(const std::string& name) override
+    {
+        Result result{};
+        result.qualifiedName = m_RootPath + name;
+
+        if (!result.qualifiedName.ends_with(kShaderExt))
+            result.qualifiedName += kShaderExt;
+
+        result.source = ReadFile(result.qualifiedName, std::ios::in, &result.found);
+        return result;
+    }
+
+    ~DefaultResolver() override = default;
+
+private:
+    static constexpr auto kShaderEnvVar = "LC_SHADER_ROOT";
+    static constexpr char kPathSeparator = '/';
+    static constexpr const char* kShaderExt = ".shader";
+
+    std::string m_RootPath{};
+
+};
+
+class Includer : public glslang::TShader::Includer
+{
+public:
+    Includer(ShaderResolver* resolver, ShaderStage stage)
+        : m_Resolver(resolver), m_Stage(stage)
+    {
+    }
+
+    // glslang callbacks
+    IncludeResult* includeSystem(const char* header, const char* includer, size_t depth) override
+    {
+        return nullptr;
+    }
+
+    IncludeResult* includeLocal(const char* header, const char* includer, size_t depth) override
+    {
+        auto result = m_Resolver->Resolve(header);
+
+        if (!result.found)
+            return nullptr;
+
+        auto text = new std::string(std::move(result.source));
+        StripShader(*text, m_Stage);
+
+        return new IncludeResult(result.qualifiedName, text->data(), text->size(), text);
+    }
+
+    void releaseInclude(IncludeResult* result) override
+    {
+        if (result)
+        {
+            delete (std::string*)result->userData;
+            delete result;
+        }
+    }
+
+private:
+    ShaderResolver* m_Resolver;
+    ShaderStage m_Stage;
+};
+
+// Info log
+void InfoLog::Error(const std::string& text)
+{
+    error += text;
+    error += '\n';
+}
+
 // Shader cache
 ShaderCache::ShaderCache(Device* device)
     : m_Device(device)
+    , m_Resolver(new DefaultResolver())
 {
 }
 
-CompiledProgram& ShaderCache::Compile(const std::string& name, const std::string& source)
+Shader* ShaderCache::Compile(const std::string& name)
 {
-    auto hash = Hash<uint64_t>(source);
-    if (m_Programs.contains(hash))
+    InfoLog log{};
+    auto result = Compile(name, log);
+    if (!result)
     {
-        return *m_Programs[hash];
+        LC_ERROR("Error compiling shader {}:\n{}", name, log.error);
+    }
+    return result;
+}
+
+Shader* ShaderCache::Compile(const std::string& name, InfoLog& log)
+{
+    auto result = m_Resolver->Resolve(name);
+    if (!result.found)
+    {
+        log.Error("Unable to resolve shader with name:");
+        log.Error(name);
+        return nullptr;
     }
 
-    auto& program = *(m_Programs[hash] = std::make_unique<CompiledProgram>());
-    PopulateProgram(name, source, program);
-    return program;
+    auto hash = Hash<uint64_t>(result.source);
+    if (m_Shaders.contains(hash))
+    {
+        return m_Shaders[hash].get();
+    }
+
+    auto& shader = (m_Shaders[hash] = std::make_unique<Shader>());
+    if (!PopulateShader(result.qualifiedName, result.source, *shader, log))
+    {
+        m_Shaders.erase(hash);
+        return nullptr;
+    }
+    shader->hash = hash;
+
+    return shader.get();
 }
 
-static void ScanLayout(const TIntermNode& root, PipelineLayout& layout)
+void ShaderCache::Release(Shader* shader)
+{
+    LC_ASSERT(m_Shaders.contains(shader->hash));
+
+    if (--shader->uses <= 0)
+    {
+        FreeResources(shader);
+        m_Shaders.erase(shader->hash);
+    }
+}
+
+static bool ScanLayout(const TIntermNode& root, PipelineLayout& layout, InfoLog& log)
 {
     for (auto node : root.getAsAggregate()->getSequence())
     {
@@ -201,8 +340,8 @@ static void ScanLayout(const TIntermNode& root, PipelineLayout& layout)
                     auto set = qualifier.layoutSet;
                     auto binding = qualifier.layoutBinding;
 
-                    if (set >= 0 && set < CompiledProgram::kMaxSets &&
-                        binding >= 0 && binding < CompiledProgram::kMaxBindingsPerSet)
+                    if (set >= 0 && set < Shader::kMaxSets &&
+                        binding >= 0 && binding < Shader::kMaxBindingsPerSet)
                     {
                         if (!layout.sets[set])
                             layout.sets[set] = PipelineLayout::SetLayout{};
@@ -212,15 +351,17 @@ static void ScanLayout(const TIntermNode& root, PipelineLayout& layout)
                     }
                     else
                     {
-                        LC_ASSERT(0 && "Invalid uniform binding in shader");
+                        log.Error("Error while scanning: Invalid uniform binding in shader");
+                        return false;
                     }
                 }
             }
         }
     }
+    return true;
 }
 
-bool ShaderCache::PopulateProgram(const std::string& name, const std::string& source, CompiledProgram& compiled)
+bool ShaderCache::PopulateShader(const std::string& name, const std::string& source, Shader& shader, InfoLog& log)
 {
     const int defaultVersion = 450;
     const auto inputLang = glslang::EShSourceGlsl;
@@ -229,32 +370,49 @@ bool ShaderCache::PopulateProgram(const std::string& name, const std::string& so
     const auto targetLang = glslang::EshTargetSpv;
     const auto targetLangVersion = glslang::EShTargetSpv_1_2;
 
-    compiled = {};
+    shader = {};
     std::vector<std::unique_ptr<glslang::TShader>> shaders;
     glslang::TProgram program;
 
-    auto addShader = [&](std::string_view text, EShLanguage lang, VkShaderStageFlagBits bit, const char* entry)
+    auto addShader = [&](std::string_view text,
+        EShLanguage lang,
+        VkShaderStageFlagBits bit,
+        const char* entry,
+        ShaderStage shaderStage)
     {
-        if (text.empty()) return;
+        if (text.empty())
+        {
+            log.Error("Empty shader stage");
+            return false;
+        }
 
-        auto& shader = *shaders.emplace_back(std::make_unique<glslang::TShader>(lang));
+        auto& glsl = *shaders.emplace_back(std::make_unique<glslang::TShader>(lang));
         auto data = text.data();
         auto names = name.c_str();
         int length = (int)text.length();
 
-        shader.setStringsWithLengthsAndNames(&data, &length, &names, 1);
-        shader.setEnvInput(inputLang, lang, client, defaultVersion);
-        shader.setEnvClient(client, clientVersion);
-        shader.setEnvTarget(targetLang, targetLangVersion);
+        glsl.setStringsWithLengthsAndNames(&data, &length, &names, 1);
+        glsl.setEnvInput(inputLang, lang, client, defaultVersion);
+        glsl.setEnvClient(client, clientVersion);
+        glsl.setEnvTarget(targetLang, targetLangVersion);
 
-        auto result = shader.parse(&builtInResource, defaultVersion, true, EShMsgDefault);
-        LC_ASSERT(result);
+        Includer includer(m_Resolver.get(), shaderStage);
 
-        program.addShader(&shader);
+        auto result = glsl.parse(&builtInResource, defaultVersion, true, EShMsgDefault, includer);
+        if (!result)
+        {
+            log.Error("Failed parsing:");
+            log.Error(glsl.getInfoLog());
+            return false;
+        }
 
-        auto stage = compiled.numStages;
-        compiled.stages[stage].stageBit = bit;
-        compiled.numStages++;
+        program.addShader(&glsl);
+
+        auto stage = shader.numStages;
+        shader.stages[stage].stageBit = bit;
+        shader.numStages++;
+
+        return true;
     };
 
     // Detect shader types in source
@@ -262,31 +420,43 @@ bool ShaderCache::PopulateProgram(const std::string& name, const std::string& so
         source.find(kFragmentDefinition) != std::string::npos)
     {
         std::string vert(source);
-        StripShader(vert, ProgramStage::kVertex);
+        StripShader(vert, ShaderStage::kVertex);
 
         std::string frag(source);
-        StripShader(frag, ProgramStage::kFragment);
+        StripShader(frag, ShaderStage::kFragment);
 
-        addShader(vert, EShLangVertex, VK_SHADER_STAGE_VERTEX_BIT, "vert");
-        addShader(frag, EShLangFragment, VK_SHADER_STAGE_FRAGMENT_BIT, "frag");
+        if (!addShader(vert, EShLangVertex, VK_SHADER_STAGE_VERTEX_BIT,
+            "vert", ShaderStage::kVertex))
+            return false;
+        if (!addShader(frag, EShLangFragment, VK_SHADER_STAGE_FRAGMENT_BIT,
+            "frag", ShaderStage::kFragment))
+            return false;
     }
     else if (source.find(kComputeDefinition) != std::string::npos)
     {
         std::string compute(source);
-        addShader(compute, EShLangCompute, VK_SHADER_STAGE_COMPUTE_BIT, "compute");
+        StripShader(compute, ShaderStage::kCompute);
+
+        if (!addShader(compute, EShLangCompute, VK_SHADER_STAGE_COMPUTE_BIT,
+            "compute", ShaderStage::kCompute))
+            return false;
     }
     else
     {
-        LC_ERROR("No entrypoint found in {}", name);
+        log.Error("No entrypoint found in shader.");
         return false;
     }
 
+    if (!program.link(EShMsgDefault))
+    {
+        log.Error("Failed linking:");
+        log.Error(program.getInfoLog());
+        return false;
+    }
 
-    auto result = program.link(EShMsgDefault);
-    LC_ASSERT(result);
-
+    // Create SPIRV shader modules for each stage
     PipelineLayout layout;
-    for (int i = 0; i < compiled.numStages; ++i)
+    for (int i = 0; i < shader.numStages; ++i)
     {
         m_SpirvBuffer.clear();
 
@@ -299,17 +469,21 @@ bool ShaderCache::PopulateProgram(const std::string& name, const std::string& so
             .pCode = m_SpirvBuffer.data()
         };
 
-        result = vkCreateShaderModule(m_Device->m_Device, &moduleInfo, nullptr, &compiled.stages[i].module);
-        LC_ASSERT(result == VK_SUCCESS);
+        auto result = vkCreateShaderModule(m_Device->m_Device, &moduleInfo, nullptr, &shader.stages[i].module);
+        if (result != VK_SUCCESS)
+        {
+            log.Error("Failed to create Vulkan shader module");
+            return false;
+        }
 
-        ScanLayout(*inter.getTreeRoot(), layout);
+        if (!ScanLayout(*inter.getTreeRoot(), layout, log))
+            return false;
     }
-    PopulateLayout(layout, compiled);
 
-    return true;
+    return PopulateLayout(layout, shader, log);
 }
 
-void ShaderCache::PopulateLayout(const PipelineLayout& layout, CompiledProgram& compiled)
+bool ShaderCache::PopulateLayout(const PipelineLayout& layout, Shader& compiled, InfoLog& log)
 {
     // Create descriptor set layout per set
     for (const auto& set : layout.sets)
@@ -319,7 +493,7 @@ void ShaderCache::PopulateLayout(const PipelineLayout& layout, CompiledProgram& 
             auto& setLayout = set.value();
 
             uint32_t numBindings = 0;
-            VkDescriptorSetLayoutBinding bindings[CompiledProgram::kMaxBindingsPerSet];
+            VkDescriptorSetLayoutBinding bindings[Shader::kMaxBindingsPerSet];
             for (uint32_t binding = 0; binding < setLayout.bindings.size(); ++binding)
             {
                 if (setLayout.bindings[binding])
@@ -358,24 +532,30 @@ void ShaderCache::PopulateLayout(const PipelineLayout& layout, CompiledProgram& 
 
     auto result = vkCreatePipelineLayout(m_Device->m_Device, &pipelineLayoutInfo, nullptr, &compiled.layout);
     LC_ASSERT(result == VK_SUCCESS);
+
+    return true;
 }
 
 void ShaderCache::Clear()
 {
-    for (auto&[_, program] : m_Programs)
+    for (auto&[hash, shader] : m_Shaders)
     {
-        for (int i = 0; i < program->numStages; ++i)
-        {
-            vkDestroyShaderModule(m_Device->m_Device, program->stages[i].module, nullptr);
-        }
+        FreeResources(shader.get());
+    }
+}
 
-        // TODO: Check errors here
-        vkDestroyPipelineLayout(m_Device->m_Device, program->layout, nullptr);
+void ShaderCache::FreeResources(Shader* shader)
+{
+    for (int i = 0; i < shader->numStages; ++i)
+    {
+        vkDestroyShaderModule(m_Device->m_Device, shader->stages[i].module, nullptr);
+    }
 
-        for (int i = 0; i < program->numSets; ++i)
-        {
-            vkDestroyDescriptorSetLayout(m_Device->m_Device, program->setLayouts[i], nullptr);
-        }
+    vkDestroyPipelineLayout(m_Device->m_Device, shader->layout, nullptr);
+
+    for (int i = 0; i < shader->numSets; ++i)
+    {
+       // vkDestroyDescriptorSetLayout(m_Device->m_Device, shader->setLayouts[i], nullptr);
     }
 }
 

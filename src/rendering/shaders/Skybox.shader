@@ -37,5 +37,6 @@ void frag()
     vec3 dir = -normalize(v_Direction);
     dir.x = -dir.x;
     vec3 col = texture(u_Environment, dir).rgb;
+
     o_Color = vec4(col, 1.0);
 }

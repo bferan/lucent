@@ -53,7 +53,7 @@ static Texture* ImportTexture(Device* device, const aiTexture* texture,
         static_cast<int>(texture->mWidth), &x, &y, &n, reqChannels);
     LC_ASSERT(imgData);
 
-    auto importedTexture = device->CreateTexture(TextureInfo{
+    auto importedTexture = device->CreateTexture(TextureSettings{
         .width = static_cast<uint32_t>(x),
         .height = static_cast<uint32_t>(y),
         .format = linear ? TextureFormat::kRGBA8 : TextureFormat::kRGBA8_SRGB
@@ -82,7 +82,7 @@ static Texture* ImportTexture(Device* device, std::string_view rootPath, const c
     auto imgData = stbi_load(path.c_str(), &x, &y, &n, reqChannels);
     LC_ASSERT(imgData);
 
-    auto importedTexture = device->CreateTexture(TextureInfo{
+    auto importedTexture = device->CreateTexture(TextureSettings{
         .width = static_cast<uint32_t>(x),
         .height = static_cast<uint32_t>(y),
         .format = linear ? TextureFormat::kRGBA8 : TextureFormat::kRGBA8_SRGB

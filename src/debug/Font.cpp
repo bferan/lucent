@@ -36,7 +36,7 @@ Font::Font(Device* device, const std::string& fontFile, float pixelHeight)
         kFirstAsciiChar, kNumChars, m_BakedFont->chars);
 
     // Create and upload font texture
-    auto texInfo = TextureInfo{
+    auto texInfo = TextureSettings{
         .width = kBitmapWidth,
         .height = kBitmapHeight,
         .format = TextureFormat::kR8
@@ -44,9 +44,8 @@ Font::Font(Device* device, const std::string& fontFile, float pixelHeight)
     m_FontTexture = m_Device->CreateTexture(texInfo, bitmap.size(), bitmap.data());
 
     // Create font pipeline & descriptor set
-    m_FontPipeline = m_Device->CreatePipeline(PipelineInfo{
-            .name = "DebugFont.shader",
-            .source = ReadFile("C:/Code/lucent/src/rendering/shaders/DebugFont.shader"),
+    m_FontPipeline = m_Device->CreatePipeline(PipelineSettings{
+            .shaderName = "DebugFont.shader",
             .depthTestEnable = false,
         }
     );
