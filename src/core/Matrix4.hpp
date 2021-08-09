@@ -210,13 +210,5 @@ inline Vector4 operator*(const Matrix4& l, const Vector4& r)
         l[0][3] * r[0] + l[1][3] * r[1] + l[2][3] * r[2] + l[3][3] * r[3]);
 }
 
-inline std::ostream& operator<<(std::ostream& out, const Matrix4& mat)
-{
-    out << "|" << mat[0][0] << ", " << mat[1][0] << ", " << mat[2][0] << ", " << mat[3][0] << "|\n";
-    out << "|" << mat[0][1] << ", " << mat[1][1] << ", " << mat[2][1] << ", " << mat[3][1] << "|\n";
-    out << "|" << mat[0][2] << ", " << mat[1][2] << ", " << mat[2][2] << ", " << mat[3][2] << "|\n";
-    out << "|" << mat[0][3] << ", " << mat[1][3] << ", " << mat[2][3] << ", " << mat[3][3] << "|\n";
-    return out;
-}
 }
 

@@ -1,7 +1,5 @@
 #pragma once
 
-#include <iostream>
-
 #include "Vector3.hpp"
 
 namespace lucent
@@ -10,7 +8,11 @@ namespace lucent
 struct Vector4
 {
 public:
-    Vector4(float x = 0.0f, float y = 0.0f, float z = 0.0f, float w = 1.0f)
+    Vector4()
+        : Vector4(0.0f, 0.0f, 0.0f, 1.0f)
+    {}
+
+    Vector4(float x, float y, float z, float w = 1.0f)
         : x(x), y(y), z(z), w(w)
     {}
 
@@ -29,9 +31,15 @@ public:
     Vector4& operator=(const Vector4&) = default;
     Vector4& operator=(Vector4&&) = default;
 
-    float operator[](int index) const { return (&x)[index]; }
+    float operator[](int index) const
+    {
+        return (&x)[index];
+    }
 
-    float& operator[](int index) { return (&x)[index]; }
+    float& operator[](int index)
+    {
+        return (&x)[index];
+    }
 
     Vector4& operator+=(const Vector4& rhs)
     {
@@ -101,12 +109,4 @@ inline Vector4 operator-(Vector4 lhs, const Vector4& rhs)
 {
     return (lhs -= rhs);
 }
-
-// TODO: Remove
-inline std::ostream& operator<<(std::ostream& out, const Vector4& v)
-{
-    out << "(" << v[0] << ", " << v[1] << ", " << v[2] << ", " << v[3] << ")";
-    return out;
-}
-
 }

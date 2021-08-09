@@ -1,10 +1,6 @@
 #pragma once
 
-#include <array>
-#include <string>
-
 #include "device/Keys.hpp"
-#include "core/Vector2.hpp"
 
 struct GLFWwindow;
 

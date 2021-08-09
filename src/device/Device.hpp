@@ -1,16 +1,9 @@
 
 #pragma once
 
-#include <vector>
-#include <string>
-#include <memory>
-
 #include "vulkan/vulkan.h"
 #include "vk_mem_alloc.h"
 
-#include "core/Vector3.hpp"
-#include "core/Vector4.hpp"
-#include "core/Color.hpp"
 #include "device/Input.hpp"
 
 struct GLFWwindow;
@@ -63,21 +56,13 @@ struct PipelineSettings
 
 struct Pipeline
 {
-    static constexpr uint32_t kMaxSets = 4;
-
-public:
     explicit Pipeline(PipelineSettings settings)
-        : settings(std::move(settings))
-    {
-    }
+        : settings(std::move(settings)), shader(), handle()
+    {}
 
-public:
     PipelineSettings settings;
-
-    Shader* shader{};
-    VkPipeline handle{};
-    VkDescriptorSetLayout setLayouts[kMaxSets]{};
-    VkPipelineLayout layout{};
+    Shader* shader;
+    VkPipeline handle;
 };
 
 enum class TextureFormat
@@ -187,8 +172,7 @@ class Context
 public:
     explicit Context(Device& device)
         : m_Device(device)
-    {
-    }
+    {}
 
     void Begin() const;
     void End() const;
@@ -240,6 +224,7 @@ public:
 
     const Framebuffer& AcquireFramebuffer();
 
+    // TODO: Remove this interface
     DescriptorSet* CreateDescriptorSet(const Pipeline& pipeline, uint32_t set);
     void WriteSet(DescriptorSet* set, uint32_t binding, const Buffer& buffer);
     void WriteSet(DescriptorSet* set, uint32_t binding, const Texture& texture);

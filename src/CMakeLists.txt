@@ -1,6 +1,8 @@
 
 target_include_directories(lucent PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
+target_precompile_headers(lucent PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/core/Core.hpp>")
+
 target_sources(lucent PRIVATE
         core/Color.hpp
         core/Hash.hpp
@@ -12,6 +14,8 @@ target_sources(lucent PRIVATE
         core/Quaternion.hpp
         core/Vector3.hpp
         core/Vector4.hpp
+        core/Utility.cpp
+        core/Utility.hpp
 
         debug/DebugConsole.cpp
         debug/DebugConsole.hpp
@@ -20,6 +24,8 @@ target_sources(lucent PRIVATE
         debug/TextMesh.cpp
         debug/TextMesh.hpp
 
+        device/Descriptor.cpp
+        device/Descriptor.hpp
         device/Device.cpp
         device/Device.hpp
         device/Input.cpp
@@ -28,6 +34,8 @@ target_sources(lucent PRIVATE
         device/ResourceLimits.hpp
         device/Shader.cpp
         device/Shader.hpp
+        device/ShaderCache.cpp
+        device/ShaderCache.hpp
 
         rendering/SceneRenderer.cpp
         rendering/SceneRenderer.hpp

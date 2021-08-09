@@ -1,7 +1,5 @@
 #include "Importer.hpp"
 
-#include "core/Log.hpp"
-
 #include "assimp/Importer.hpp"
 #include "assimp/postprocess.h"
 #include "assimp/pbrmaterial.h"

@@ -1,9 +1,5 @@
 #pragma once
 
-#include <deque>
-
-#include "core/Color.hpp"
-#include "core/Log.hpp"
 #include "device/Device.hpp"
 #include "device/Input.hpp"
 #include "debug/TextMesh.hpp"
@@ -57,6 +53,8 @@ private:
     int m_MaxEntries = 1000;
     bool m_Active;
     Vector2 m_Origin = { 50.0f, 50.0f };
+
+    std::vector<int> testVec;
 
     std::deque<DebugEntry> m_Entries;
     DebugPrompt m_Prompt;

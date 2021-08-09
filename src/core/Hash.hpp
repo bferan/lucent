@@ -1,13 +1,12 @@
 #pragma once
 
-#include <string_view>
-
 namespace lucent
 {
 
 template<typename T>
 struct FNVTraits
-{};
+{
+};
 
 template<>
 struct FNVTraits<uint32_t>

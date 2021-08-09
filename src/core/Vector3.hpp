@@ -1,7 +1,5 @@
 #pragma once
 
-#include <iostream>
-
 #include "Math.hpp"
 
 namespace lucent
@@ -12,34 +10,38 @@ struct Vector3
 public:
     inline static Vector3 Up()
     {
-        return Vector3(0.0f, 1.0f, 0.0f);
+        return { 0.0f, 1.0f, 0.0f };
     }
     inline static Vector3 Down()
     {
-        return Vector3(0.0f, -1.0f, 0.0f);
+        return { 0.0f, -1.0f, 0.0f };
     }
     inline static Vector3 Right()
     {
-        return Vector3(1.0f, 0.0f, 0.0f);
+        return { 1.0f, 0.0f, 0.0f };
     }
     inline static Vector3 Left()
     {
-        return Vector3(-1.0f, 0.0f, 0.0f);
+        return { -1.0f, 0.0f, 0.0f };
     }
     inline static Vector3 Forward()
     {
-        return Vector3(0.0f, 0.0f, -1.0f);
+        return { 0.0f, 0.0f, -1.0f };
     }
     inline static Vector3 Back()
     {
-        return Vector3(0.0f, 0.0f, 1.0f);
+        return { 0.0f, 0.0f, 1.0f };
     }
 
 public:
-    Vector3(float x = 0.0f, float y = 0.0f, float z = 0.0f)
+    Vector3()
+        : Vector3(0.0f, 0.0f, 0.0f)
+    {}
+
+    Vector3(float x, float y, float z = 0.0f)
         : x(x), y(y), z(z)
-    {
-    }
+    {}
+
     Vector3(const Vector3&) = default;
     Vector3(Vector3&&) = default;
 
@@ -111,7 +113,7 @@ inline Vector3 operator*(float lhs, Vector3 rhs)
 
 inline Vector3 operator-(const Vector3& rhs)
 {
-    return Vector3(-rhs.x, -rhs.y, -rhs.z);
+    return { -rhs.x, -rhs.y, -rhs.z };
 }
 
 inline Vector3 operator+(Vector3 lhs, const Vector3& rhs)
@@ -122,13 +124,6 @@ inline Vector3 operator+(Vector3 lhs, const Vector3& rhs)
 inline Vector3 operator-(Vector3 lhs, const Vector3& rhs)
 {
     return (lhs -= rhs);
-}
-
-// TODO: Remove
-inline std::ostream& operator<<(std::ostream& out, const Vector3& v)
-{
-    out << "(" << v[0] << ", " << v[1] << ", " << v[2] << ")";
-    return out;
 }
 
 }

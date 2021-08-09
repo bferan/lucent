@@ -18,7 +18,11 @@ public:
     }
 
 public:
-    Quaternion(float x = 0.0f, float y = 0.0f, float z = 0.0f, float w = 1.0f)
+    Quaternion()
+        : Quaternion(0.0f, 0.0f, 0.0f, 1.0f)
+    {}
+
+    Quaternion(float x, float y, float z, float w)
         : x(x), y(y), z(z), w(w)
     {}
 

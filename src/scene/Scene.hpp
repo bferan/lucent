@@ -1,12 +1,5 @@
 #pragma once
 
-#include <vector>
-
-#include "core/Color.hpp"
-#include "core/Lucent.hpp"
-#include "core/Matrix4.hpp"
-#include "core/Vector3.hpp"
-#include "core/Quaternion.hpp"
 #include "scene/EntityPool.hpp"
 #include "scene/ComponentPool.hpp"
 
@@ -27,8 +20,7 @@ struct Parent
 {
     explicit Parent(size_t numChildren)
         : children(numChildren)
-    {
-    }
+    {}
 
     std::vector<Entity> children;
 };
@@ -53,7 +45,6 @@ struct Material
     Color baseColorFactor = { 1.0f, 1.0f, 1.0f, 1.0f };
     float metallicFactor = 1.0f;
     float roughnessFactor = 1.0f;
-
 
     DescriptorSet* descSet;
 };

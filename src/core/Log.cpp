@@ -43,5 +43,4 @@ LogStdOut::~LogStdOut()
     Logger::Instance().Unregister(this);
 }
 
-
 }

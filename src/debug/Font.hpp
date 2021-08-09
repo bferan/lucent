@@ -1,7 +1,5 @@
 #pragma once
 
-#include <string>
-
 #include "device/Device.hpp"
 
 namespace lucent

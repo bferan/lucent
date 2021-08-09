@@ -1,7 +1,5 @@
 #pragma once
 
-#include <iostream>
-
 #include "Math.hpp"
 
 namespace lucent
@@ -39,8 +37,8 @@ public:
 public:
     Vector2(float x = 0.0f, float y = 0.0f)
         : x(x), y(y)
-    {
-    }
+    {}
+
     Vector2(const Vector2&) = default;
     Vector2(Vector2&&) = default;
 
@@ -122,13 +120,6 @@ inline Vector2 operator+(Vector2 lhs, const Vector2& rhs)
 inline Vector2 operator-(Vector2 lhs, const Vector2& rhs)
 {
     return (lhs -= rhs);
-}
-
-// TODO: Remove
-inline std::ostream& operator<<(std::ostream& out, const Vector2& v)
-{
-    out << "(" << v[0] << ", " << v[1] << ")";
-    return out;
 }
 
 }

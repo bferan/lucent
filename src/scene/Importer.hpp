@@ -1,7 +1,5 @@
 #pragma once
 
-#include <string>
-
 #include "assimp/scene.h"
 
 #include "scene/EntityPool.hpp"

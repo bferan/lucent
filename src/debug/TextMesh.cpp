@@ -1,7 +1,5 @@
 #include "TextMesh.hpp"
 
-#include "core/Math.hpp"
-
 namespace lucent
 {
 

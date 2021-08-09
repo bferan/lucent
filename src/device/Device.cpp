@@ -1,14 +1,10 @@
 #include "Device.hpp"
 
-#include <set>
-#include <algorithm>
-
 #include "GLFW/glfw3.h"
 #include "glslang/Public/ShaderLang.h"
 
-#include "core/Color.hpp"
-#include "core/Lucent.hpp"
 #include "device/Shader.hpp"
+#include "device/ShaderCache.hpp"
 
 namespace lucent
 {
@@ -695,6 +691,9 @@ Pipeline* Device::CreatePipeline(const PipelineSettings& settings)
 std::unique_ptr<Pipeline> Device::CreatePipeline(const PipelineSettings& settings, Shader* shaderPtr)
 {
     auto pipelinePtr = std::make_unique<Pipeline>(settings);
+
+    if (!shaderPtr) return pipelinePtr;
+
     auto& shader = *shaderPtr;
     auto& pipeline = *pipelinePtr;
     auto& framebuffer = settings.framebuffer ? *settings.framebuffer : m_Swapchain.framebuffers[0];
@@ -715,9 +714,6 @@ std::unique_ptr<Pipeline> Device::CreatePipeline(const PipelineSettings& setting
         };
     }
 
-    memcpy(pipeline.setLayouts, shader.setLayouts, sizeof(shader.setLayouts));
-    pipeline.layout = shader.layout;
-
     // Configure pipeline fixed functions
     VkVertexInputBindingDescription vertexBindingInfos[] = {
         {
@@ -733,37 +729,37 @@ std::unique_ptr<Pipeline> Device::CreatePipeline(const PipelineSettings& setting
             .binding = 0,
             .format = VK_FORMAT_R32G32B32_SFLOAT,
             .offset = (uint32_t)offsetof(Vertex, position)
-                },
-                {
+        },
+        {
             .location = 1,
             .binding = 0,
             .format = VK_FORMAT_R32G32B32_SFLOAT,
             .offset = (uint32_t)offsetof(Vertex, normal)
-                },
-                {
+        },
+        {
             .location = 2,
             .binding = 0,
             .format = VK_FORMAT_R32G32B32_SFLOAT,
             .offset = (uint32_t)offsetof(Vertex, tangent)
-                },
-                {
+        },
+        {
             .location = 3,
             .binding = 0,
             .format = VK_FORMAT_R32G32B32_SFLOAT,
             .offset = (uint32_t)offsetof(Vertex, bitangent)
-                },
-                {
+        },
+        {
             .location = 4,
             .binding = 0,
             .format = VK_FORMAT_R32G32_SFLOAT,
             .offset = (uint32_t)offsetof(Vertex, texCoord0)
-                },
-                {
+        },
+        {
             .location = 5,
             .binding = 0,
             .format = VK_FORMAT_R8G8B8A8_UNORM,
             .offset = (uint32_t)offsetof(Vertex, color)
-                }
+        }
     };
 
     auto vertexInputInfo = VkPipelineVertexInputStateCreateInfo{
@@ -808,7 +804,7 @@ std::unique_ptr<Pipeline> Device::CreatePipeline(const PipelineSettings& setting
         .cullMode = VK_CULL_MODE_BACK_BIT,
         .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
         .lineWidth = 1.0f,
-        };
+    };
 
     auto multisampleInfo = VkPipelineMultisampleStateCreateInfo{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
@@ -823,7 +819,7 @@ std::unique_ptr<Pipeline> Device::CreatePipeline(const PipelineSettings& setting
         .depthCompareOp = settings.depthTestEnable ? VK_COMPARE_OP_LESS_OR_EQUAL : VK_COMPARE_OP_ALWAYS,
         .depthBoundsTestEnable = VK_FALSE,
         .stencilTestEnable = VK_FALSE,
-        };
+    };
 
     auto colorBlendAttachmentInfo = VkPipelineColorBlendAttachmentState{
         .blendEnable = VK_FALSE,
@@ -876,7 +872,7 @@ std::unique_ptr<Pipeline> Device::CreatePipeline(const PipelineSettings& setting
         .pDepthStencilState = &depthStencilInfo,
         .pColorBlendState = &colorBlendInfo,
         .pDynamicState = &dynamicInfo,
-        .layout = pipeline.layout,
+        .layout = shader.layout,
         .renderPass = framebuffer.renderPass,
         .subpass = 0
     };
@@ -1418,7 +1414,7 @@ DescriptorSet* Device::CreateDescriptorSet(const Pipeline& pipeline, uint32_t in
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
         .descriptorPool = m_DescPool,
         .descriptorSetCount = 1,
-        .pSetLayouts = &pipeline.setLayouts[index]
+        .pSetLayouts = &pipeline.shader->setLayouts[index]
     };
 
     auto result = vkAllocateDescriptorSets(m_Device, &setAllocInfo, &set->handle);
@@ -1475,7 +1471,7 @@ void Context::BindSet(const DescriptorSet* set)
 
     vkCmdBindDescriptorSets(m_CommandBuffer,
         VK_PIPELINE_BIND_POINT_GRAPHICS,
-        m_BoundPipeline->layout,
+        m_BoundPipeline->shader->layout,
         set->index,
         1,
         &set->handle,
@@ -1489,7 +1485,7 @@ void Context::BindSet(const DescriptorSet* set, uint32_t dynamicOffset)
 
     vkCmdBindDescriptorSets(m_CommandBuffer,
         VK_PIPELINE_BIND_POINT_GRAPHICS,
-        m_BoundPipeline->layout,
+        m_BoundPipeline->shader->layout,
         set->index,
         1,
         &set->handle,

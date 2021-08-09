@@ -4,7 +4,6 @@
 #include "stb_truetype.h"
 
 #include "core/Utility.hpp"
-#include "core/Lucent.hpp"
 
 namespace lucent
 {

@@ -1,4 +1,3 @@
-#include <core/Log.hpp>
 #include "DebugConsole.hpp"
 
 using namespace std::literals;

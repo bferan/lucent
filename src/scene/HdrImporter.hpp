@@ -1,9 +1,6 @@
 #pragma once
 
-#include <string>
-
 #include "device/Device.hpp"
-#include "core/Matrix4.hpp"
 #include "scene/Scene.hpp"
 
 namespace lucent

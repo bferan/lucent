@@ -2,7 +2,6 @@
 
 #include "stb_image.h"
 
-#include "core/Lucent.hpp"
 #include "core/Utility.hpp"
 
 namespace lucent

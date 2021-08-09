@@ -1,6 +1,5 @@
 #pragma once
 
-#include "core/Matrix4.hpp"
 #include "device/Device.hpp"
 #include "scene/Scene.hpp"
 #include "debug/DebugConsole.hpp"

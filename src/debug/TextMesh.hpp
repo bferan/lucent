@@ -1,8 +1,5 @@
 #pragma once
 
-#include <string>
-#include <vector>
-
 #include "device/Device.hpp"
 #include "debug/Font.hpp"
 

@@ -1,8 +1,5 @@
 #pragma once
 
-#include <vector>
-
-#include "core/Lucent.hpp"
 #include "scene/EntityPool.hpp"
 
 namespace lucent
