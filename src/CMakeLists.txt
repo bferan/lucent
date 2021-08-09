@@ -4,6 +4,7 @@ target_include_directories(lucent PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_precompile_headers(lucent PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/core/Core.hpp>")
 
 target_sources(lucent PRIVATE
+        core/Array.hpp
         core/Color.hpp
         core/Hash.hpp
         core/Log.cpp
@@ -24,8 +25,10 @@ target_sources(lucent PRIVATE
         debug/TextMesh.cpp
         debug/TextMesh.hpp
 
-        device/Descriptor.cpp
-        device/Descriptor.hpp
+        device/Context.cpp
+        device/Context.hpp
+        device/DescriptorCache.cpp
+        device/DescriptorCache.hpp
         device/Device.cpp
         device/Device.hpp
         device/Input.cpp

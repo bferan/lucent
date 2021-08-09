@@ -5,36 +5,9 @@
 namespace lucent
 {
 
-template<typename T, int N>
-using SlotList = std::array <std::optional<T>, N>;
+class Device;
 
-struct SetLayout
-{
-    SlotList<VkDescriptorType, Shader::kMaxBindingsPerSet> bindings;
-};
-
-inline bool operator==(const SetLayout& lhs, const SetLayout& rhs)
-{
-    return lhs.bindings == rhs.bindings;
-}
-
-struct PipelineLayout
-{
-    SlotList<SetLayout, Shader::kMaxSets> sets;
-};
-
-inline bool operator==(const PipelineLayout& lhs, const PipelineLayout& rhs)
-{
-    return lhs.sets == rhs.sets;
-}
-
-struct LayoutHash
-{
-    size_t operator()(const SetLayout& set) const;
-    size_t operator()(const PipelineLayout& layout) const;
-};
-
-// Currently, specific to the Vulkan backend, could be made general
+// Specific to the Vulkan backend, could be made general
 class ShaderCache
 {
 public:
@@ -49,23 +22,48 @@ public:
     // Release all resources from the cache
     void Clear();
 
+public:
+    template<typename T, int N>
+    using SlotList = std::array<std::optional<T>, N>;
+
+    using SetList = Array<VkDescriptorSetLayout, Shader::kMaxSets>;
+
+    struct SetLayout
+    {
+        bool operator==(const SetLayout other) const
+        {
+            return bindings == other.bindings;
+        }
+        SlotList<VkDescriptorType, Shader::kMaxBindingsPerSet> bindings;
+    };
+
+    struct PipelineLayout
+    {
+        SlotList<SetLayout, Shader::kMaxSets> sets;
+    };
+
+    struct LayoutHash
+    {
+        size_t operator()(const SetLayout& set) const;
+        size_t operator()(const SetList& sets) const;
+    };
+
 private:
-    bool PopulateShader(const std::string& name, const std::string& source, Shader& shader, ShaderInfoLog& log);
-    bool PopulateLayout(const PipelineLayout& layout, Shader& shader, ShaderInfoLog& log);
+    bool PopulateShaderModules(Shader& shader, const std::string& name, const std::string& source, ShaderInfoLog& log);
+    bool PopulateShaderLayout(Shader& shader, const PipelineLayout& layout, ShaderInfoLog& log);
 
     void FreeResources(Shader* shader);
 
     VkDescriptorSetLayout FindSetLayout(const SetLayout& layout);
-    VkPipelineLayout FindPipelineLayout(const PipelineLayout& layout);
 
 private:
     Device* m_Device;
-    std::vector <uint32_t> m_SpirvBuffer;
-    std::unique_ptr <ShaderResolver> m_Resolver;
+    std::vector<uint32> m_SpirvBuffer;
+    std::unique_ptr<ShaderResolver> m_Resolver;
+    std::unordered_map<uint64, std::unique_ptr<Shader>> m_Shaders;
 
-    std::unordered_map <uint64_t, std::unique_ptr<Shader>> m_Shaders;
-    std::unordered_map <SetLayout, VkDescriptorSetLayout, LayoutHash> m_SetLayouts;
-    std::unordered_map <PipelineLayout, VkPipelineLayout, LayoutHash> m_PipelineLayouts;
+    std::unordered_map<SetLayout, VkDescriptorSetLayout, LayoutHash> m_SetLayouts;
+    std::unordered_map<SetList, VkPipelineLayout, LayoutHash> m_PipelineLayouts;
 };
 
 }

@@ -6,7 +6,7 @@
 namespace lucent
 {
 
-using PackedColor = uint32_t;
+using PackedColor = uint32;
 
 struct Color
 {

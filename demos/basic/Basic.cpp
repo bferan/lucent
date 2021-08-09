@@ -2,9 +2,6 @@
 
 #include "GLFW/glfw3.h"
 
-#include "core/Math.hpp"
-#include "core/Matrix4.hpp"
-#include "core/Log.hpp"
 #include "device/Device.hpp"
 #include "rendering/SceneRenderer.hpp"
 #include "scene/Importer.hpp"
@@ -22,7 +19,7 @@ public:
 
         m_Renderer = std::make_unique<SceneRenderer>(&m_Device);
 
-        Importer importer(&m_Device, m_Renderer->m_DefaultPipeline);
+        Importer importer(&m_Device);
 
         //    importer.Import(m_Scene, "models/Plane.glb");
         importer.Import(m_Scene, "models/DamagedHelmet.glb");

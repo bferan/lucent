@@ -27,7 +27,7 @@ struct Parent
 
 struct MeshInstance
 {
-    std::vector<uint32_t> meshes;
+    std::vector<uint32> meshes;
 };
 
 struct Mesh
@@ -35,9 +35,9 @@ struct Mesh
     Buffer* vertexBuffer;
     Buffer* indexBuffer;
 
-    uint32_t numIndices;
+    uint32 numIndices;
 
-    uint32_t materialIdx;
+    uint32 materialIdx;
 };
 
 struct Material
@@ -46,7 +46,11 @@ struct Material
     float metallicFactor = 1.0f;
     float roughnessFactor = 1.0f;
 
-    DescriptorSet* descSet;
+    Texture* baseColor;
+    Texture* metalRough;
+    Texture* normalMap;
+    Texture* aoMap;
+    Texture* emissive;
 };
 
 struct Camera

@@ -3,8 +3,8 @@
 #include "GLFW/glfw3.h"
 #include "glslang/Public/ShaderLang.h"
 
-#include "device/Shader.hpp"
 #include "device/ShaderCache.hpp"
+#include "device/Context.hpp"
 
 namespace lucent
 {
@@ -28,6 +28,7 @@ static VkBufferUsageFlags BufferTypeToFlags(BufferType type)
         break;
     }
     case BufferType::Uniform:
+    case BufferType::UniformDynamic:
     {
         flags |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
         break;
@@ -47,6 +48,9 @@ static VkDescriptorType BufferTypeToDescriptorType(BufferType type)
     switch (type)
     {
     case BufferType::Uniform:
+        return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+
+    case BufferType::UniformDynamic:
         return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
 
     default:
@@ -149,7 +153,7 @@ static VkSamplerAddressMode TextureAddressModeToVk(TextureAddressMode mode)
 void Device::CreateCube()
 {
     std::vector<Vertex> vertices;
-    std::vector<uint32_t> indices;
+    std::vector<uint32> indices;
 
     vertices.assign({
         { .position = { -1.0f, -1.0f, -1.0f }},
@@ -174,15 +178,15 @@ void Device::CreateCube()
     m_Cube.vertices = CreateBuffer(BufferType::Vertex, vertices.size() * sizeof(Vertex));
     m_Cube.vertices->Upload(vertices.data(), vertices.size() * sizeof(Vertex));
 
-    m_Cube.indices = CreateBuffer(BufferType::Index, indices.size() * sizeof(uint32_t));
-    m_Cube.indices->Upload(indices.data(), indices.size() * sizeof(uint32_t));
+    m_Cube.indices = CreateBuffer(BufferType::Index, indices.size() * sizeof(uint32));
+    m_Cube.indices->Upload(indices.data(), indices.size() * sizeof(uint32));
     m_Cube.numIndices = indices.size();
 }
 
 void Device::CreateQuad()
 {
     std::vector<Vertex> vertices;
-    std::vector<uint32_t> indices;
+    std::vector<uint32> indices;
 
     vertices.assign({
         { .position = { -1.0f, -1.0f, 0.0f }, .texCoord0 = { 0.0f, 1.0f }},
@@ -196,8 +200,8 @@ void Device::CreateQuad()
     m_Quad.vertices = CreateBuffer(BufferType::Vertex, vertices.size() * sizeof(Vertex));
     m_Quad.vertices->Upload(vertices.data(), vertices.size() * sizeof(Vertex));
 
-    m_Quad.indices = CreateBuffer(BufferType::Index, indices.size() * sizeof(uint32_t));
-    m_Quad.indices->Upload(indices.data(), indices.size() * sizeof(uint32_t));
+    m_Quad.indices = CreateBuffer(BufferType::Index, indices.size() * sizeof(uint32));
+    m_Quad.indices->Upload(indices.data(), indices.size() * sizeof(uint32));
     m_Quad.numIndices = indices.size();
 }
 
@@ -228,7 +232,7 @@ Device::Device()
     // Initialize VMA
     auto allocatorInfo = VmaAllocatorCreateInfo{
         .physicalDevice = m_PhysicalDevice,
-        .device = m_Device,
+        .device = m_Handle,
         .instance = m_Instance,
         .vulkanApiVersion = VK_API_VERSION_1_2
     };
@@ -238,8 +242,8 @@ Device::Device()
     auto semaphoreInfo = VkSemaphoreCreateInfo{
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
     };
-    vkCreateSemaphore(m_Device, &semaphoreInfo, nullptr, &m_ImageAvailable);
-    vkCreateSemaphore(m_Device, &semaphoreInfo, nullptr, &m_RenderFinished);
+    vkCreateSemaphore(m_Handle, &semaphoreInfo, nullptr, &m_ImageAvailable);
+    vkCreateSemaphore(m_Handle, &semaphoreInfo, nullptr, &m_RenderFinished);
 
     // Create transfer buffer
     m_TransferBuffer = CreateBuffer(BufferType::Staging, 128 * 1024 * 1024);
@@ -249,47 +253,25 @@ Device::Device()
         .flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
         .queueFamilyIndex = m_GraphicsQueue.familyIndex
     };
-    auto result = vkCreateCommandPool(m_Device, &poolInfo, nullptr, &m_OneShotCmdPool);
+    auto result = vkCreateCommandPool(m_Handle, &poolInfo, nullptr, &m_OneShotCmdPool);
     LC_ASSERT(result == VK_SUCCESS);
 
     // Create shader cache
     m_ShaderCache = std::make_unique<ShaderCache>(this);
 
-    // Create descriptor pool
-    VkDescriptorPoolSize descPoolSizes[] = {
-        {
-            .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .descriptorCount = 1024
-        },
-        {
-            .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .descriptorCount = 1024
-        }
-    };
-
-    auto descPoolInfo = VkDescriptorPoolCreateInfo{
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-        .maxSets = 1024,
-        .poolSizeCount = LC_ARRAY_SIZE(descPoolSizes),
-        .pPoolSizes = descPoolSizes
-    };
-
-    result = vkCreateDescriptorPool(m_Device, &descPoolInfo, nullptr, &m_DescPool);
-    LC_ASSERT(result == VK_SUCCESS);
-
     CreateSwapchain();
 
     // Create dummy textures
-    uint32_t black = 0xff000000;
+    uint32 black = 0xff000000;
     m_BlackTexture = CreateTexture(TextureSettings{}, sizeof(black), &black);
 
-    uint32_t white = 0xffffffff;
+    uint32 white = 0xffffffff;
     m_WhiteTexture = CreateTexture(TextureSettings{}, sizeof(white), &white);
 
-    uint32_t gray = 0xff808080;
+    uint32 gray = 0xff808080;
     m_GrayTexture = CreateTexture(TextureSettings{}, sizeof(gray), &gray);
 
-    uint32_t green = 0xff00ff00;
+    uint32 green = 0xff00ff00;
     m_GreenTexture = CreateTexture(TextureSettings{}, sizeof(green), &green);
 
     // Create primitive meshes
@@ -299,7 +281,7 @@ Device::Device()
 
 Device::~Device()
 {
-    vkDeviceWaitIdle(m_Device);
+    vkDeviceWaitIdle(m_Handle);
 
     // Destroy pipelines
     for (auto& pipeline : m_Pipelines)
@@ -316,46 +298,44 @@ Device::~Device()
     // Destroy textures
     for (auto& tex : m_Textures)
     {
-        vkDestroyImageView(m_Device, tex->imageView, nullptr);
+        vkDestroyImageView(m_Handle, tex->imageView, nullptr);
         vmaDestroyImage(m_Allocator, tex->image, tex->alloc);
-        vkDestroySampler(m_Device, tex->sampler, nullptr);
+        vkDestroySampler(m_Handle, tex->sampler, nullptr);
     }
 
     // Destroy contexts
     for (auto& ctx : m_Contexts)
     {
-        vkFreeCommandBuffers(m_Device, ctx->m_CommandPool, 1, &ctx->m_CommandBuffer);
-        vkDestroyCommandPool(m_Device, ctx->m_CommandPool, nullptr);
-    }
+        ctx->Dispose();
 
-    vkDestroyDescriptorPool(m_Device, m_DescPool, nullptr);
+    }
 
     // Destroy shaders
     m_ShaderCache->Clear();
 
     // Destroy swapchain
-    vkDestroyRenderPass(m_Device, m_Swapchain.framebuffers[0].renderPass, nullptr);
+    vkDestroyRenderPass(m_Handle, m_Swapchain.framebuffers[0].renderPass, nullptr);
     for (auto& tex : m_Swapchain.textures)
     {
-        vkDestroyImageView(m_Device, tex.imageView, nullptr);
+        vkDestroyImageView(m_Handle, tex.imageView, nullptr);
     }
     for (auto& fb : m_Swapchain.framebuffers)
     {
-        vkDestroyFramebuffer(m_Device, fb.handle, nullptr);
+        vkDestroyFramebuffer(m_Handle, fb.handle, nullptr);
     }
-    vkDestroySwapchainKHR(m_Device, m_Swapchain.handle, nullptr);
+    vkDestroySwapchainKHR(m_Handle, m_Swapchain.handle, nullptr);
 
     // Destroy semaphores
-    vkDestroySemaphore(m_Device, m_ImageAvailable, nullptr);
-    vkDestroySemaphore(m_Device, m_RenderFinished, nullptr);
+    vkDestroySemaphore(m_Handle, m_ImageAvailable, nullptr);
+    vkDestroySemaphore(m_Handle, m_RenderFinished, nullptr);
 
     // Destroy one shot command pool
-    vkDestroyCommandPool(m_Device, m_OneShotCmdPool, nullptr);
+    vkDestroyCommandPool(m_Handle, m_OneShotCmdPool, nullptr);
 
     // VMA
     vmaDestroyAllocator(m_Allocator);
 
-    vkDestroyDevice(m_Device, nullptr);
+    vkDestroyDevice(m_Handle, nullptr);
     vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
     vkDestroyInstance(m_Instance, nullptr);
 
@@ -366,7 +346,7 @@ Device::~Device()
 
 void Device::CreateInstance()
 {
-    uint32_t instanceExtCount;
+    uint32 instanceExtCount;
     const char** instanceExts = glfwGetRequiredInstanceExtensions(&instanceExtCount);
 
     std::vector<const char*> validationLayers = {
@@ -382,7 +362,7 @@ void Device::CreateInstance()
     auto createInfo = VkInstanceCreateInfo{
         .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         .pApplicationInfo = &appInfo,
-        .enabledLayerCount = static_cast<uint32_t>(validationLayers.size()),
+        .enabledLayerCount = static_cast<uint32>(validationLayers.size()),
         .ppEnabledLayerNames = validationLayers.data(),
         .enabledExtensionCount = instanceExtCount,
         .ppEnabledExtensionNames = instanceExts
@@ -395,7 +375,7 @@ void Device::CreateInstance()
 void Device::CreateDevice()
 {
     // Find suitable physical device
-    uint32_t deviceCount;
+    uint32 deviceCount;
     std::vector<VkPhysicalDevice> physicalDevices;
     vkEnumeratePhysicalDevices(m_Instance, &deviceCount, nullptr);
     physicalDevices.resize(deviceCount);
@@ -417,14 +397,14 @@ void Device::CreateDevice()
     m_PhysicalDevice = selectedDevice;
 
     // Find queue families for graphics and present
-    uint32_t queueFamilyCount;
+    uint32 queueFamilyCount;
     std::vector<VkQueueFamilyProperties> familyProperties;
     vkGetPhysicalDeviceQueueFamilyProperties(selectedDevice, &queueFamilyCount, nullptr);
     familyProperties.resize(queueFamilyCount);
     vkGetPhysicalDeviceQueueFamilyProperties(selectedDevice, &queueFamilyCount, familyProperties.data());
 
-    uint32_t graphicsFamilyIdx = -1;
-    uint32_t presentFamilyIdx = -1;
+    uint32 graphicsFamilyIdx = -1;
+    uint32 presentFamilyIdx = -1;
     for (int i = 0; i < familyProperties.size(); ++i)
     {
         const auto& family = familyProperties[i];
@@ -449,7 +429,7 @@ void Device::CreateDevice()
     }
 
     float queuePriority = 1.0f;
-    std::set<uint32_t> familyIndices = { graphicsFamilyIdx, presentFamilyIdx };
+    std::set<uint32> familyIndices = { graphicsFamilyIdx, presentFamilyIdx };
     std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
     queueCreateInfos.reserve(familyIndices.size());
     for (auto idx : familyIndices)
@@ -467,20 +447,20 @@ void Device::CreateDevice()
 
     auto deviceCreateInfo = VkDeviceCreateInfo{
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-        .queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size()),
+        .queueCreateInfoCount = static_cast<uint32>(queueCreateInfos.size()),
         .pQueueCreateInfos = queueCreateInfos.data(),
-        .enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size()),
+        .enabledExtensionCount = static_cast<uint32>(deviceExtensions.size()),
         .ppEnabledExtensionNames = deviceExtensions.data()
     };
 
-    auto result = vkCreateDevice(selectedDevice, &deviceCreateInfo, nullptr, &m_Device);
+    auto result = vkCreateDevice(selectedDevice, &deviceCreateInfo, nullptr, &m_Handle);
     LC_ASSERT(result == VK_SUCCESS);
 
     m_GraphicsQueue.familyIndex = graphicsFamilyIdx;
     m_PresentQueue.familyIndex = presentFamilyIdx;
 
-    vkGetDeviceQueue(m_Device, graphicsFamilyIdx, 0, &m_GraphicsQueue.handle);
-    vkGetDeviceQueue(m_Device, presentFamilyIdx, 0, &m_PresentQueue.handle);
+    vkGetDeviceQueue(m_Handle, graphicsFamilyIdx, 0, &m_GraphicsQueue.handle);
+    vkGetDeviceQueue(m_Handle, presentFamilyIdx, 0, &m_PresentQueue.handle);
 }
 
 void Device::CreateSwapchain()
@@ -490,7 +470,7 @@ void Device::CreateSwapchain()
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_PhysicalDevice, m_Surface, &surfaceCapabilities);
 
     std::vector<VkSurfaceFormatKHR> surfaceFormats;
-    uint32_t surfaceFormatCount;
+    uint32 surfaceFormatCount;
     vkGetPhysicalDeviceSurfaceFormatsKHR(m_PhysicalDevice, m_Surface, &surfaceFormatCount, nullptr);
     surfaceFormats.resize(surfaceFormatCount);
     vkGetPhysicalDeviceSurfaceFormatsKHR(m_PhysicalDevice, m_Surface, &surfaceFormatCount, surfaceFormats.data());
@@ -513,7 +493,7 @@ void Device::CreateSwapchain()
         int w, h;
         glfwGetFramebufferSize(m_Window, &w, &h);
 
-        chosenExtent = { static_cast<uint32_t>(w), static_cast<uint32_t>(h) };
+        chosenExtent = { static_cast<uint32>(w), static_cast<uint32>(h) };
 
         auto& min = surfaceCapabilities.minImageExtent;
         auto& max = surfaceCapabilities.maxImageExtent;
@@ -525,7 +505,7 @@ void Device::CreateSwapchain()
     auto chosenImageCount = surfaceCapabilities.minImageCount + 1;
 
     auto sharedQueue = m_GraphicsQueue.familyIndex == m_PresentQueue.familyIndex;
-    uint32_t queueIndices[] = { m_GraphicsQueue.familyIndex, m_PresentQueue.familyIndex };
+    uint32 queueIndices[] = { m_GraphicsQueue.familyIndex, m_PresentQueue.familyIndex };
 
     // Create swapchain
     auto swapchainCreateInfo = VkSwapchainCreateInfoKHR{
@@ -547,15 +527,15 @@ void Device::CreateSwapchain()
         .oldSwapchain = VK_NULL_HANDLE
     };
 
-    auto result = vkCreateSwapchainKHR(m_Device, &swapchainCreateInfo, nullptr, &m_Swapchain.handle);
+    auto result = vkCreateSwapchainKHR(m_Handle, &swapchainCreateInfo, nullptr, &m_Swapchain.handle);
     LC_ASSERT(result == VK_SUCCESS);
 
     // Retrieve images from swapchain
-    uint32_t imageCount;
-    vkGetSwapchainImagesKHR(m_Device, m_Swapchain.handle, &imageCount, nullptr);
+    uint32 imageCount;
+    vkGetSwapchainImagesKHR(m_Handle, m_Swapchain.handle, &imageCount, nullptr);
     std::vector<VkImage> images;
     images.resize(imageCount);
-    vkGetSwapchainImagesKHR(m_Device, m_Swapchain.handle, &imageCount, images.data());
+    vkGetSwapchainImagesKHR(m_Handle, m_Swapchain.handle, &imageCount, images.data());
 
     // Create render pass
     auto colAttachmentDescription = VkAttachmentDescription{
@@ -619,7 +599,7 @@ void Device::CreateSwapchain()
     };
 
     VkRenderPass renderPass;
-    result = vkCreateRenderPass(m_Device, &renderPassInfo, nullptr, &renderPass);
+    result = vkCreateRenderPass(m_Handle, &renderPassInfo, nullptr, &renderPass);
     LC_ASSERT(result == VK_SUCCESS);
 
     // Create depth texture
@@ -656,7 +636,7 @@ void Device::CreateSwapchain()
                 .layerCount = 1
             }
         };
-        result = vkCreateImageView(m_Device, &viewCreateInfo, nullptr, &tex.imageView);
+        result = vkCreateImageView(m_Handle, &viewCreateInfo, nullptr, &tex.imageView);
         LC_ASSERT(result == VK_SUCCESS);
 
         fb.extent = chosenExtent;
@@ -677,7 +657,7 @@ void Device::CreateSwapchain()
             .height = tex.extent.height,
             .layers = 1
         };
-        result = vkCreateFramebuffer(m_Device, &framebufferInfo, nullptr, &fb.handle);
+        result = vkCreateFramebuffer(m_Handle, &framebufferInfo, nullptr, &fb.handle);
         LC_ASSERT(result == VK_SUCCESS);
     }
 }
@@ -703,7 +683,7 @@ std::unique_ptr<Pipeline> Device::CreatePipeline(const PipelineSettings& setting
 
     // Populate pipeline shader stages
     VkPipelineShaderStageCreateInfo stageInfos[Shader::kMaxStages];
-    for (int i = 0; i < shader.numStages; ++i)
+    for (int i = 0; i < shader.stages.size(); ++i)
     {
         auto& stage = shader.stages[i];
         stageInfos[i] = VkPipelineShaderStageCreateInfo{
@@ -728,37 +708,37 @@ std::unique_ptr<Pipeline> Device::CreatePipeline(const PipelineSettings& setting
             .location = 0,
             .binding = 0,
             .format = VK_FORMAT_R32G32B32_SFLOAT,
-            .offset = (uint32_t)offsetof(Vertex, position)
+            .offset = (uint32)offsetof(Vertex, position)
         },
         {
             .location = 1,
             .binding = 0,
             .format = VK_FORMAT_R32G32B32_SFLOAT,
-            .offset = (uint32_t)offsetof(Vertex, normal)
+            .offset = (uint32)offsetof(Vertex, normal)
         },
         {
             .location = 2,
             .binding = 0,
             .format = VK_FORMAT_R32G32B32_SFLOAT,
-            .offset = (uint32_t)offsetof(Vertex, tangent)
+            .offset = (uint32)offsetof(Vertex, tangent)
         },
         {
             .location = 3,
             .binding = 0,
             .format = VK_FORMAT_R32G32B32_SFLOAT,
-            .offset = (uint32_t)offsetof(Vertex, bitangent)
+            .offset = (uint32)offsetof(Vertex, bitangent)
         },
         {
             .location = 4,
             .binding = 0,
             .format = VK_FORMAT_R32G32_SFLOAT,
-            .offset = (uint32_t)offsetof(Vertex, texCoord0)
+            .offset = (uint32)offsetof(Vertex, texCoord0)
         },
         {
             .location = 5,
             .binding = 0,
             .format = VK_FORMAT_R8G8B8A8_UNORM,
-            .offset = (uint32_t)offsetof(Vertex, color)
+            .offset = (uint32)offsetof(Vertex, color)
         }
     };
 
@@ -862,7 +842,7 @@ std::unique_ptr<Pipeline> Device::CreatePipeline(const PipelineSettings& setting
 
     auto pipelineCreateInfo = VkGraphicsPipelineCreateInfo{
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-        .stageCount = shader.numStages,
+        .stageCount = static_cast<uint32>(shader.stages.size()),
         .pStages = stageInfos,
         .pVertexInputState = &vertexInputInfo,
         .pInputAssemblyState = &inputAssemblyInfo,
@@ -872,12 +852,12 @@ std::unique_ptr<Pipeline> Device::CreatePipeline(const PipelineSettings& setting
         .pDepthStencilState = &depthStencilInfo,
         .pColorBlendState = &colorBlendInfo,
         .pDynamicState = &dynamicInfo,
-        .layout = shader.layout,
+        .layout = shader.pipelineLayout,
         .renderPass = framebuffer.renderPass,
         .subpass = 0
     };
 
-    auto result = vkCreateGraphicsPipelines(m_Device, VK_NULL_HANDLE,
+    auto result = vkCreateGraphicsPipelines(m_Handle, VK_NULL_HANDLE,
         1, &pipelineCreateInfo, nullptr, &pipeline.handle);
     LC_ASSERT(result == VK_SUCCESS);
 
@@ -886,7 +866,7 @@ std::unique_ptr<Pipeline> Device::CreatePipeline(const PipelineSettings& setting
 
 void Device::ReloadPipelines()
 {
-    vkDeviceWaitIdle(m_Device);
+    vkDeviceWaitIdle(m_Handle);
     for (auto& pipeline : m_Pipelines)
     {
         auto updatedShader = m_ShaderCache->Compile(pipeline->settings.shaderName);
@@ -905,7 +885,7 @@ void Device::ReloadPipelines()
 
 void Device::FreePipeline(Pipeline* pipeline)
 {
-    vkDestroyPipeline(m_Device, pipeline->handle, nullptr);
+    vkDestroyPipeline(m_Handle, pipeline->handle, nullptr);
 }
 
 Buffer* Device::CreateBuffer(BufferType type, size_t size)
@@ -944,7 +924,7 @@ Texture* Device::CreateTexture(const TextureSettings& info, size_t size, void* d
     auto addressMode = TextureAddressModeToVk(info.addressMode);
 
     VkFlags flags = 0;
-    uint32_t arrayLayers = 1;
+    uint32 arrayLayers = 1;
 
     if (info.shape == TextureShape::kCube)
     {
@@ -1000,7 +980,7 @@ Texture* Device::CreateTexture(const TextureSettings& info, size_t size, void* d
             .layerCount = arrayLayers
         }
     };
-    vkCreateImageView(m_Device, &viewInfo, nullptr, &tex.imageView);
+    vkCreateImageView(m_Handle, &viewInfo, nullptr, &tex.imageView);
 
     // Create sampler
     auto samplerInfo = VkSamplerCreateInfo{
@@ -1022,7 +1002,7 @@ Texture* Device::CreateTexture(const TextureSettings& info, size_t size, void* d
         .unnormalizedCoordinates = VK_FALSE
     };
 
-    vkCreateSampler(m_Device, &samplerInfo, nullptr, &tex.sampler);
+    vkCreateSampler(m_Handle, &samplerInfo, nullptr, &tex.sampler);
 
     if (size > 0 && data)
     {
@@ -1037,7 +1017,7 @@ Texture* Device::CreateTexture(const TextureSettings& info, size_t size, void* d
             .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
             .commandBufferCount = 1
         };
-        vkAllocateCommandBuffers(m_Device, &cbAllocInfo, &cb);
+        vkAllocateCommandBuffers(m_Handle, &cbAllocInfo, &cb);
 
         auto beginInfo = VkCommandBufferBeginInfo{
             .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -1145,8 +1125,8 @@ Texture* Device::CreateTexture(const TextureSettings& info, size_t size, void* d
 
         // Free command buffer
         vkQueueWaitIdle(m_GraphicsQueue.handle);
-        vkFreeCommandBuffers(m_Device, m_OneShotCmdPool, 1, &cb);
-        vkResetCommandPool(m_Device, m_OneShotCmdPool, 0);
+        vkFreeCommandBuffers(m_Handle, m_OneShotCmdPool, 1, &cb);
+        vkResetCommandPool(m_Handle, m_OneShotCmdPool, 0);
     }
 
     return &tex;
@@ -1211,7 +1191,7 @@ Framebuffer* Device::CreateFramebuffer(const FramebufferSettings& info)
         .pSubpasses = &subpassDesc
     };
 
-    auto result = vkCreateRenderPass(m_Device, &passInfo, nullptr, &fb.renderPass);
+    auto result = vkCreateRenderPass(m_Handle, &passInfo, nullptr, &fb.renderPass);
     LC_ASSERT(result == VK_SUCCESS);
 
     // Create framebuffer
@@ -1227,7 +1207,7 @@ Framebuffer* Device::CreateFramebuffer(const FramebufferSettings& info)
         .layers = 1
     };
 
-    result = vkCreateFramebuffer(m_Device, &fbInfo, nullptr, &fb.handle);
+    result = vkCreateFramebuffer(m_Handle, &fbInfo, nullptr, &fb.handle);
     LC_ASSERT(result == VK_SUCCESS);
 
     // Transition images to correct layout
@@ -1238,7 +1218,7 @@ Framebuffer* Device::CreateFramebuffer(const FramebufferSettings& info)
         .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
         .commandBufferCount = 1
     };
-    vkAllocateCommandBuffers(m_Device, &cbAllocInfo, &cb);
+    vkAllocateCommandBuffers(m_Handle, &cbAllocInfo, &cb);
 
     auto beginInfo = VkCommandBufferBeginInfo{
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -1315,8 +1295,8 @@ Framebuffer* Device::CreateFramebuffer(const FramebufferSettings& info)
     LC_ASSERT(result == VK_SUCCESS);
 
     vkQueueWaitIdle(m_GraphicsQueue.handle);
-    vkFreeCommandBuffers(m_Device, m_OneShotCmdPool, 1, &cb);
-    vkResetCommandPool(m_Device, m_OneShotCmdPool, 0);
+    vkFreeCommandBuffers(m_Handle, m_OneShotCmdPool, 1, &cb);
+    vkResetCommandPool(m_Handle, m_OneShotCmdPool, 0);
 
     return &fb;
 }
@@ -1324,34 +1304,13 @@ Framebuffer* Device::CreateFramebuffer(const FramebufferSettings& info)
 Context* Device::CreateContext()
 {
     auto& ctx = *m_Contexts.emplace_back(std::make_unique<Context>(*this));
-
-    // Create command pool
-    auto poolCreateInfo = VkCommandPoolCreateInfo{
-        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-        .flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
-        .queueFamilyIndex = m_GraphicsQueue.familyIndex
-    };
-
-    auto result = vkCreateCommandPool(m_Device, &poolCreateInfo, nullptr, &ctx.m_CommandPool);
-    LC_ASSERT(result == VK_SUCCESS);
-
-    auto bufferAllocInfo = VkCommandBufferAllocateInfo{
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .commandPool = ctx.m_CommandPool,
-        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-        .commandBufferCount = 1u
-    };
-
-    result = vkAllocateCommandBuffers(m_Device, &bufferAllocInfo, &ctx.m_CommandBuffer);
-    LC_ASSERT(result == VK_SUCCESS);
-
     return &ctx;
 }
 
 const Framebuffer& Device::AcquireFramebuffer()
 {
     // Acquire image
-    vkAcquireNextImageKHR(m_Device,
+    vkAcquireNextImageKHR(m_Handle,
         m_Swapchain.handle,
         UINT64_MAX,
         m_ImageAvailable,
@@ -1401,96 +1360,7 @@ void Device::Present()
         .pImageIndices = &m_NextImageIndex
     };
     vkQueuePresentKHR(m_PresentQueue.handle, &presentInfo);
-    vkDeviceWaitIdle(m_Device);
-}
-
-// Descriptor sets (temp)
-DescriptorSet* Device::CreateDescriptorSet(const Pipeline& pipeline, uint32_t index)
-{
-    auto& set = m_DescSets.emplace_back(std::make_unique<DescriptorSet>());
-    set->index = index;
-
-    auto setAllocInfo = VkDescriptorSetAllocateInfo{
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-        .descriptorPool = m_DescPool,
-        .descriptorSetCount = 1,
-        .pSetLayouts = &pipeline.shader->setLayouts[index]
-    };
-
-    auto result = vkAllocateDescriptorSets(m_Device, &setAllocInfo, &set->handle);
-    LC_ASSERT(result == VK_SUCCESS);
-
-    return set.get();
-}
-
-void Device::WriteSet(DescriptorSet* set, uint32_t binding, const Buffer& buffer)
-{
-    auto buffInfo = VkDescriptorBufferInfo{
-        .buffer = buffer.handle,
-        .offset = 0,
-        .range = VK_WHOLE_SIZE
-    };
-
-    auto descWrite = VkWriteDescriptorSet{
-        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstSet = set->handle,
-        .dstBinding = binding,
-        .dstArrayElement = 0,
-        .descriptorCount = 1,
-        .descriptorType = BufferTypeToDescriptorType(buffer.type),
-        .pBufferInfo = &buffInfo
-    };
-
-    vkUpdateDescriptorSets(m_Device, 1, &descWrite, 0, nullptr);
-}
-
-void Device::WriteSet(DescriptorSet* set, uint32_t binding, const Texture& texture)
-{
-    auto imgInfo = VkDescriptorImageInfo{
-        .sampler = texture.sampler,
-        .imageView = texture.imageView,
-        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-    };
-
-    auto descWrite = VkWriteDescriptorSet{
-        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstSet = set->handle,
-        .dstBinding = binding,
-        .dstArrayElement = 0,
-        .descriptorCount = 1,
-        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-        .pImageInfo = &imgInfo
-    };
-
-    vkUpdateDescriptorSets(m_Device, 1, &descWrite, 0, nullptr);
-}
-
-void Context::BindSet(const DescriptorSet* set)
-{
-    LC_ASSERT(m_BoundPipeline != nullptr);
-
-    vkCmdBindDescriptorSets(m_CommandBuffer,
-        VK_PIPELINE_BIND_POINT_GRAPHICS,
-        m_BoundPipeline->shader->layout,
-        set->index,
-        1,
-        &set->handle,
-        0,
-        nullptr);
-}
-
-void Context::BindSet(const DescriptorSet* set, uint32_t dynamicOffset)
-{
-    LC_ASSERT(m_BoundPipeline != nullptr);
-
-    vkCmdBindDescriptorSets(m_CommandBuffer,
-        VK_PIPELINE_BIND_POINT_GRAPHICS,
-        m_BoundPipeline->shader->layout,
-        set->index,
-        1,
-        &set->handle,
-        1,
-        &dynamicOffset);
+    vkDeviceWaitIdle(m_Handle);
 }
 
 // Buffer
@@ -1499,189 +1369,12 @@ void Buffer::Upload(void* data, size_t size, size_t offset) const
     LC_ASSERT(offset + size <= bufSize);
 
     // TODO: Use staging buffer
-    uint8_t* ptr;
+    uint8* ptr;
     vmaMapMemory(device->m_Allocator, allocation, (void**)&ptr);
     ptr += offset;
     memcpy(ptr, data, size);
     vmaUnmapMemory(device->m_Allocator, allocation);
     vmaFlushAllocation(device->m_Allocator, allocation, offset, size);
-}
-
-// Context
-void Context::Begin() const
-{
-    vkResetCommandPool(m_Device.m_Device, m_CommandPool, 0);
-
-    auto beginInfo = VkCommandBufferBeginInfo{
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
-    };
-    auto result = vkBeginCommandBuffer(m_CommandBuffer, &beginInfo);
-    LC_ASSERT(result == VK_SUCCESS);
-}
-
-void Context::End() const
-{
-    auto result = vkEndCommandBuffer(m_CommandBuffer);
-    LC_ASSERT(result == VK_SUCCESS);
-}
-
-void Context::BeginRenderPass(const Framebuffer& fbuffer, VkExtent2D extent)
-{
-    if (fbuffer.usage == FramebufferUsage::SwapchainImage)
-        m_SwapchainWritten = true;
-
-    if (extent.width == 0 | extent.height == 0)
-        extent = fbuffer.extent;
-
-    auto viewport = VkViewport{
-        .x = 0.0f, .y = static_cast<float>(extent.height),
-        .width = static_cast<float>(extent.width),
-        .height = -static_cast<float>(extent.height),
-        .minDepth = 0.0f, .maxDepth = 1.0f
-    };
-    vkCmdSetViewport(m_CommandBuffer, 0, 1, &viewport);
-
-    VkClearValue clearValues[] = {
-        { .color = { 0.0f, 0.0f, 0.0f, 1.0f }},
-        { .depthStencil = { .depth = 1.0f, .stencil = 0 }}
-    };
-
-    auto renderPassBeginInfo = VkRenderPassBeginInfo{
-        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-        .renderPass = fbuffer.renderPass,
-        .framebuffer = fbuffer.handle,
-        .renderArea = {
-            .offset = {},
-            .extent = fbuffer.extent
-        },
-        .clearValueCount = LC_ARRAY_SIZE(clearValues),
-        .pClearValues = clearValues
-    };
-    vkCmdBeginRenderPass(m_CommandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
-}
-
-void Context::EndRenderPass() const
-{
-    vkCmdEndRenderPass(m_CommandBuffer);
-}
-
-void Context::Bind(Pipeline& pipeline)
-{
-    vkCmdBindPipeline(m_CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
-    m_BoundPipeline = &pipeline;
-}
-
-void Context::Bind(const Buffer* indexBuffer)
-{
-    vkCmdBindIndexBuffer(m_CommandBuffer, indexBuffer->handle, 0, VK_INDEX_TYPE_UINT32);
-}
-
-void Context::Bind(const Buffer* vertexBuffer, uint32_t binding)
-{
-    VkDeviceSize offset = 0;
-    vkCmdBindVertexBuffers(m_CommandBuffer, binding, 1, &vertexBuffer->handle, &offset);
-}
-
-void Context::Draw(uint32_t indexCount) const
-{
-    vkCmdDrawIndexed(m_CommandBuffer, indexCount, 1, 0, 0, 0);
-}
-
-void Context::CopyTexture(
-    Texture* src, int srcLayer, int srcLevel,
-    Texture* dst, int dstLayer, int dstLevel,
-    uint32_t width, uint32_t height)
-{
-    auto transition = [&](VkImage img,
-        VkImageLayout oldLayout, VkImageLayout newLayout,
-        VkPipelineStageFlags srcStage, VkAccessFlags srcAccess,
-        VkPipelineStageFlags dstStage, VkAccessFlags dstAccess,
-        uint32_t layer, uint32_t level)
-    {
-        auto imgBarrier = VkImageMemoryBarrier{
-            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-            .srcAccessMask = srcAccess,
-            .dstAccessMask = dstAccess,
-            .oldLayout = oldLayout,
-            .newLayout = newLayout,
-            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .image = img,
-            .subresourceRange = {
-                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                .baseMipLevel = level,
-                .levelCount = 1,
-                .baseArrayLayer = layer,
-                .layerCount = 1
-            }
-        };
-        vkCmdPipelineBarrier(m_CommandBuffer, srcStage, dstStage,
-            VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 0, nullptr, 1, &imgBarrier);
-    };
-
-    // SRC: COLOR_ATTACHMENT -> TRANSFER_SRC
-    transition(src->image,
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-        VK_PIPELINE_STAGE_TRANSFER_BIT,
-        VK_ACCESS_TRANSFER_READ_BIT, srcLayer, srcLevel);
-
-    // DST: UNKNOWN -> TRANSFER_DST
-    transition(dst->image,
-        VK_IMAGE_LAYOUT_UNDEFINED,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-        VK_ACCESS_NONE_KHR,
-        VK_PIPELINE_STAGE_TRANSFER_BIT,
-        VK_ACCESS_TRANSFER_WRITE_BIT, dstLayer, dstLevel);
-
-    auto copyInfo = VkImageCopy{
-        .srcSubresource = {
-            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-            .mipLevel = static_cast<uint32_t>(srcLevel),
-            .baseArrayLayer = static_cast<uint32_t>(srcLayer),
-            .layerCount = 1
-        },
-        .srcOffset = {},
-        .dstSubresource = {
-            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-            .mipLevel = static_cast<uint32_t>(dstLevel),
-            .baseArrayLayer = static_cast<uint32_t>(dstLayer),
-            .layerCount = 1
-        },
-        .dstOffset = {},
-        .extent = {
-            .width = width,
-            .height = height,
-            .depth = 1
-        }
-    };
-    vkCmdCopyImage(m_CommandBuffer,
-        src->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        dst->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        1, &copyInfo
-    );
-
-    // SRC: TRANSFER_SRC -> COLOR_ATTACHMENT
-    transition(src->image,
-        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        VK_PIPELINE_STAGE_TRANSFER_BIT,
-        VK_ACCESS_TRANSFER_READ_BIT,
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, srcLayer, srcLevel);
-
-    // DST: TRANSFER_DST -> SHADER_READ
-    transition(dst->image,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        VK_PIPELINE_STAGE_TRANSFER_BIT,
-        VK_ACCESS_TRANSFER_WRITE_BIT,
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-        VK_ACCESS_SHADER_READ_BIT, dstLayer, dstLevel);
 }
 
 }

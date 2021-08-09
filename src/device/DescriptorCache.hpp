@@ -3,4 +3,8 @@
 namespace lucent
 {
 
+class DescriptorCache
+{
+};
+
 }

@@ -4,6 +4,7 @@
 #include "stb_truetype.h"
 
 #include "core/Utility.hpp"
+#include "device/Context.hpp"
 
 namespace lucent
 {
@@ -25,7 +26,7 @@ Font::Font(Device* device, const std::string& fontFile, float pixelHeight)
     auto fontText = ReadFile(fontFile, std::ios::binary | std::ios::in);
     auto data = reinterpret_cast<const unsigned char*>(fontText.data());
 
-    std::vector<uint8_t> bitmap;
+    std::vector<uint8> bitmap;
     bitmap.resize(kBitmapWidth * kBitmapHeight);
 
     m_BakedFont = new BakedFont();
@@ -48,9 +49,6 @@ Font::Font(Device* device, const std::string& fontFile, float pixelHeight)
             .depthTestEnable = false,
         }
     );
-
-    m_DescSet = m_Device->CreateDescriptorSet(*m_FontPipeline, 0);
-    m_Device->WriteSet(m_DescSet, 0, *m_FontTexture);
 }
 
 Glyph Font::GetGlyph(char c) const
@@ -80,8 +78,8 @@ Glyph Font::GetGlyph(char c) const
 
 void Font::Bind(Context& context) const
 {
-    context.Bind(*m_FontPipeline);
-    context.BindSet(m_DescSet);
+    context.Bind(m_FontPipeline);
+    context.Bind(0, 0, m_FontTexture);
 }
 
 Font::~Font()

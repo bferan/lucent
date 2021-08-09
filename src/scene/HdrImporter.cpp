@@ -3,6 +3,7 @@
 #include "stb_image.h"
 
 #include "core/Utility.hpp"
+#include "device/Context.hpp"
 
 namespace lucent
 {
@@ -54,15 +55,11 @@ HdrImporter::HdrImporter(Device* device)
         .framebuffer = m_Offscreen
     });
 
-    m_DescSet = m_Device->CreateDescriptorSet(*m_RectToCube, 0);
-    m_UniformBuffer = m_Device->CreateBuffer(BufferType::Uniform, 65535);
+    m_UniformBuffer = m_Device->CreateBuffer(BufferType::UniformDynamic, 65535);
 }
 
-void HdrImporter::RenderToCube(Pipeline* pipeline, Texture* src, Texture* dst, int dstLevel, uint32_t size)
+void HdrImporter::RenderToCube(Pipeline* pipeline, Texture* src, Texture* dst, int dstLevel, uint32 size)
 {
-    m_Device->WriteSet(m_DescSet, 0, *m_UniformBuffer);
-    m_Device->WriteSet(m_DescSet, 1, *src);
-
     auto& ctx = *m_Context;
     auto proj = Matrix4::Perspective(kHalfPi, 1.0f, 0.001, 10000);
 
@@ -76,7 +73,7 @@ void HdrImporter::RenderToCube(Pipeline* pipeline, Texture* src, Texture* dst, i
     };
 
     const size_t uniformAlignment = m_Device->m_DeviceProperties.limits.minUniformBufferOffsetAlignment;
-    uint32_t uniformOffset = 0;
+    uint32 uniformOffset = 0;
 
     ctx.Begin();
     for (int face = 0; face < LC_ARRAY_SIZE(views); ++face)
@@ -86,12 +83,13 @@ void HdrImporter::RenderToCube(Pipeline* pipeline, Texture* src, Texture* dst, i
         m_UniformBuffer->Upload(&m_UBO, sizeof(HdrUBO), uniformOffset);
 
         ctx.BeginRenderPass(*m_Offscreen, VkExtent2D{ size, size });
-        ctx.Bind(*pipeline);
+        ctx.Bind(pipeline);
 
         ctx.Bind(m_Device->m_Cube.indices);
-        ctx.Bind(m_Device->m_Cube.vertices, 0);
+        ctx.Bind(m_Device->m_Cube.vertices);
 
-        ctx.BindSet(m_DescSet, uniformOffset);
+        ctx.Bind(0, 0, m_UniformBuffer, uniformOffset);
+        ctx.Bind(0, 1, src);
 
         ctx.Draw(m_Device->m_Cube.numIndices);
         ctx.EndRenderPass();
@@ -110,20 +108,18 @@ void HdrImporter::RenderToCube(Pipeline* pipeline, Texture* src, Texture* dst, i
     m_Device->Submit(m_Context);
 }
 
-void HdrImporter::RenderToQuad(Pipeline* pipeline, Texture* dst, uint32_t size)
+void HdrImporter::RenderToQuad(Pipeline* pipeline, Texture* dst, uint32 size)
 {
-    m_Device->WriteSet(m_DescSet, 0, *m_UniformBuffer);
-
     auto& ctx = *m_Context;
 
     ctx.Begin();
     ctx.BeginRenderPass(*m_Offscreen, VkExtent2D{ size, size });
-    ctx.Bind(*pipeline);
+    ctx.Bind(pipeline);
 
     ctx.Bind(m_Device->m_Quad.indices);
-    ctx.Bind(m_Device->m_Quad.vertices, 0);
+    ctx.Bind(m_Device->m_Quad.vertices);
 
-    ctx.BindSet(m_DescSet, 0);
+    ctx.Bind(0, 0, m_UniformBuffer, 0);
 
     ctx.Draw(m_Device->m_Quad.numIndices);
     ctx.EndRenderPass();
@@ -148,8 +144,8 @@ Environment HdrImporter::Import(const std::string& hdrFile)
     float* data = stbi_loadf(hdrFile.c_str(), &x, &y, &numChannels, kDesiredChannels);
 
     auto envRectangle = m_Device->CreateTexture(TextureSettings{
-        .width = static_cast<uint32_t>(x),
-        .height = static_cast<uint32_t>(y),
+        .width = static_cast<uint32>(x),
+        .height = static_cast<uint32>(y),
         .format = TextureFormat::kRGBA32F
     }, x * y * kDesiredChannels * sizeof(float), data);
 

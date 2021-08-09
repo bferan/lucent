@@ -18,10 +18,6 @@ layout(location = 4) varying vec3 v_Pos;
 
 layout(location = 0) out vec4 o_Color;
 
-layout(set = 0, binding = 1) uniform samplerCube u_EnvIrradiance;
-layout(set = 0, binding = 2) uniform samplerCube u_EnvSpecular;
-layout(set = 0, binding = 3) uniform sampler2D u_BRDF;
-
 layout(set = 0, binding = 0) uniform MyBuffer
 {
     mat4 u_Model;
@@ -29,6 +25,10 @@ layout(set = 0, binding = 0) uniform MyBuffer
     mat4 u_Proj;
     vec3 u_CameraPos;
 };
+
+layout(set = 0, binding = 1) uniform samplerCube u_EnvIrradiance;
+layout(set = 0, binding = 2) uniform samplerCube u_EnvSpecular;
+layout(set = 0, binding = 3) uniform sampler2D u_BRDF;
 
 layout(set = 1, binding = 0) uniform sampler2D u_BaseColor;
 layout(set = 1, binding = 1) uniform sampler2D u_MetalRoughness;

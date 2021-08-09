@@ -7,19 +7,11 @@
 
 #include "core/Utility.hpp"
 #include "core/Hash.hpp"
+#include "device/Device.hpp"
 #include "device/ResourceLimits.hpp"
 
 namespace lucent
 {
-
-size_t LayoutHash::operator()(const SetLayout& set) const
-{
-    return 0;
-}
-size_t LayoutHash::operator()(const PipelineLayout& layout) const
-{
-    return 0;
-}
 
 // Shader descriptor layout
 static VkDescriptorType BasicTypeToDescriptorType(glslang::TBasicType basicType)
@@ -156,7 +148,7 @@ static void StripShader(std::string& text, ShaderStage stage)
     }
 }
 
-// Shader including/resolution
+// Shader including & resolution
 class DefaultResolver : public ShaderResolver
     {
     public:
@@ -270,14 +262,14 @@ Shader* ShaderCache::Compile(const std::string& name, ShaderInfoLog& log)
         return nullptr;
     }
 
-    auto hash = Hash<uint64_t>(result.source);
+    auto hash = Hash<uint64>(result.source);
     if (m_Shaders.contains(hash))
     {
         return m_Shaders[hash].get();
     }
 
     auto& shader = (m_Shaders[hash] = std::make_unique<Shader>());
-    if (!PopulateShader(result.qualifiedName, result.source, *shader, log))
+    if (!PopulateShaderModules(*shader, result.qualifiedName, result.source, log))
     {
         m_Shaders.erase(hash);
         return nullptr;
@@ -298,7 +290,7 @@ void ShaderCache::Release(Shader* shader)
     }
 }
 
-static bool ScanLayout(const TIntermNode& root, PipelineLayout& layout, ShaderInfoLog& log)
+static bool ScanLayout(const TIntermNode& root, ShaderCache::PipelineLayout& layout, ShaderInfoLog& log)
 {
     for (auto node : root.getAsAggregate()->getSequence())
     {
@@ -320,7 +312,7 @@ static bool ScanLayout(const TIntermNode& root, PipelineLayout& layout, ShaderIn
                         binding >= 0 && binding < Shader::kMaxBindingsPerSet)
                     {
                         if (!layout.sets[set])
-                            layout.sets[set] = SetLayout{};
+                            layout.sets[set] = ShaderCache::SetLayout{};
 
                         auto& setLayout = layout.sets[set].value();
                         setLayout.bindings[binding] = BasicTypeToDescriptorType(type.getBasicType());
@@ -337,7 +329,7 @@ static bool ScanLayout(const TIntermNode& root, PipelineLayout& layout, ShaderIn
     return true;
 }
 
-bool ShaderCache::PopulateShader(const std::string& name, const std::string& source, Shader& shader, ShaderInfoLog& log)
+bool ShaderCache::PopulateShaderModules(Shader& shader, const std::string& name, const std::string& source, ShaderInfoLog& log)
 {
     const int defaultVersion = 450;
     const auto inputLang = glslang::EShSourceGlsl;
@@ -384,10 +376,9 @@ bool ShaderCache::PopulateShader(const std::string& name, const std::string& sou
 
         program.addShader(&glsl);
 
-        auto stage = shader.numStages;
-        shader.stages[stage].stageBit = bit;
-        shader.numStages++;
-
+        shader.stages.emplace_back(Shader::Stage{
+            .stageBit = bit
+        });
         return true;
     };
 
@@ -432,7 +423,7 @@ bool ShaderCache::PopulateShader(const std::string& name, const std::string& sou
 
     // Create SPIRV shader modules for each stage
     PipelineLayout layout;
-    for (int i = 0; i < shader.numStages; ++i)
+    for (int i = 0; i < shader.stages.size(); ++i)
     {
         m_SpirvBuffer.clear();
 
@@ -441,74 +432,53 @@ bool ShaderCache::PopulateShader(const std::string& name, const std::string& sou
 
         auto moduleInfo = VkShaderModuleCreateInfo{
             .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-            .codeSize = m_SpirvBuffer.size() * sizeof(uint32_t),
+            .codeSize = m_SpirvBuffer.size() * sizeof(uint32),
             .pCode = m_SpirvBuffer.data()
         };
 
-        auto result = vkCreateShaderModule(m_Device->m_Device, &moduleInfo, nullptr, &shader.stages[i].module);
+        auto result = vkCreateShaderModule(m_Device->m_Handle, &moduleInfo, nullptr, &shader.stages[i].module);
         if (result != VK_SUCCESS)
         {
             log.Error("Failed to create Vulkan shader module");
             return false;
         }
 
+        // Scan intermediate for the layout of this stage
         if (!ScanLayout(*inter.getTreeRoot(), layout, log))
             return false;
     }
 
-    return PopulateLayout(layout, shader, log);
+    return PopulateShaderLayout(shader, layout, log);
 }
 
-bool ShaderCache::PopulateLayout(const PipelineLayout& layout, Shader& compiled, ShaderInfoLog& log)
+bool ShaderCache::PopulateShaderLayout(Shader& shader, const PipelineLayout& layout, ShaderInfoLog& log)
 {
-    // Create descriptor set layout per set
-    for (const auto& set : layout.sets)
+    // Find or create descriptor sets
+    for (int i = 0; i < Shader::kMaxSets; ++i)
     {
-        if (set)
-        {
-            auto& setLayout = set.value();
-
-            uint32_t numBindings = 0;
-            VkDescriptorSetLayoutBinding bindings[Shader::kMaxBindingsPerSet];
-            for (uint32_t binding = 0; binding < setLayout.bindings.size(); ++binding)
-            {
-                if (setLayout.bindings[binding])
-                {
-                    bindings[numBindings] = VkDescriptorSetLayoutBinding{
-                        .binding = binding,
-                        .descriptorType = setLayout.bindings[binding].value(),
-                        .descriptorCount = 1,
-                        .stageFlags = VK_SHADER_STAGE_ALL
-                    };
-                    numBindings++;
-                }
-            }
-
-            auto setLayoutInfo = VkDescriptorSetLayoutCreateInfo{
-                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-                .bindingCount = numBindings,
-                .pBindings = bindings
-            };
-
-            auto result = vkCreateDescriptorSetLayout(m_Device->m_Device,
-                &setLayoutInfo,
-                nullptr,
-                &compiled.setLayouts[compiled.numSets]);
-            LC_ASSERT(result == VK_SUCCESS);
-            compiled.numSets++;
-        }
+        auto& set = layout.sets[i];
+        if (!set) break;
+        shader.setLayouts.push_back(FindSetLayout(set.value()));
     }
 
-    // Create pipeline layout
-    auto pipelineLayoutInfo = VkPipelineLayoutCreateInfo{
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .setLayoutCount = compiled.numSets,
-        .pSetLayouts = compiled.setLayouts
-    };
+    // Find or create pipeline layout
+    auto it = m_PipelineLayouts.find(shader.setLayouts);
+    if (it == m_PipelineLayouts.end())
+    {
+        auto pipelineLayoutInfo = VkPipelineLayoutCreateInfo{
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+            .setLayoutCount = static_cast<uint32>(shader.setLayouts.size()),
+            .pSetLayouts = shader.setLayouts.data()
+        };
 
-    auto result = vkCreatePipelineLayout(m_Device->m_Device, &pipelineLayoutInfo, nullptr, &compiled.layout);
-    LC_ASSERT(result == VK_SUCCESS);
+        VkPipelineLayout pipelineLayout;
+        auto result = vkCreatePipelineLayout(m_Device->m_Handle, &pipelineLayoutInfo, nullptr, &pipelineLayout);
+        LC_ASSERT(result == VK_SUCCESS);
 
+        it = m_PipelineLayouts.insert(it, {shader.setLayouts, pipelineLayout});
+    }
+
+    shader.pipelineLayout = it->second;
     return true;
 }
 
@@ -521,31 +491,80 @@ void ShaderCache::Clear()
 
     for (auto&[layout, vkLayout] : m_SetLayouts)
     {
-        vkDestroyDescriptorSetLayout(m_Device->m_Device, vkLayout, nullptr);
+        vkDestroyDescriptorSetLayout(m_Device->m_Handle, vkLayout, nullptr);
     }
 
     for (auto&[layout, vkLayout] : m_PipelineLayouts)
     {
-        vkDestroyPipelineLayout(m_Device->m_Device, vkLayout, nullptr);
+        vkDestroyPipelineLayout(m_Device->m_Handle, vkLayout, nullptr);
     }
 }
 
 void ShaderCache::FreeResources(Shader* shader)
 {
-    for (int i = 0; i < shader->numStages; ++i)
+    for (auto& stage : shader->stages)
     {
-        vkDestroyShaderModule(m_Device->m_Device, shader->stages[i].module, nullptr);
+        vkDestroyShaderModule(m_Device->m_Handle, stage.module, nullptr);
     }
 }
 
 VkDescriptorSetLayout ShaderCache::FindSetLayout(const SetLayout& layout)
 {
-    return nullptr;
+    auto it = m_SetLayouts.find(layout);
+
+    if (it != m_SetLayouts.end())
+        return it->second;
+
+    // Create new descriptor set layout
+    uint32 numBindings = 0;
+    VkDescriptorSetLayoutBinding bindings[Shader::kMaxBindingsPerSet];
+    for (uint32 binding = 0; binding < layout.bindings.size(); ++binding)
+    {
+        if (layout.bindings[binding])
+        {
+            bindings[numBindings++] = VkDescriptorSetLayoutBinding{
+                .binding = binding,
+                .descriptorType = layout.bindings[binding].value(),
+                .descriptorCount = 1,
+                .stageFlags = VK_SHADER_STAGE_ALL
+            };
+        }
+    }
+
+    auto setLayoutInfo = VkDescriptorSetLayoutCreateInfo{
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .bindingCount = numBindings,
+        .pBindings = bindings
+    };
+
+    VkDescriptorSetLayout setLayout;
+    auto result = vkCreateDescriptorSetLayout(m_Device->m_Handle,
+        &setLayoutInfo,
+        nullptr,
+        &setLayout);
+
+    LC_ASSERT(result == VK_SUCCESS);
+
+    m_SetLayouts.insert(it, {layout, setLayout});
+    return setLayout;
 }
 
-VkPipelineLayout ShaderCache::FindPipelineLayout(const PipelineLayout& layout)
+size_t ShaderCache::LayoutHash::operator()(const SetLayout& set) const
 {
-    return nullptr;
+    size_t hash = FNVTraits<size_t>::kOffset;
+    for (int i = 0; i < set.bindings.size(); ++i)
+    {
+        hash = HashBytes(i, hash);
+        if (set.bindings[i])
+            hash = HashBytes(set.bindings[i].value(), hash);
+    }
+    return hash;
 }
+
+size_t ShaderCache::LayoutHash::operator()(const SetList &sets) const
+{
+    return HashBytes<size_t>(sets);
+}
+
 
 }

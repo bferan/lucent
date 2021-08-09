@@ -21,8 +21,8 @@ public:
     Environment Import(const std::string& hdrFile);
 
 private:
-    void RenderToCube(Pipeline* pipeline, Texture* src, Texture* dst, int dstLevel, uint32_t size);
-    void RenderToQuad(Pipeline* pipeline, Texture* dst, uint32_t size);
+    void RenderToCube(Pipeline* pipeline, Texture* src, Texture* dst, int dstLevel, uint32 size);
+    void RenderToQuad(Pipeline* pipeline, Texture* dst, uint32 size);
 
 private:
     Device* m_Device;
@@ -34,7 +34,6 @@ private:
 
     HdrUBO m_UBO;
     Buffer* m_UniformBuffer;
-    DescriptorSet* m_DescSet;
 
     Pipeline* m_RectToCube;
     Pipeline* m_GenIrradiance;

@@ -70,7 +70,7 @@ private:
     static void CursorPosCallback(GLFWwindow* window, double xpos, double ypos);
     static void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
     static void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
-    static void CharCallback(GLFWwindow* window, uint32_t codepoint);
+    static void CharCallback(GLFWwindow* window, uint32 codepoint);
 
 private:
     GLFWwindow* m_Window;

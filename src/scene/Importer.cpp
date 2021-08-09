@@ -8,8 +8,8 @@
 namespace lucent
 {
 
-Importer::Importer(Device* device, Pipeline* pipeline)
-    : m_Device(device), m_Pipeline(pipeline)
+Importer::Importer(Device* device)
+    : m_Device(device)
 {
 }
 
@@ -52,8 +52,8 @@ static Texture* ImportTexture(Device* device, const aiTexture* texture,
     LC_ASSERT(imgData);
 
     auto importedTexture = device->CreateTexture(TextureSettings{
-        .width = static_cast<uint32_t>(x),
-        .height = static_cast<uint32_t>(y),
+        .width = static_cast<uint32>(x),
+        .height = static_cast<uint32>(y),
         .format = linear ? TextureFormat::kRGBA8 : TextureFormat::kRGBA8_SRGB
     }, x * y * reqChannels, imgData);
 
@@ -81,8 +81,8 @@ static Texture* ImportTexture(Device* device, std::string_view rootPath, const c
     LC_ASSERT(imgData);
 
     auto importedTexture = device->CreateTexture(TextureSettings{
-        .width = static_cast<uint32_t>(x),
-        .height = static_cast<uint32_t>(y),
+        .width = static_cast<uint32>(x),
+        .height = static_cast<uint32>(y),
         .format = linear ? TextureFormat::kRGBA8 : TextureFormat::kRGBA8_SRGB
     }, x * y * reqChannels, imgData);
 
@@ -102,34 +102,27 @@ void Importer::ImportMaterials(Scene& scene, const aiScene& model)
 
         // Create textures
         auto result = data.GetTexture(aiTextureType_DIFFUSE, 0, &path);
-        auto baseColTex = ImportTexture(m_Device, model.GetEmbeddedTexture(path.C_Str()),
+        material.baseColor = ImportTexture(m_Device, model.GetEmbeddedTexture(path.C_Str()),
             result, m_Device->m_BlackTexture, false);
 
         // 'Unknown' texture type needs special handling as it is excluded from embed post-processing
         result = data.GetTexture(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLICROUGHNESS_TEXTURE, &path);
         auto unknown = model.GetEmbeddedTexture(path.C_Str());
-        auto metalRoughTex = unknown ?
+        material.metalRough = unknown ?
             ImportTexture(m_Device, unknown, result, m_Device->m_GreenTexture) :
             ImportTexture(m_Device, m_ModelFile, path.C_Str(), result, m_Device->m_GreenTexture);
 
         result = data.GetTexture(aiTextureType_NORMALS, 0, &path);
-        auto normalTex = ImportTexture(m_Device, model.GetEmbeddedTexture(path.C_Str()),
+        material.normalMap = ImportTexture(m_Device, model.GetEmbeddedTexture(path.C_Str()),
             result, m_Device->m_GrayTexture);
 
         result = data.GetTexture(aiTextureType_LIGHTMAP, 0, &path);
-        auto aoTex = ImportTexture(m_Device, model.GetEmbeddedTexture(path.C_Str()), result, m_Device->m_WhiteTexture);
+        material.aoMap = ImportTexture(m_Device, model.GetEmbeddedTexture(path.C_Str()), result,
+            m_Device->m_WhiteTexture);
 
         result = data.GetTexture(aiTextureType_EMISSIVE, 0, &path);
-        auto emissiveTex = ImportTexture(m_Device, model.GetEmbeddedTexture(path.C_Str()), result,
+        material.emissive = ImportTexture(m_Device, model.GetEmbeddedTexture(path.C_Str()), result,
             m_Device->m_BlackTexture, false);
-
-        // Create descriptor set for material textures
-        material.descSet = m_Device->CreateDescriptorSet(*m_Pipeline, 1);
-        m_Device->WriteSet(material.descSet, 0, *baseColTex);
-        m_Device->WriteSet(material.descSet, 1, *metalRoughTex);
-        m_Device->WriteSet(material.descSet, 2, *normalTex);
-        m_Device->WriteSet(material.descSet, 3, *aoTex);
-        m_Device->WriteSet(material.descSet, 4, *emissiveTex);
 
         // GLTF material parameters
         if (aiColor4D c; data.Get(AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_BASE_COLOR_FACTOR, c) == aiReturn_SUCCESS)
@@ -147,7 +140,7 @@ void Importer::ImportMaterials(Scene& scene, const aiScene& model)
 void Importer::ImportMeshes(Scene& scene, const aiScene& model)
 {
     std::vector<Vertex> vertices;
-    std::vector<uint32_t> indices;
+    std::vector<uint32> indices;
 
     for (int i = 0; i < model.mNumMeshes; ++i)
     {
@@ -183,10 +176,10 @@ void Importer::ImportMeshes(Scene& scene, const aiScene& model)
             indices.push_back(face.mIndices[2]);
         }
 
-        Mesh newMesh{ .numIndices = static_cast<uint32_t>(indices.size()) };
+        Mesh newMesh{ .numIndices = static_cast<uint32>(indices.size()) };
 
         VkDeviceSize vertSize = vertices.size() * sizeof(Vertex);
-        VkDeviceSize indexSize = indices.size() * sizeof(uint32_t);
+        VkDeviceSize indexSize = indices.size() * sizeof(uint32);
 
         newMesh.vertexBuffer = m_Device->CreateBuffer(BufferType::Vertex, vertSize);
         newMesh.indexBuffer = m_Device->CreateBuffer(BufferType::Index, indexSize);
@@ -219,7 +212,7 @@ Entity Importer::ImportEntities(Scene& scene, const aiScene& model, const aiNode
 
     if (node.mNumMeshes > 0)
     {
-        std::vector<uint32_t> meshes(node.mNumMeshes);
+        std::vector<uint32> meshes(node.mNumMeshes);
         for (int i = 0; i < meshes.size(); ++i)
             meshes[i] = m_MeshIndices[node.mMeshes[i]];
 

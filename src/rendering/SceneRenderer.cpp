@@ -1,7 +1,7 @@
 #include "SceneRenderer.hpp"
 
 #include "core/Utility.hpp"
-#include "scene/ComponentPool.hpp"
+#include "device/Context.hpp"
 
 namespace lucent
 {
@@ -15,11 +15,7 @@ SceneRenderer::SceneRenderer(Device* device)
     m_Context = m_Device->CreateContext();
 
     // Create UBO
-    m_GlobalSet = m_Device->CreateDescriptorSet(*m_DefaultPipeline, 0);
-    m_SkyboxSet = m_Device->CreateDescriptorSet(*m_SkyboxPipeline, 1);
-
-    m_UniformBuffer = m_Device->CreateBuffer(BufferType::Uniform, 65535);
-    m_Device->WriteSet(m_GlobalSet, 0, *m_UniformBuffer);
+    m_UniformBuffer = m_Device->CreateBuffer(BufferType::UniformDynamic, 65535);
 
     // Create debug console (temp)
     m_DebugConsole = std::make_unique<DebugConsole>(m_Device);
@@ -41,12 +37,6 @@ void SceneRenderer::Render(Scene& scene)
 
     auto proj = Matrix4::Perspective(camera.horizontalFov, camera.aspectRatio, camera.near, camera.far);
 
-    m_Device->WriteSet(m_GlobalSet, 1, *scene.environment.irradianceMap);
-    m_Device->WriteSet(m_GlobalSet, 2, *scene.environment.specularMap);
-    m_Device->WriteSet(m_GlobalSet, 3, *scene.environment.BRDF);
-
-    m_Device->WriteSet(m_SkyboxSet, 0, *scene.environment.cubeMap);
-
     // Draw
     auto& ctx = *m_Context;
     auto& fb = m_Device->AcquireFramebuffer();
@@ -54,10 +44,14 @@ void SceneRenderer::Render(Scene& scene)
     ctx.Begin();
     ctx.BeginRenderPass(fb);
 
-    ctx.Bind(*m_DefaultPipeline);
+    // Bind globals
+    ctx.Bind(m_DefaultPipeline);
+    ctx.Bind(0, 1, scene.environment.irradianceMap);
+    ctx.Bind(0, 2, scene.environment.specularMap);
+    ctx.Bind(0, 3, scene.environment.BRDF);
 
     const size_t uniformAlignment = m_Device->m_DeviceProperties.limits.minUniformBufferOffsetAlignment;
-    uint32_t uniformOffset = 0;
+    uint32 uniformOffset = 0;
 
     // Draw entities
     for (auto entity : scene.meshInstances)
@@ -83,10 +77,15 @@ void SceneRenderer::Render(Scene& scene)
             auto& mesh = scene.meshes[idx];
             auto& material = scene.materials[mesh.materialIdx];
 
-            ctx.BindSet(m_GlobalSet, uniformOffset);
-            ctx.BindSet(material.descSet);
+            ctx.Bind(0, 0, m_UniformBuffer, uniformOffset);
 
-            ctx.Bind(mesh.vertexBuffer, 0);
+            ctx.Bind(1, 0, material.baseColor);
+            ctx.Bind(1, 1, material.metalRough);
+            ctx.Bind(1, 2, material.normalMap);
+            ctx.Bind(1, 3, material.aoMap);
+            ctx.Bind(1, 4, material.emissive);
+
+            ctx.Bind(mesh.vertexBuffer);
             ctx.Bind(mesh.indexBuffer);
             ctx.Draw(mesh.numIndices);
         }
@@ -103,12 +102,15 @@ void SceneRenderer::Render(Scene& scene)
         .proj = proj
     };
     m_UniformBuffer->Upload(&ubo, sizeof(UBO), uniformOffset);
-    ctx.Bind(*m_SkyboxPipeline);
-    ctx.BindSet(m_GlobalSet, uniformOffset);
-    ctx.BindSet(m_SkyboxSet);
+    ctx.Bind(m_SkyboxPipeline);
+    ctx.Bind(0, 0, m_UniformBuffer, uniformOffset);
+    ctx.Bind(0, 1, scene.environment.irradianceMap);
+    ctx.Bind(0, 2, scene.environment.specularMap);
+    ctx.Bind(0, 3, scene.environment.BRDF);
+    ctx.Bind(1, 0, scene.environment.cubeMap);
 
     ctx.Bind(m_Device->m_Cube.indices);
-    ctx.Bind(m_Device->m_Cube.vertices, 0);
+    ctx.Bind(m_Device->m_Cube.vertices);
     ctx.Draw(m_Device->m_Cube.numIndices);
 
     // Draw console

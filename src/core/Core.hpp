@@ -12,7 +12,9 @@
 #include <memory>
 #include <optional>
 #include <utility>
+#include <variant>
 
+#include "core/Array.hpp"
 #include "core/Color.hpp"
 #include "core/Vector4.hpp"
 #include "core/Lucent.hpp"

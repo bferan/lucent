@@ -5,6 +5,7 @@
 #include "vk_mem_alloc.h"
 
 #include "device/Input.hpp"
+#include "device/Shader.hpp"
 
 struct GLFWwindow;
 
@@ -14,6 +15,7 @@ namespace lucent
 class Device;
 class Shader;
 class ShaderCache;
+class Context;
 struct Texture;
 struct Framebuffer;
 
@@ -36,7 +38,7 @@ struct Vertex
 struct DeviceQueue
 {
     VkQueue handle;
-    uint32_t familyIndex;
+    uint32 familyIndex;
 };
 
 enum class ShaderStage
@@ -101,9 +103,9 @@ struct Texture
 
 struct TextureSettings
 {
-    uint32_t width = 1;
-    uint32_t height = 1;
-    uint32_t levels = 1;
+    uint32 width = 1;
+    uint32 height = 1;
+    uint32 levels = 1;
     TextureFormat format = TextureFormat::kRGBA8;
     TextureShape shape = TextureShape::k2D;
     TextureAddressMode addressMode = TextureAddressMode::kRepeat;
@@ -147,6 +149,7 @@ enum class BufferType
     Vertex,
     Index,
     Uniform,
+    UniformDynamic,
     Staging
 };
 
@@ -159,52 +162,6 @@ struct Buffer
     VmaAllocation allocation;
     BufferType type;
     size_t bufSize;
-};
-
-struct DescriptorSet
-{
-    VkDescriptorSet handle;
-    uint32_t index;
-};
-
-class Context
-{
-public:
-    explicit Context(Device& device)
-        : m_Device(device)
-    {}
-
-    void Begin() const;
-    void End() const;
-
-    void BeginRenderPass(const Framebuffer& fbuffer, VkExtent2D extent = {});
-    void EndRenderPass() const;
-
-    void Bind(Pipeline& pipeline);
-
-    // TODO: One entrypoint, determine binding point from buffer type
-    void Bind(const Buffer* indexBuffer);
-    void Bind(const Buffer* vertexBuffer, uint32_t binding);
-
-    void BindSet(const DescriptorSet* set);
-    void BindSet(const DescriptorSet* set, uint32_t dynamicOffset);
-
-    void Draw(uint32_t indexCount) const;
-
-    void CopyTexture(
-        Texture* src, int srcLayer, int srcLevel,
-        Texture* dst, int dstLayer, int dstLevel,
-        uint32_t width, uint32_t height);
-
-public:
-    Device& m_Device;
-
-    VkCommandPool m_CommandPool{};
-    VkCommandBuffer m_CommandBuffer{};
-
-    // Active state
-    bool m_SwapchainWritten{};
-    Pipeline* m_BoundPipeline{};
 };
 
 class Device
@@ -223,11 +180,6 @@ public:
     Framebuffer* CreateFramebuffer(const FramebufferSettings& info);
 
     const Framebuffer& AcquireFramebuffer();
-
-    // TODO: Remove this interface
-    DescriptorSet* CreateDescriptorSet(const Pipeline& pipeline, uint32_t set);
-    void WriteSet(DescriptorSet* set, uint32_t binding, const Buffer& buffer);
-    void WriteSet(DescriptorSet* set, uint32_t binding, const Texture& texture);
 
     Context* CreateContext();
     void Submit(Context* context);
@@ -254,7 +206,7 @@ public:
 
     VmaAllocator m_Allocator{};
 
-    VkDevice m_Device{};
+    VkDevice m_Handle{};
     DeviceQueue m_GraphicsQueue{};
     DeviceQueue m_PresentQueue{};
 
@@ -268,13 +220,10 @@ public:
 
     VkSemaphore m_ImageAvailable{};
     VkSemaphore m_RenderFinished{};
-    uint32_t m_NextImageIndex{};
+    uint32 m_NextImageIndex{};
 
     Buffer* m_TransferBuffer;
     VkCommandPool m_OneShotCmdPool;
-
-    VkDescriptorPool m_DescPool{};
-    std::vector<std::unique_ptr<DescriptorSet>> m_DescSets;
 
     std::unique_ptr<Input> m_Input;
 
@@ -288,14 +237,14 @@ public:
     {
         Buffer* vertices;
         Buffer* indices;
-        uint32_t numIndices;
+        uint32 numIndices;
     } m_Cube;
 
     struct Quad
     {
         Buffer* vertices;
         Buffer* indices;
-        uint32_t numIndices;
+        uint32 numIndices;
     } m_Quad;
 
     Texture* m_BlackTexture;

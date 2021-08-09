@@ -30,10 +30,6 @@ public:
     Pipeline* m_DefaultPipeline;
     Pipeline* m_SkyboxPipeline;
 
-    DescriptorSet* m_SkyboxSet;
-
-    // UBO
-    DescriptorSet* m_GlobalSet;
     Buffer* m_UniformBuffer;
 
     // TEMP

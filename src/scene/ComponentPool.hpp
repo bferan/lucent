@@ -27,7 +27,7 @@ public:
     auto end() { return m_DenseArray.end(); }
 
 private:
-    std::vector<uint32_t> m_SparseArray{};
+    std::vector<uint32> m_SparseArray{};
     std::vector<Entity> m_DenseArray{};
     std::vector<T> m_Components{};
 };

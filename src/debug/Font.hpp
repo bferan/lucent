@@ -45,8 +45,6 @@ private:
     Device* m_Device;
     Pipeline* m_FontPipeline;
     Texture* m_FontTexture;
-    DescriptorSet* m_DescSet;
-
 };
 
 }

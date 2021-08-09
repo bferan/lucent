@@ -1,11 +1,17 @@
 #pragma once
 
+#include <core/Hash.hpp>
 #include "vulkan/vulkan.h"
-
-#include "device/Device.hpp"
 
 namespace lucent
 {
+
+using DescriptorID = uint32;
+
+inline constexpr DescriptorID operator ""_id(const char* name)
+{
+    return Hash<DescriptorID>(name);
+}
 
 struct ShaderInfoLog
 {
@@ -29,7 +35,15 @@ public:
 public:
     virtual Result Resolve(const std::string& name) = 0;
 
-    virtual ~ShaderResolver() = default;;
+    virtual ~ShaderResolver() = default;
+};
+
+// Binary search these
+struct DescriptorEntry
+{
+    uint32 hash: 32;
+    uint32 set: 2;
+    uint32 binding: 4;
 };
 
 struct Shader
@@ -37,6 +51,8 @@ struct Shader
     static constexpr int kMaxStages = 8;
     static constexpr int kMaxSets = 4;
     static constexpr int kMaxBindingsPerSet = 16;
+    static constexpr int kMaxDescriptors = 64;
+    static constexpr int kMaxDynamicDescriptorsPerSet = 4;
 
     struct Stage
     {
@@ -44,15 +60,12 @@ struct Shader
         VkShaderModule module;
     };
 
-    uint32_t numStages;
-    Stage stages[kMaxStages];
-
-    VkPipelineLayout layout;
-    uint32_t numSets;
-    VkDescriptorSetLayout setLayouts[kMaxSets];
-
-    uint64_t hash;
-    uint32_t uses;
+    Array <Stage, kMaxStages> stages;
+    Array <VkDescriptorSetLayout, kMaxSets> setLayouts;
+    Array <DescriptorEntry, kMaxDescriptors> descriptors;
+    VkPipelineLayout pipelineLayout;
+    uint64 hash;
+    uint32 uses;
 };
 
 }

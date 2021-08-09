@@ -59,7 +59,7 @@ void Input::ScrollCallback(GLFWwindow* window, double xoffset, double yoffset)
     state.scroll = { (float)xoffset, (float)yoffset };
 }
 
-void Input::CharCallback(GLFWwindow* window, uint32_t codepoint)
+void Input::CharCallback(GLFWwindow* window, uint32 codepoint)
 {
     auto& state = ((Input*)glfwGetWindowUserPointer(window))->m_State;
 

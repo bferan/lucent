@@ -26,7 +26,7 @@ private:
     bool m_Dirty;
 
     std::vector<Vertex> m_Vertices;
-    std::vector<uint32_t> m_Indices;
+    std::vector<uint32> m_Indices;
 
     Device* m_Device;
     Buffer* m_VertexBuffer;

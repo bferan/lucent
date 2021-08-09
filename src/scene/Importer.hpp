@@ -13,7 +13,7 @@ class Device;
 class Importer
 {
 public:
-    Importer(Device* device, Pipeline* pipeline);
+    Importer(Device* device);
 
     Entity Import(Scene& scene, const std::string& modelFile);
 
@@ -24,11 +24,10 @@ private:
     void ImportMeshes(Scene& scene, const aiScene& model);
     Entity ImportEntities(Scene& scene, const aiScene& model, const aiNode& node, Entity parent);
 
-    std::vector<uint32_t> m_MeshIndices;
-    std::vector<uint32_t> m_MaterialIndices;
+    std::vector<uint32> m_MeshIndices;
+    std::vector<uint32> m_MaterialIndices;
     std::string_view m_ModelFile;
 
-    Pipeline* m_Pipeline;
     Device* m_Device;
 };
 

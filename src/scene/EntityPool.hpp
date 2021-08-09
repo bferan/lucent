@@ -10,8 +10,8 @@ struct Entity
         return index == 0;
     }
 
-    uint32_t index: 24 {};
-    uint32_t version: 8 {};
+    uint32 index: 24 {};
+    uint32 version: 8 {};
 };
 
 inline bool operator==(Entity lhs, Entity rhs)
@@ -47,7 +47,7 @@ public:
         else
         {
             auto index = m_Entities.size();
-            return m_Entities.emplace_back(Entity{ static_cast<uint32_t>(index), 0 });
+            return m_Entities.emplace_back(Entity{ static_cast<uint32>(index), 0 });
         }
     }
 
@@ -67,8 +67,8 @@ public:
     }
 
 private:
-    uint32_t m_LastFreeIndex = (uint32_t)-1;
-    uint32_t m_NumFree = 0;
+    uint32 m_LastFreeIndex = (uint32)-1;
+    uint32 m_NumFree = 0;
     std::vector<Entity> m_Entities;
 
 };
