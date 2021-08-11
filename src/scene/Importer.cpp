@@ -196,18 +196,18 @@ void Importer::ImportMeshes(Scene& scene, const aiScene& model)
 
 Entity Importer::ImportEntities(Scene& scene, const aiScene& model, const aiNode& node, Entity parent)
 {
-    auto entity = scene.entities.Create();
+    auto entity = scene.Create();
 
     aiVector3D pos;
     aiQuaternion rot;
     aiVector3D scale;
     node.mTransformation.Decompose(scale, rot, pos);
 
-    scene.transforms.Assign(entity, Transform{
+    entity.Assign(Transform{
         .rotation = { rot.x, rot.y, rot.z, rot.w },
         .position = { pos.x, pos.y, pos.z },
         .scale = scale.x,
-        .parent = parent
+        .parent = parent.id
     });
 
     if (node.mNumMeshes > 0)
@@ -216,7 +216,7 @@ Entity Importer::ImportEntities(Scene& scene, const aiScene& model, const aiNode
         for (int i = 0; i < meshes.size(); ++i)
             meshes[i] = m_MeshIndices[node.mMeshes[i]];
 
-        scene.meshInstances.Assign(entity, MeshInstance{ .meshes = std::move(meshes) });
+        entity.Assign(MeshInstance{ .meshes = std::move(meshes) });
     }
 
     if (node.mNumChildren > 0 || node.mNumMeshes > 1)
@@ -226,10 +226,9 @@ Entity Importer::ImportEntities(Scene& scene, const aiScene& model, const aiNode
         // Import actual children
         for (int i = 0; i < node.mNumChildren; ++i)
         {
-            parentComponent.children[i] = ImportEntities(scene, model, *node.mChildren[i], entity);
+            parentComponent.children[i] = ImportEntities(scene, model, *node.mChildren[i], entity).id;
         }
-
-        scene.parents.Assign(entity, std::move(parentComponent));
+        entity.Assign(std::move(parentComponent));
     }
 
     return entity;

@@ -8,12 +8,30 @@
 namespace lucent
 {
 
+class Scene;
+
+struct Entity
+{
+    template<typename T>
+    T& Get();
+
+    template<typename T>
+    void Assign(T&& component);
+
+    template<typename T>
+    void Remove();
+
+public:
+    EntityID id;
+    Scene* scene{};
+};
+
 struct Transform
 {
     Quaternion rotation; // 16
     Vector3 position;    // 12
     float scale = 1.0f;         // 4
-    Entity parent;       // 4
+    EntityID parent;       // 4
 };
 
 struct Parent
@@ -22,7 +40,7 @@ struct Parent
         : children(numChildren)
     {}
 
-    std::vector<Entity> children;
+    std::vector<EntityID> children;
 };
 
 struct MeshInstance
@@ -74,6 +92,13 @@ struct Environment
 
 struct Scene
 {
+public:
+    Scene();
+
+    Entity Create();
+    void Destroy(Entity entity);
+
+public:
     EntityPool entities;
 
     ComponentPool<Transform> transforms;
@@ -85,6 +110,62 @@ struct Scene
     std::vector<Material> materials;
 
     Environment environment;
+
+private:
+    friend class Entity;
+    std::vector<ComponentPoolBase*> m_PoolsByIndex;
+
+    template<typename T>
+    void RegisterPool(ComponentPool<T>& pool);
+
+    template<typename T>
+    ComponentPool<T>& GetPool();
+
 };
+
+template<typename T>
+T& Entity::Get()
+{
+    return scene->template GetPool<T>()[id];
+}
+
+template<typename T>
+void Entity::Assign(T&& component)
+{
+    scene->GetPool<T>().Assign(id, std::forward<T>(component));
+}
+
+template<typename T>
+void Entity::Remove()
+{
+    scene->GetPool<T>().Remove(id);
+}
+
+template<typename T>
+void Scene::RegisterPool(ComponentPool<T>& pool)
+{
+    auto id = ComponentPool<T>::ID();
+    if (id >= m_PoolsByIndex.size())
+    {
+        m_PoolsByIndex.resize(id + 1);
+    }
+    m_PoolsByIndex[id] = &pool;
+}
+
+template<typename T>
+ComponentPool<T>& Scene::GetPool()
+{
+    auto id = ComponentPool<T>::ID();
+    ComponentPoolBase* pool = nullptr;
+
+    if (id < m_PoolsByIndex.size())
+        pool = m_PoolsByIndex[id];
+
+    if (!pool)
+    {
+        LC_ASSERT(0 && "Unable to find component pool");
+    }
+    return pool->As<T>();
+}
 
 }

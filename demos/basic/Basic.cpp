@@ -16,22 +16,20 @@ public:
     void Init()
     {
         LC_INFO("Welcome to LUCENT!");
-
         m_Renderer = std::make_unique<SceneRenderer>(&m_Device);
 
         Importer importer(&m_Device);
 
-        //    importer.Import(m_Scene, "models/Plane.glb");
+        //importer.Import(m_Scene, "models/Plane.glb");
         importer.Import(m_Scene, "models/DamagedHelmet.glb");
-        //importer.Import(m_Scene, "models/Sponza/Sponza.gltf");
 
         HdrImporter hdrImporter(&m_Device);
         m_Scene.environment = hdrImporter.Import("textures/shanghai_bund_4k.hdr");
 
         // Create camera entity
-        m_Player = m_Scene.entities.Create();
-        m_Scene.transforms.Assign(m_Player, Transform{ .position = { 0.0f, 2.0f, 2.0f }});
-        m_Scene.cameras.Assign(m_Player, Camera{ .horizontalFov = kHalfPi, .aspectRatio = 1600.0f / 900.0f });
+        m_Player = m_Scene.Create();
+        m_Player.Assign(Transform{ .position = { 0.0f, 2.0f, 2.0f }});
+        m_Player.Assign(Camera{ .horizontalFov = kHalfPi, .aspectRatio = 1600.0f / 900.0f });
     }
 
     void Draw(float dt)
@@ -40,8 +38,8 @@ public:
         timer += dt;
 
         auto& input = m_Device.m_Input->GetState();
-        auto& transform = m_Scene.transforms[m_Player];
-        auto& camera = m_Scene.cameras[m_Player];
+        auto& transform = m_Player.Get<Transform>();
+        auto& camera = m_Player.Get<Camera>();
 
         if (!m_Renderer->m_DebugConsole->Active())
         {
@@ -87,7 +85,6 @@ public:
 
     Scene m_Scene{};
     Entity m_Player;
-    Entity m_Rotate;
 };
 
 }

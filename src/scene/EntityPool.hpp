@@ -3,7 +3,7 @@
 namespace lucent
 {
 
-struct Entity
+struct EntityID
 {
     bool Empty() const
     {
@@ -14,7 +14,7 @@ struct Entity
     uint32 version: 8 {};
 };
 
-inline bool operator==(Entity lhs, Entity rhs)
+inline bool operator==(EntityID lhs, EntityID rhs)
 {
     return lhs.index == rhs.index && lhs.version == rhs.version;
 }
@@ -25,10 +25,10 @@ public:
     EntityPool()
     {
         // Add the null entity
-        m_Entities.push_back(Entity{ 0, 1 });
+        m_Entities.push_back(EntityID{ 0, 1 });
     }
 
-    Entity Create()
+    EntityID Create()
     {
         if (m_NumFree > 0)
         {
@@ -47,16 +47,16 @@ public:
         else
         {
             auto index = m_Entities.size();
-            return m_Entities.emplace_back(Entity{ static_cast<uint32>(index), 0 });
+            return m_Entities.emplace_back(EntityID{ static_cast<uint32>(index), 0 });
         }
     }
 
-    bool Valid(Entity entity)
+    bool Valid(EntityID entity)
     {
         return entity.index < m_Entities.size() && m_Entities[entity.index] == entity;
     }
 
-    void Destroy(Entity entity)
+    void Destroy(EntityID entity)
     {
         LC_ASSERT(Valid(entity));
 
@@ -69,7 +69,7 @@ public:
 private:
     uint32 m_LastFreeIndex = (uint32)-1;
     uint32 m_NumFree = 0;
-    std::vector<Entity> m_Entities;
+    std::vector<EntityID> m_Entities;
 
 };
 

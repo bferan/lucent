@@ -5,44 +5,86 @@
 namespace lucent
 {
 
+using ComponentID = uint32;
+
+struct ComponentMeta
+{
+    inline static ComponentID s_NextID{};
+
+    template<typename T>
+    inline static const ComponentID s_ID = s_NextID++;
+};
+
 template<typename T>
-class ComponentPool
+class ComponentPool;
+
+class ComponentPoolBase
 {
 public:
-    bool Contains(Entity entity) const;
+    template<typename T>
+    ComponentPool<T>& As();
 
     auto Size();
 
+    bool Contains(EntityID entity) const;
+
+    virtual void Remove(EntityID entity) = 0;
+
+protected:
+    std::vector<uint32> m_SparseArray{};
+    std::vector<EntityID> m_DenseArray{};
+};
+
+template<typename T>
+class ComponentPool : public ComponentPoolBase
+{
+public:
+    static ComponentID ID()
+    { return ComponentMeta::s_ID<T>; }
+
+public:
     template<typename C>
-    void Assign(Entity entity, C&& component);
+    void Assign(EntityID entity, C&& component);
 
-    T& operator[](Entity entity);
+    T& operator[](EntityID entity);
 
-    void Remove(Entity entity);
+    void Remove(EntityID entity) override;
 
     void Clear();
 
 public:
-    auto begin() { return m_DenseArray.begin(); }
-    auto end() { return m_DenseArray.end(); }
+    auto begin()
+    { return m_DenseArray.begin(); }
+    auto end()
+    { return m_DenseArray.end(); }
 
 private:
-    std::vector<uint32> m_SparseArray{};
-    std::vector<Entity> m_DenseArray{};
     std::vector<T> m_Components{};
 };
 
-template<typename T>
-bool ComponentPool<T>::Contains(Entity entity) const
+/* Component pool base implementation: */
+inline bool ComponentPoolBase::Contains(EntityID entity) const
 {
     return entity.index < m_SparseArray.size() &&
         m_SparseArray[entity.index] < m_DenseArray.size() &&
         m_DenseArray[m_SparseArray[entity.index]] == entity;
 }
 
+inline auto ComponentPoolBase::Size()
+{
+    return m_DenseArray.size();
+}
+
+template<typename T>
+ComponentPool<T>& ComponentPoolBase::As()
+{
+    return *reinterpret_cast<ComponentPool<T>*>(this);
+}
+
+/* Typed component pool implementation: */
 template<typename T>
 template<typename C>
-void ComponentPool<T>::Assign(Entity entity, C&& component)
+void ComponentPool<T>::Assign(EntityID entity, C&& component)
 {
     if (Contains(entity))
     {
@@ -62,14 +104,14 @@ void ComponentPool<T>::Assign(Entity entity, C&& component)
 }
 
 template<typename T>
-T& ComponentPool<T>::operator[](Entity entity)
+T& ComponentPool<T>::operator[](EntityID entity)
 {
     LC_ASSERT(Contains(entity));
     return m_Components[m_SparseArray[entity.index]];
 }
 
 template<typename T>
-void ComponentPool<T>::Remove(Entity entity)
+void ComponentPool<T>::Remove(EntityID entity)
 {
     LC_ASSERT(Contains(entity));
 
@@ -92,12 +134,6 @@ void ComponentPool<T>::Clear()
     m_SparseArray.clear();
     m_DenseArray.clear();
     m_Components.clear();
-}
-
-template<typename T>
-auto ComponentPool<T>::Size()
-{
-    return m_DenseArray.size();
 }
 
 }
