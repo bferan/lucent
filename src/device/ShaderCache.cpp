@@ -6,7 +6,6 @@
 #include "glslang/SPIRV/GlslangToSpv.h"
 
 #include "core/Utility.hpp"
-#include "core/Hash.hpp"
 #include "device/Device.hpp"
 #include "device/ResourceLimits.hpp"
 
@@ -21,11 +20,11 @@ static VkDescriptorType BasicTypeToDescriptorType(glslang::TBasicType basicType)
     case glslang::EbtBlock:
         return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
 
-        case glslang::EbtSampler:
-            return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            default:
-                LC_ASSERT(0 && "Unsupported uniform type declared in shader");
-                return VK_DESCRIPTOR_TYPE_MAX_ENUM;
+    case glslang::EbtSampler:
+        return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    default:
+        LC_ASSERT(0 && "Unsupported uniform type declared in shader");
+        return VK_DESCRIPTOR_TYPE_MAX_ENUM;
     }
 }
 
@@ -150,90 +149,89 @@ static void StripShader(std::string& text, ShaderStage stage)
 
 // Shader including & resolution
 class DefaultResolver : public ShaderResolver
+{
+public:
+    DefaultResolver()
     {
-    public:
-        DefaultResolver()
+        auto env = std::getenv(kShaderEnvVar);
+        if (env)
         {
-            auto env = std::getenv(kShaderEnvVar);
-            if (env)
+            LC_DEBUG("Resolving shaders from {}", env);
+            m_RootPath = env;
+            if (!m_RootPath.empty() && !m_RootPath.ends_with(kPathSeparator))
             {
-                LC_DEBUG("Resolving shaders from {}", env);
-                m_RootPath = env;
-                if (!m_RootPath.empty() && !m_RootPath.ends_with(kPathSeparator))
-                {
-                    m_RootPath += kPathSeparator;
-                }
-            }
-            else
-            {
-                LC_INFO("Default shader resolver could not locate ENV variable {}\n"
-                        "Using current working directory instead.", kShaderEnvVar);
+                m_RootPath += kPathSeparator;
             }
         }
-
-        Result Resolve(const std::string& name) override
+        else
         {
-            Result result{};
-            result.qualifiedName = m_RootPath + name;
-
-            if (!result.qualifiedName.ends_with(kShaderExt))
-                result.qualifiedName += kShaderExt;
-
-            result.source = ReadFile(result.qualifiedName, std::ios::in, &result.found);
-            return result;
+            LC_INFO("Default shader resolver could not locate ENV variable {}\n"
+                    "Using current working directory instead.", kShaderEnvVar);
         }
+    }
 
-        ~DefaultResolver() override = default;
+    Result Resolve(const std::string& name) override
+    {
+        Result result{};
+        result.qualifiedName = m_RootPath + name;
 
-    private:
-        static constexpr auto kShaderEnvVar = "LC_SHADER_ROOT";
-        static constexpr char kPathSeparator = '/';
-        static constexpr const char* kShaderExt = ".shader";
+        if (!result.qualifiedName.ends_with(kShaderExt))
+            result.qualifiedName += kShaderExt;
 
-        std::string m_RootPath{};
+        result.source = ReadFile(result.qualifiedName, std::ios::in, &result.found);
+        return result;
+    }
 
-    };
+    ~DefaultResolver() override = default;
+
+private:
+    static constexpr auto kShaderEnvVar = "LC_SHADER_ROOT";
+    static constexpr char kPathSeparator = '/';
+    static constexpr const char* kShaderExt = ".shader";
+
+    std::string m_RootPath{};
+
+};
 
 class Includer : public glslang::TShader::Includer
-    {
-    public:
-        Includer(ShaderResolver* resolver, ShaderStage stage)
+{
+public:
+    Includer(ShaderResolver* resolver, ShaderStage stage)
         : m_Resolver(resolver), m_Stage(stage)
-        {
-        }
+    {}
 
-        // glslang callbacks
-        IncludeResult* includeSystem(const char* header, const char* includer, size_t depth) override
-        {
+    // glslang callbacks
+    IncludeResult* includeSystem(const char* header, const char* includer, size_t depth) override
+    {
+        return nullptr;
+    }
+
+    IncludeResult* includeLocal(const char* header, const char* includer, size_t depth) override
+    {
+        auto result = m_Resolver->Resolve(header);
+
+        if (!result.found)
             return nullptr;
-        }
 
-        IncludeResult* includeLocal(const char* header, const char* includer, size_t depth) override
+        auto text = new std::string(std::move(result.source));
+        StripShader(*text, m_Stage);
+
+        return new IncludeResult(result.qualifiedName, text->data(), text->size(), text);
+    }
+
+    void releaseInclude(IncludeResult* result) override
+    {
+        if (result)
         {
-            auto result = m_Resolver->Resolve(header);
-
-            if (!result.found)
-                return nullptr;
-
-            auto text = new std::string(std::move(result.source));
-            StripShader(*text, m_Stage);
-
-            return new IncludeResult(result.qualifiedName, text->data(), text->size(), text);
+            delete (std::string*)result->userData;
+            delete result;
         }
+    }
 
-        void releaseInclude(IncludeResult* result) override
-        {
-            if (result)
-            {
-                delete (std::string*)result->userData;
-                delete result;
-            }
-        }
-
-    private:
-        ShaderResolver* m_Resolver;
-        ShaderStage m_Stage;
-    };
+private:
+    ShaderResolver* m_Resolver;
+    ShaderStage m_Stage;
+};
 
 // Shader cache
 ShaderCache::ShaderCache(Device* device)
@@ -268,7 +266,7 @@ Shader* ShaderCache::Compile(const std::string& name, ShaderInfoLog& log)
         return m_Shaders[hash].get();
     }
 
-    auto& shader = (m_Shaders[hash] = std::make_unique<Shader>());
+    auto& shader = (m_Shaders[hash] = std::make_unique<Shader>(Shader{}));
     if (!PopulateShaderModules(*shader, result.qualifiedName, result.source, log))
     {
         m_Shaders.erase(hash);
@@ -290,8 +288,74 @@ void ShaderCache::Release(Shader* shader)
     }
 }
 
-static bool ScanLayout(const TIntermNode& root, ShaderCache::PipelineLayout& layout, ShaderInfoLog& log)
+const char* kAnonymousPrefix = "anon@";
+
+static bool ScanLinkerSymbols(const TIntermNode& root,
+    ShaderCache::PipelineLayout& layout,
+    Shader& shader,
+    ShaderInfoLog& log)
 {
+    auto addDescriptor = [&](glslang::TIntermSymbol& symbol)
+    {
+        auto& type = symbol.getType();
+        auto& qualifier = type.getQualifier();
+        auto set = qualifier.layoutSet;
+        auto binding = qualifier.layoutBinding;
+
+        // Validate binding
+        if (set < 0 || set >= Shader::kMaxSets ||
+            binding < 0 || binding >= Shader::kMaxBindingsPerSet)
+        {
+            log.Error("Error while scanning: invalid uniform set/binding in shader");
+            return false;
+        }
+
+        if (!layout.sets[set])
+            layout.sets[set] = ShaderCache::SetLayout{};
+
+        // If binding not already present from a previous stage, create it
+        if (!layout.sets[set]->bindings[binding])
+        {
+            layout.sets[set]->bindings[binding] = BasicTypeToDescriptorType(type.getBasicType());
+
+            bool isBlock = type.getBasicType() == glslang::EbtBlock;
+            uint32 size = isBlock ? glslang::TIntermediate::getBlockSize(type) : 0;
+
+            // Add global scope descriptor
+            auto entry = DescriptorEntry{
+                .hash = Hash<uint32>(symbol.getName()),
+                .set = set,
+                .binding = binding,
+                .size = size
+            };
+            shader.descriptors.emplace_back(entry);
+
+            // Add all block members as separate descriptors
+            if (isBlock)
+            {
+                shader.blocks.emplace_back(entry);
+                int childSize = 0;
+                int offset = 0;
+                for (auto& loc : *type.getStruct())
+                {
+                    auto& child = *loc.type;
+                    glslang::TIntermediate::updateOffset(type, child, offset, childSize);
+
+                    shader.descriptors.emplace_back(DescriptorEntry{
+                        .hash = Hash<uint32>(child.getFieldName()),
+                        .set = set,
+                        .binding = binding,
+                        .offset = static_cast<uint32>(offset),
+                        .size = static_cast<uint32>(childSize)
+                    });
+                    offset += childSize;
+                }
+            }
+        }
+        return true;
+    };
+
+    // Scan all uniform linker symbols
     for (auto node : root.getAsAggregate()->getSequence())
     {
         auto agg = node->getAsAggregate();
@@ -300,28 +364,10 @@ static bool ScanLayout(const TIntermNode& root, ShaderCache::PipelineLayout& lay
             for (auto obj : agg->getSequence())
             {
                 auto symbol = obj->getAsSymbolNode();
-                auto& type = symbol->getType();
-                auto& qualifier = type.getQualifier();
-
-                if (qualifier.hasUniformLayout())
+                if (symbol->getQualifier().hasUniformLayout())
                 {
-                    auto set = qualifier.layoutSet;
-                    auto binding = qualifier.layoutBinding;
-
-                    if (set >= 0 && set < Shader::kMaxSets &&
-                        binding >= 0 && binding < Shader::kMaxBindingsPerSet)
-                    {
-                        if (!layout.sets[set])
-                            layout.sets[set] = ShaderCache::SetLayout{};
-
-                        auto& setLayout = layout.sets[set].value();
-                        setLayout.bindings[binding] = BasicTypeToDescriptorType(type.getBasicType());
-                    }
-                    else
-                    {
-                        log.Error("Error while scanning: Invalid uniform binding in shader");
+                    if (!addDescriptor(*symbol))
                         return false;
-                    }
                 }
             }
         }
@@ -329,7 +375,10 @@ static bool ScanLayout(const TIntermNode& root, ShaderCache::PipelineLayout& lay
     return true;
 }
 
-bool ShaderCache::PopulateShaderModules(Shader& shader, const std::string& name, const std::string& source, ShaderInfoLog& log)
+bool ShaderCache::PopulateShaderModules(Shader& shader,
+    const std::string& name,
+    const std::string& source,
+    ShaderInfoLog& log)
 {
     const int defaultVersion = 450;
     const auto inputLang = glslang::EShSourceGlsl;
@@ -375,10 +424,7 @@ bool ShaderCache::PopulateShaderModules(Shader& shader, const std::string& name,
         }
 
         program.addShader(&glsl);
-
-        shader.stages.emplace_back(Shader::Stage{
-            .stageBit = bit
-        });
+        shader.stages.emplace_back(Shader::Stage{ .stageBit = bit });
         return true;
     };
 
@@ -421,8 +467,9 @@ bool ShaderCache::PopulateShaderModules(Shader& shader, const std::string& name,
         return false;
     }
 
-    // Create SPIRV shader modules for each stage
     PipelineLayout layout;
+
+    // Create SPIRV shader modules for each stage
     for (int i = 0; i < shader.stages.size(); ++i)
     {
         m_SpirvBuffer.clear();
@@ -443,9 +490,28 @@ bool ShaderCache::PopulateShaderModules(Shader& shader, const std::string& name,
             return false;
         }
 
-        // Scan intermediate for the layout of this stage
-        if (!ScanLayout(*inter.getTreeRoot(), layout, log))
+        if (!ScanLinkerSymbols(*inter.getTreeRoot(), layout, shader, log))
             return false;
+    }
+
+    // Sort descriptors in hash order for binary search
+    auto& descriptors = shader.descriptors;
+    std::sort(descriptors.begin(), descriptors.end(), [](auto& a, auto& b)
+    {
+        return a.hash < b.hash;
+    });
+
+    // Check for any hash collisions
+    uint32 prevHash = -1;
+    for (auto entry : descriptors)
+    {
+        uint32 hash = entry.hash;
+        if (hash == prevHash)
+        {
+            log.Error("Descriptor layout hash collision occurred");
+            return false;
+        }
+        prevHash = hash;
     }
 
     return PopulateShaderLayout(shader, layout, log);
@@ -475,7 +541,7 @@ bool ShaderCache::PopulateShaderLayout(Shader& shader, const PipelineLayout& lay
         auto result = vkCreatePipelineLayout(m_Device->m_Handle, &pipelineLayoutInfo, nullptr, &pipelineLayout);
         LC_ASSERT(result == VK_SUCCESS);
 
-        it = m_PipelineLayouts.insert(it, {shader.setLayouts, pipelineLayout});
+        it = m_PipelineLayouts.insert(it, { shader.setLayouts, pipelineLayout });
     }
 
     shader.pipelineLayout = it->second;
@@ -545,7 +611,7 @@ VkDescriptorSetLayout ShaderCache::FindSetLayout(const SetLayout& layout)
 
     LC_ASSERT(result == VK_SUCCESS);
 
-    m_SetLayouts.insert(it, {layout, setLayout});
+    m_SetLayouts.insert(it, { layout, setLayout });
     return setLayout;
 }
 
@@ -561,10 +627,9 @@ size_t ShaderCache::LayoutHash::operator()(const SetLayout& set) const
     return hash;
 }
 
-size_t ShaderCache::LayoutHash::operator()(const SetList &sets) const
+size_t ShaderCache::LayoutHash::operator()(const SetList& sets) const
 {
     return HashBytes<size_t>(sets);
 }
-
 
 }

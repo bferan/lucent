@@ -51,9 +51,12 @@ Context::Context(Device& device)
     LC_ASSERT(result == VK_SUCCESS);
 }
 
-void Context::Begin() const
+void Context::Begin()
 {
     vkResetCommandPool(m_Device.m_Handle, m_CommandPool, 0);
+
+    m_ScratchBindings.clear();
+    m_ScratchDrawOffset = 0;
 
     auto beginInfo = VkCommandBufferBeginInfo{
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -63,7 +66,7 @@ void Context::Begin() const
     LC_ASSERT(result == VK_SUCCESS);
 }
 
-void Context::End() const
+void Context::End()
 {
     auto result = vkEndCommandBuffer(m_CommandBuffer);
     LC_ASSERT(result == VK_SUCCESS);
@@ -143,6 +146,7 @@ void Context::Draw(uint32 indexCount)
 {
     EstablishBindings();
     vkCmdDrawIndexed(m_CommandBuffer, indexCount, 1, 0, 0, 0);
+    ResetScratchBindings();
 }
 
 void Context::CopyTexture(
@@ -276,6 +280,33 @@ void Context::Bind(uint32 set, uint32 binding, const Texture* texture)
     bound.dirty = true;
 }
 
+void Context::Bind(DescriptorID id, const Buffer* buffer)
+{
+    auto entry = FindDescriptorEntry(id);
+    Bind(entry.set, entry.binding, buffer);
+}
+
+void Context::Bind(DescriptorID id, const Buffer* buffer, uint32 dynamicOffset)
+{
+    auto entry = FindDescriptorEntry(id);
+    Bind(entry.set, entry.binding, buffer, dynamicOffset);
+}
+
+void Context::Bind(DescriptorID id, const Texture* texture)
+{
+    auto entry = FindDescriptorEntry(id);
+    Bind(entry.set, entry.binding, texture);
+}
+
+void Context::Uniform(DescriptorID id, const uint8* data, size_t size)
+{
+    auto entry = FindDescriptorEntry(id);
+    LC_ASSERT(entry.size == size);
+
+    auto offset = GetScratchOffset(entry.set, entry.binding);
+    m_ScratchUniformBuffer->Upload(data, size, offset + entry.offset);
+}
+
 void Context::EstablishBindings()
 {
     LC_ASSERT(m_BoundPipeline != nullptr);
@@ -286,7 +317,8 @@ void Context::EstablishBindings()
         if (set.dirty)
         {
             // Find/alloc descriptor set
-            auto layout = m_BoundPipeline->shader->setLayouts[setIndex];
+            auto& setLayouts = m_BoundPipeline->shader->setLayouts;
+            auto layout = setLayouts[setIndex];
             auto setHandle = FindDescriptorSet(set.bindings, layout);
 
             // Bind set
@@ -392,6 +424,80 @@ VkDescriptorSet Context::FindDescriptorSet(const BindingArray& bindings, VkDescr
         it = m_DescriptorSets.insert(it, { bindings, set });
     }
     return it->second;
+}
+
+DescriptorEntry Context::FindDescriptorEntry(DescriptorID id)
+{
+    LC_ASSERT(m_BoundPipeline);
+    auto& descriptors = m_BoundPipeline->shader->descriptors;
+
+    auto it = std::lower_bound(descriptors.begin(), descriptors.end(), id,
+        [](auto& desc, auto& name)
+        {
+            return desc.hash < name.hash;
+        });
+
+    if (it == descriptors.end() || id.hash != it->hash)
+    {
+        LC_ERROR("Failed to find descriptor with ID \"{}\"", id.name);
+        return {};
+    }
+    return *it;
+}
+
+uint32 Context::GetScratchOffset(uint32 set, uint32 binding)
+{
+    if (!m_ScratchUniformBuffer)
+    {
+        m_ScratchUniformBuffer = m_Device.CreateBuffer(BufferType::UniformDynamic, 65536);
+    }
+
+    auto matchBinding = [=](auto& arg)
+    {
+        return arg.set == set && arg.binding == binding;
+    };
+
+    auto it = std::find_if(m_ScratchBindings.begin(), m_ScratchBindings.end(), matchBinding);
+
+    if (it == m_ScratchBindings.end())
+    {
+        // Create a new scratch binding for this block
+        LC_ASSERT(m_BoundPipeline);
+        auto& blocks = m_BoundPipeline->shader->blocks;
+        auto block = std::find_if(blocks.begin(), blocks.end(), matchBinding);
+        LC_ASSERT(block != blocks.end());
+
+        auto offset = m_ScratchBindings.empty() ?
+            m_ScratchDrawOffset :
+            m_ScratchBindings.back().offset + m_ScratchBindings.back().size;
+
+        // Align offset to required boundary
+        auto alignment = m_Device.m_DeviceProperties.limits.minUniformBufferOffsetAlignment;
+        offset += (alignment - (offset % alignment)) % alignment;
+
+        // Clear new allocation
+        m_ScratchUniformBuffer->Clear(block->size, offset);
+
+        // Bind to uniform block
+        Bind(set, binding, m_ScratchUniformBuffer, offset);
+
+        it = &m_ScratchBindings.emplace_back(ScratchBinding{
+            .set = set,
+            .binding = binding,
+            .offset = offset,
+            .size = block->size
+        });
+    }
+    return it->offset;
+}
+
+void Context::ResetScratchBindings()
+{
+    if (!m_ScratchBindings.empty())
+    {
+        m_ScratchDrawOffset = m_ScratchBindings.back().offset + m_ScratchBindings.back().size;
+        m_ScratchBindings.clear();
+    }
 }
 
 }

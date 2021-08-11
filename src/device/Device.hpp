@@ -155,7 +155,8 @@ enum class BufferType
 
 struct Buffer
 {
-    void Upload(void* data, size_t size, size_t offset = 0) const;
+    void Upload(const void* data, size_t size, size_t offset = 0) const;
+    void Clear(size_t size, size_t offset) const;
 
     Device* device;
     VkBuffer handle;

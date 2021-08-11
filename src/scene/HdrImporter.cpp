@@ -54,11 +54,9 @@ HdrImporter::HdrImporter(Device* device)
         .shaderName = "BRDF.shader",
         .framebuffer = m_Offscreen
     });
-
-    m_UniformBuffer = m_Device->CreateBuffer(BufferType::UniformDynamic, 65535);
 }
 
-void HdrImporter::RenderToCube(Pipeline* pipeline, Texture* src, Texture* dst, int dstLevel, uint32 size)
+void HdrImporter::RenderToCube(Pipeline* pipeline, Texture* src, Texture* dst, int dstLevel, uint32 size, float rough)
 {
     auto& ctx = *m_Context;
     auto proj = Matrix4::Perspective(kHalfPi, 1.0f, 0.001, 10000);
@@ -72,15 +70,10 @@ void HdrImporter::RenderToCube(Pipeline* pipeline, Texture* src, Texture* dst, i
         Matrix4::RotationY(kPi)        // -z
     };
 
-    const size_t uniformAlignment = m_Device->m_DeviceProperties.limits.minUniformBufferOffsetAlignment;
-    uint32 uniformOffset = 0;
-
     ctx.Begin();
     for (int face = 0; face < LC_ARRAY_SIZE(views); ++face)
     {
-        m_UBO.view = views[face];
-        m_UBO.proj = proj;
-        m_UniformBuffer->Upload(&m_UBO, sizeof(HdrUBO), uniformOffset);
+        auto& view = views[face];
 
         ctx.BeginRenderPass(*m_Offscreen, VkExtent2D{ size, size });
         ctx.Bind(pipeline);
@@ -88,7 +81,10 @@ void HdrImporter::RenderToCube(Pipeline* pipeline, Texture* src, Texture* dst, i
         ctx.Bind(m_Device->m_Cube.indices);
         ctx.Bind(m_Device->m_Cube.vertices);
 
-        ctx.Bind(0, 0, m_UniformBuffer, uniformOffset);
+        ctx.Uniform("u_View"_id, view);
+        ctx.Uniform("u_Proj"_id, proj);
+        ctx.Uniform("u_Roughness"_id, rough);
+
         ctx.Bind(0, 1, src);
 
         ctx.Draw(m_Device->m_Cube.numIndices);
@@ -98,10 +94,6 @@ void HdrImporter::RenderToCube(Pipeline* pipeline, Texture* src, Texture* dst, i
             m_OffscreenColor, 0, 0,
             dst, face, dstLevel,
             size, size);
-
-        uniformOffset += sizeof(HdrUBO);
-        // Align up
-        uniformOffset += (uniformAlignment - (uniformOffset % uniformAlignment)) % uniformAlignment;
     }
     ctx.End();
 
@@ -118,8 +110,6 @@ void HdrImporter::RenderToQuad(Pipeline* pipeline, Texture* dst, uint32 size)
 
     ctx.Bind(m_Device->m_Quad.indices);
     ctx.Bind(m_Device->m_Quad.vertices);
-
-    ctx.Bind(0, 0, m_UniformBuffer, 0);
 
     ctx.Draw(m_Device->m_Quad.numIndices);
     ctx.EndRenderPass();
@@ -184,9 +174,7 @@ Environment HdrImporter::Import(const std::string& hdrFile)
     for (int level = 0; level < kSpecularLevels; ++level)
     {
         float rough = (float)level / (kSpecularLevels - 1);
-        m_UBO.rough = rough;
-
-        RenderToCube(m_GenSpecular, env.cubeMap, env.specularMap, level, dim);
+        RenderToCube(m_GenSpecular, env.cubeMap, env.specularMap, level, dim, rough);
         dim /= 2;
     }
 

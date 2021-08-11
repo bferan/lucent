@@ -49,6 +49,26 @@ public:
         return m_Elems[pos];
     }
 
+    const_reference front() const
+    {
+        return m_Elems[0];
+    }
+
+    reference front()
+    {
+        return m_Elems[0];
+    }
+
+    const_reference back() const
+    {
+        return m_Elems[m_Count - 1];
+    }
+
+    reference back()
+    {
+        return m_Elems[m_Count - 1];
+    }
+
     bool empty() const
     {
         return m_Count == 0;
@@ -92,6 +112,12 @@ public:
     size_type max_size() const
     {
         return N;
+    }
+
+    void clear()
+    {
+        std::destroy(begin(), end());
+        m_Count = 0;
     }
 
 private:

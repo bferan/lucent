@@ -79,11 +79,11 @@ void SceneRenderer::Render(Scene& scene)
 
             ctx.Bind(0, 0, m_UniformBuffer, uniformOffset);
 
-            ctx.Bind(1, 0, material.baseColor);
-            ctx.Bind(1, 1, material.metalRough);
-            ctx.Bind(1, 2, material.normalMap);
-            ctx.Bind(1, 3, material.aoMap);
-            ctx.Bind(1, 4, material.emissive);
+            ctx.Bind("u_BaseColor"_id, material.baseColor);
+            ctx.Bind("u_MetalRoughness"_id, material.metalRough);
+            ctx.Bind("u_Normal"_id, material.normalMap);
+            ctx.Bind("u_AO"_id, material.aoMap);
+            ctx.Bind("u_Emissive"_id, material.emissive);
 
             ctx.Bind(mesh.vertexBuffer);
             ctx.Bind(mesh.indexBuffer);

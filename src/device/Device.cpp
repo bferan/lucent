@@ -1364,7 +1364,7 @@ void Device::Present()
 }
 
 // Buffer
-void Buffer::Upload(void* data, size_t size, size_t offset) const
+void Buffer::Upload(const void* data, size_t size, size_t offset) const
 {
     LC_ASSERT(offset + size <= bufSize);
 
@@ -1373,6 +1373,18 @@ void Buffer::Upload(void* data, size_t size, size_t offset) const
     vmaMapMemory(device->m_Allocator, allocation, (void**)&ptr);
     ptr += offset;
     memcpy(ptr, data, size);
+    vmaUnmapMemory(device->m_Allocator, allocation);
+    vmaFlushAllocation(device->m_Allocator, allocation, offset, size);
+}
+
+void Buffer::Clear(size_t size, size_t offset) const
+{
+    LC_ASSERT(offset + size <= bufSize);
+
+    uint8* ptr;
+    vmaMapMemory(device->m_Allocator, allocation, (void**)&ptr);
+    ptr += offset;
+    memset(ptr, 0, size);
     vmaUnmapMemory(device->m_Allocator, allocation);
     vmaFlushAllocation(device->m_Allocator, allocation, offset, size);
 }

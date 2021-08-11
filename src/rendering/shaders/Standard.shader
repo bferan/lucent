@@ -18,7 +18,7 @@ layout(location = 4) varying vec3 v_Pos;
 
 layout(location = 0) out vec4 o_Color;
 
-layout(set = 0, binding = 0) uniform MyBuffer
+layout(set = 0, binding = 0) uniform Globals
 {
     mat4 u_Model;
     mat4 u_View;

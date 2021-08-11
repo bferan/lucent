@@ -5,6 +5,7 @@
 
 #include "core/Utility.hpp"
 #include "device/Context.hpp"
+#include "device/Shader.hpp"
 
 namespace lucent
 {
@@ -79,7 +80,7 @@ Glyph Font::GetGlyph(char c) const
 void Font::Bind(Context& context) const
 {
     context.Bind(m_FontPipeline);
-    context.Bind(0, 0, m_FontTexture);
+    context.Bind("u_FontTex"_id, m_FontTexture);
 }
 
 Font::~Font()

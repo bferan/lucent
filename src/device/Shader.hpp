@@ -6,11 +6,17 @@
 namespace lucent
 {
 
-using DescriptorID = uint32;
-
-inline constexpr DescriptorID operator ""_id(const char* name)
+struct DescriptorID
 {
-    return Hash<DescriptorID>(name);
+    uint32 hash;
+    std::string_view name;
+};
+
+inline constexpr DescriptorID operator ""_id(const char* name, size_t size)
+{
+    auto nameView = std::string_view(name, size);
+    auto hash = Hash<uint32>(nameView);
+    return { hash, nameView };
 }
 
 struct ShaderInfoLog
@@ -44,7 +50,10 @@ struct DescriptorEntry
     uint32 hash: 32;
     uint32 set: 2;
     uint32 binding: 4;
+    uint32 offset: 16;
+    uint32 size: 16;
 };
+static_assert(sizeof(DescriptorEntry) == 12);
 
 struct Shader
 {
@@ -53,6 +62,7 @@ struct Shader
     static constexpr int kMaxBindingsPerSet = 16;
     static constexpr int kMaxDescriptors = 64;
     static constexpr int kMaxDynamicDescriptorsPerSet = 4;
+    static constexpr int kMaxDescriptorBlocks = 8;
 
     struct Stage
     {
@@ -63,6 +73,7 @@ struct Shader
     Array <Stage, kMaxStages> stages;
     Array <VkDescriptorSetLayout, kMaxSets> setLayouts;
     Array <DescriptorEntry, kMaxDescriptors> descriptors;
+    Array <DescriptorEntry, kMaxDescriptorBlocks> blocks;
     VkPipelineLayout pipelineLayout;
     uint64 hash;
     uint32 uses;
