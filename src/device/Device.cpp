@@ -271,6 +271,9 @@ Device::Device()
     uint32 gray = 0xff808080;
     m_GrayTexture = CreateTexture(TextureSettings{}, sizeof(gray), &gray);
 
+    uint32 normal = Color(0.5f, 0.5f, 1.0f).Pack();
+    m_NormalTexture = CreateTexture(TextureSettings{}, sizeof(normal), &normal);
+
     uint32 green = 0xff00ff00;
     m_GreenTexture = CreateTexture(TextureSettings{}, sizeof(green), &green);
 
@@ -719,25 +722,19 @@ std::unique_ptr<Pipeline> Device::CreatePipeline(const PipelineSettings& setting
         {
             .location = 2,
             .binding = 0,
-            .format = VK_FORMAT_R32G32B32_SFLOAT,
+            .format = VK_FORMAT_R32G32B32A32_SFLOAT,
             .offset = (uint32)offsetof(Vertex, tangent)
         },
         {
             .location = 3,
             .binding = 0,
-            .format = VK_FORMAT_R32G32B32_SFLOAT,
-            .offset = (uint32)offsetof(Vertex, bitangent)
-        },
-        {
-            .location = 4,
-            .binding = 0,
             .format = VK_FORMAT_R32G32_SFLOAT,
             .offset = (uint32)offsetof(Vertex, texCoord0)
         },
         {
-            .location = 5,
+            .location = 4,
             .binding = 0,
-            .format = VK_FORMAT_R8G8B8A8_UNORM,
+            .format = VK_FORMAT_R32G32B32A32_SFLOAT,
             .offset = (uint32)offsetof(Vertex, color)
         }
     };
@@ -913,7 +910,7 @@ Buffer* Device::CreateBuffer(BufferType type, size_t size)
     return &buff;
 }
 
-Texture* Device::CreateTexture(const TextureSettings& info, size_t size, void* data)
+Texture* Device::CreateTexture(const TextureSettings& info, size_t size, const void* data)
 {
     auto& tex = *m_Textures.emplace_back(std::make_unique<Texture>());
 

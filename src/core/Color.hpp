@@ -37,6 +37,10 @@ public:
     }
 
 public:
+    Color()
+        : Color(0.0f, 0.0f, 0.0f)
+    {}
+
     Color(float r, float g, float b, float a = 1.0f)
         : r(r), g(g), b(b), a(a)
     {}

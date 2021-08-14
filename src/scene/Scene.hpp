@@ -36,10 +36,6 @@ struct Transform
 
 struct Parent
 {
-    explicit Parent(size_t numChildren)
-        : children(numChildren)
-    {}
-
     std::vector<EntityID> children;
 };
 
@@ -64,7 +60,7 @@ struct Material
     float metallicFactor = 1.0f;
     float roughnessFactor = 1.0f;
 
-    Texture* baseColor;
+    Texture* baseColorMap;
     Texture* metalRough;
     Texture* normalMap;
     Texture* aoMap;
@@ -90,36 +86,38 @@ struct Environment
     Texture* BRDF;
 };
 
+struct DirectionalLight
+{
+
+};
+
 struct Scene
 {
 public:
     Scene();
 
-    Entity Create();
+    Entity CreateEntity();
     void Destroy(Entity entity);
+
+    template<typename... Cs, typename F>
+    void Each(F&& func);
 
 public:
     EntityPool entities;
-
-    ComponentPool<Transform> transforms;
-    ComponentPool<Parent> parents;
-    ComponentPool<MeshInstance> meshInstances;
-    ComponentPool<Camera> cameras;
 
     std::vector<Mesh> meshes;
     std::vector<Material> materials;
 
     Environment environment;
 
+    Entity mainCamera;
+
 private:
     friend class Entity;
-    std::vector<ComponentPoolBase*> m_PoolsByIndex;
+    std::vector<std::unique_ptr<ComponentPoolBase>> m_PoolsByIndex;
 
     template<typename T>
-    void RegisterPool(ComponentPool<T>& pool);
-
-    template<typename T>
-    ComponentPool<T>& GetPool();
+    ComponentPool<std::decay_t<T>>& GetPool();
 
 };
 
@@ -142,30 +140,54 @@ void Entity::Remove()
 }
 
 template<typename T>
-void Scene::RegisterPool(ComponentPool<T>& pool)
+ComponentPool<std::decay_t<T>>& Scene::GetPool()
 {
-    auto id = ComponentPool<T>::ID();
-    if (id >= m_PoolsByIndex.size())
-    {
-        m_PoolsByIndex.resize(id + 1);
-    }
-    m_PoolsByIndex[id] = &pool;
-}
-
-template<typename T>
-ComponentPool<T>& Scene::GetPool()
-{
-    auto id = ComponentPool<T>::ID();
+    using C = std::decay_t<T>;
+    auto id = ComponentPool<C>::ID();
     ComponentPoolBase* pool = nullptr;
 
     if (id < m_PoolsByIndex.size())
-        pool = m_PoolsByIndex[id];
+    {
+        pool = m_PoolsByIndex[id].get();
+    }
+    else
+    {
+        m_PoolsByIndex.resize(id + 1);
+    }
 
     if (!pool)
     {
-        LC_ASSERT(0 && "Unable to find component pool");
+        pool = (m_PoolsByIndex[id] = std::make_unique<ComponentPool<C>>()).get();
     }
-    return pool->As<T>();
+    return pool->As<C>();
+}
+
+template<typename... Cs, typename F>
+void Scene::Each(F&& func)
+{
+    auto pools = std::tie(GetPool<Cs>()...);
+
+    // Choose the smallest pool for iteration
+    auto& pool = *std::min({ (ComponentPoolBase*)&std::get<ComponentPool<Cs>&>(pools)... }, [](auto* lhs, auto* rhs)
+    {
+        return lhs->Size() < rhs->Size();
+    });
+
+    for (auto id : pool)
+    {
+        if ((std::get<ComponentPool<Cs>&>(pools).Contains(id) && ...))
+        {
+            // Check if function can accept entity at compile time
+            if constexpr (std::is_invocable_v<F, Entity, Cs...>)
+            {
+                func(Entity{ id, this }, std::get<ComponentPool<Cs>&>(pools)[id]...);
+            }
+            else
+            {
+                func(std::get<ComponentPool<Cs>&>(pools)[id]...);
+            }
+        }
+    }
 }
 
 }

@@ -1,13 +1,7 @@
-#version 450
-#extension GL_ARB_separate_shader_objects : enable
 
 #define PI 3.14159265358979323846
 
-layout(location = 0) attribute vec3 a_Position;
-layout(location = 1) attribute vec3 a_Normal;
-layout(location = 2) attribute vec3 a_Tangent;
-layout(location = 3) attribute vec3 a_Bitangent;
-layout(location = 4) attribute vec2 a_UV;
+#include "shared/VertexLayout"
 
 layout(location = 0) varying vec3 v_Direction;
 

@@ -1,12 +1,5 @@
-#version 450
-#extension GL_ARB_separate_shader_objects : enable
 
-layout(location = 0) attribute vec3 a_Position;
-layout(location = 1) attribute vec3 a_Normal;
-layout(location = 2) attribute vec3 a_Tangent;
-layout(location = 3) attribute vec3 a_Bitangent;
-layout(location = 4) attribute vec2 a_UV;
-layout(location = 5) attribute vec4 a_Color;
+#include "shared/VertexLayout"
 
 layout(location = 0) varying vec2 v_UV;
 layout(location = 1) varying vec4 v_Color;
@@ -27,5 +20,3 @@ void frag()
     float value = texture(u_FontTex, v_UV).r;
     o_Color = value * v_Color;
 }
-
-

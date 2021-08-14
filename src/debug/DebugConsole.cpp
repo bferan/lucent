@@ -38,10 +38,10 @@ void DebugConsole::GenerateMesh()
     if (m_Active)
     {
         // Render text prompt
-        auto indicatorColor = Color::Gray().Pack();
+        auto indicatorColor = Color::Gray();
         x += m_TextPrompt.Draw(kPromptIndicator, x, y, indicatorColor);
 
-        auto promptColor = Color::White().Pack();
+        auto promptColor = Color::White();
         x += m_TextPrompt.Draw(m_Prompt.text, x, y, promptColor);
 
         m_TextPrompt.Draw(kPromptCursor, x, y, indicatorColor);
@@ -65,8 +65,6 @@ void DebugConsole::GenerateMesh()
         if (!m_Active)
             color.a *= Clamp(entry.lifetime, 0.0f, 1.0f);
 
-        auto packedColor = color.Pack();
-
         for (auto c : entry.text)
         {
             bool newLine = c == '\n';
@@ -79,7 +77,7 @@ void DebugConsole::GenerateMesh()
                 if (newLine) continue;
             }
             x = Round(x);
-            x += m_TextLog.Draw(c, x, y, packedColor);
+            x += m_TextLog.Draw(c, x, y, color);
             ++col;
         }
         // Advance upward to next entry origin

@@ -96,9 +96,20 @@ static void StripFunction(std::string& text, const std::string& prototype)
 
 static void StripDeclarations(std::string& text, const std::string& keyword)
 {
+    // TODO: Make this more robust to comments?
     size_t pos = 0;
     while ((pos = text.find(keyword, pos)) != std::string::npos)
     {
+        // Ensure we're not inside a line comment
+        if (auto start = text.rfind("//", pos); start != std::string::npos)
+        {
+            if (auto end = text.find('\n', start); end != std::string::npos && end > pos)
+            {
+                pos = end;
+                continue;
+            }
+        }
+
         // Seek to end of prev statement
         auto prevStatementEnd = text.rfind(';', pos);
         if (prevStatementEnd == std::string::npos) prevStatementEnd = 0;
@@ -119,6 +130,7 @@ static void StripDeclarations(std::string& text, const std::string& keyword)
 
 static void StripShader(std::string& text, ShaderStage stage)
 {
+    // TODO: This could be performed in one pass per shader rather than separate string manipulations
     switch (stage)
     {
     case ShaderStage::kVertex:
@@ -289,6 +301,9 @@ void ShaderCache::Release(Shader* shader)
 }
 
 const char* kAnonymousPrefix = "anon@";
+const char* kDefaultPreamble =
+    "#extension GL_ARB_separate_shader_objects : enable\n"
+    "#extension GL_GOOGLE_include_directive : enable\n";
 
 static bool ScanLinkerSymbols(const TIntermNode& root,
     ShaderCache::PipelineLayout& layout,
@@ -412,6 +427,7 @@ bool ShaderCache::PopulateShaderModules(Shader& shader,
         glsl.setEnvInput(inputLang, lang, client, defaultVersion);
         glsl.setEnvClient(client, clientVersion);
         glsl.setEnvTarget(targetLang, targetLangVersion);
+        glsl.setPreamble(kDefaultPreamble);
 
         Includer includer(m_Resolver.get(), shaderStage);
 

@@ -24,11 +24,8 @@ SceneRenderer::SceneRenderer(Device* device)
 void SceneRenderer::Render(Scene& scene)
 {
     // Find first camera
-    LC_ASSERT(scene.cameras.Size() > 0);
-    auto cameraEntity = *scene.cameras.begin();
-
-    auto& transform = scene.transforms[cameraEntity];
-    auto& camera = scene.cameras[cameraEntity];
+    auto& transform = scene.mainCamera.Get<Transform>();
+    auto& camera = scene.mainCamera.Get<Camera>();
 
     // Calc camera position
     auto view = Matrix4::RotationX(-camera.pitch) *
@@ -44,21 +41,14 @@ void SceneRenderer::Render(Scene& scene)
     ctx.Begin();
     ctx.BeginRenderPass(fb);
 
-    // Bind globals
     ctx.Bind(m_DefaultPipeline);
-    ctx.Bind(0, 1, scene.environment.irradianceMap);
-    ctx.Bind(0, 2, scene.environment.specularMap);
-    ctx.Bind(0, 3, scene.environment.BRDF);
 
     const size_t uniformAlignment = m_Device->m_DeviceProperties.limits.minUniformBufferOffsetAlignment;
     uint32 uniformOffset = 0;
 
     // Draw entities
-    for (auto entity : scene.meshInstances)
+    scene.Each<MeshInstance, Transform>([&](auto& instance, auto& local)
     {
-        auto& local = scene.transforms[entity];
-        auto& instance = scene.meshInstances[entity];
-
         auto model = Matrix4::Translation(local.position) *
             Matrix4::Rotation(local.rotation) *
             Matrix4::Scale(local.scale, local.scale, local.scale);
@@ -77,9 +67,13 @@ void SceneRenderer::Render(Scene& scene)
             auto& mesh = scene.meshes[idx];
             auto& material = scene.materials[mesh.materialIdx];
 
+            // Bind globals
             ctx.Bind(0, 0, m_UniformBuffer, uniformOffset);
+            ctx.Bind(0, 1, scene.environment.irradianceMap);
+            ctx.Bind(0, 2, scene.environment.specularMap);
+            ctx.Bind(0, 3, scene.environment.BRDF);
 
-            ctx.Bind("u_BaseColor"_id, material.baseColor);
+            ctx.Bind("u_BaseColor"_id, material.baseColorMap);
             ctx.Bind("u_MetalRoughness"_id, material.metalRough);
             ctx.Bind("u_Normal"_id, material.normalMap);
             ctx.Bind("u_AO"_id, material.aoMap);
@@ -93,7 +87,7 @@ void SceneRenderer::Render(Scene& scene)
         uniformOffset += sizeof(UBO);
         // Align up
         uniformOffset += (uniformAlignment - (uniformOffset % uniformAlignment)) % uniformAlignment;
-    }
+    });
 
     // Draw skybox
     UBO ubo = {

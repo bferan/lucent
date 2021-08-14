@@ -30,6 +30,14 @@ public:
 
     virtual void Remove(EntityID entity) = 0;
 
+    virtual ~ComponentPoolBase() = default;
+
+public:
+    auto begin()
+    { return m_DenseArray.begin(); }
+    auto end()
+    { return m_DenseArray.end(); }
+
 protected:
     std::vector<uint32> m_SparseArray{};
     std::vector<EntityID> m_DenseArray{};
@@ -42,6 +50,8 @@ public:
     static ComponentID ID()
     { return ComponentMeta::s_ID<T>; }
 
+    ~ComponentPool() override = default;
+
 public:
     template<typename C>
     void Assign(EntityID entity, C&& component);
@@ -51,12 +61,6 @@ public:
     void Remove(EntityID entity) override;
 
     void Clear();
-
-public:
-    auto begin()
-    { return m_DenseArray.begin(); }
-    auto end()
-    { return m_DenseArray.end(); }
 
 private:
     std::vector<T> m_Components{};

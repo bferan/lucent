@@ -7,9 +7,6 @@
 [submodule "extern/SPIRV-Headers"]
 	path = extern/SPIRV-Headers
 	url = https://github.com/KhronosGroup/SPIRV-Headers
-[submodule "extern/assimp"]
-	path = extern/assimp
-	url = https://github.com/assimp/assimp
 [submodule "extern/glfw"]
 	path = extern/glfw
 	url = https://github.com/glfw/glfw

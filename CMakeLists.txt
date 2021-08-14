@@ -44,13 +44,13 @@ target_link_libraries(lucent PUBLIC glfw)
 add_subdirectory(extern/renderdoc)
 target_link_libraries(lucent PRIVATE renderdoc)
 
-# Assimp
-add_subdirectory(extern/assimp)
-target_link_libraries(lucent PUBLIC assimp)
-
 # stb
 add_subdirectory(extern/stb)
 target_link_libraries(lucent PUBLIC stb)
+
+# tinygltf
+add_subdirectory(extern/tinygltf)
+target_link_libraries(lucent PRIVATE tinygltf)
 
 # FMT
 add_subdirectory(extern/fmt)

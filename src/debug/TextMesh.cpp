@@ -18,7 +18,7 @@ TextMesh::TextMesh(Device* device, const Font& font)
     m_IndexBuffer = m_Device->CreateBuffer(BufferType::Index, kIdxBufferSize);
 }
 
-float TextMesh::Draw(const std::string& str, float x, float y, PackedColor color)
+float TextMesh::Draw(const std::string& str, float x, float y, Color color)
 {
     float originX = x;
 
@@ -30,7 +30,7 @@ float TextMesh::Draw(const std::string& str, float x, float y, PackedColor color
     return x - originX;
 }
 
-float TextMesh::Draw(char c, float screenX, float screenY, PackedColor color)
+float TextMesh::Draw(char c, float screenX, float screenY, Color color)
 {
     const auto& glyph = m_Font.GetGlyph(c);
 

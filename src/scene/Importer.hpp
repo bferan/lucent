@@ -1,9 +1,13 @@
 #pragma once
 
-#include "assimp/scene.h"
-
 #include "scene/EntityPool.hpp"
 #include "scene/Scene.hpp"
+
+namespace tinygltf
+{
+class Model;
+class Node;
+}
 
 namespace lucent
 {
@@ -20,11 +24,11 @@ public:
     void Clear();
 
 private:
-    void ImportMaterials(Scene& scene, const aiScene& model);
-    void ImportMeshes(Scene& scene, const aiScene& model);
-    Entity ImportEntities(Scene& scene, const aiScene& model, const aiNode& node, Entity parent);
+    void ImportMaterials(Scene& scene, const tinygltf::Model& model);
+    void ImportMeshes(Scene& scene, const tinygltf::Model& model);
+    Entity ImportEntities(Scene& scene, const tinygltf::Model& model, const tinygltf::Node& node, Entity parent);
 
-    std::vector<uint32> m_MeshIndices;
+    std::vector<MeshInstance> m_MeshInstances;
     std::vector<uint32> m_MaterialIndices;
     std::string_view m_ModelFile;
 

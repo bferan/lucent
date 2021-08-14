@@ -19,20 +19,13 @@ class Context;
 struct Texture;
 struct Framebuffer;
 
-struct TexCoord
-{
-    float u;
-    float v;
-};
-
 struct Vertex
 {
     Vector3 position;
     Vector3 normal;
-    Vector3 tangent;
-    Vector3 bitangent;
-    TexCoord texCoord0;
-    PackedColor color = Color::White().Pack();
+    Vector4 tangent;
+    Vector2 texCoord0;
+    Color color = Color::White();
 };
 
 struct DeviceQueue
@@ -176,7 +169,7 @@ public:
 
     Buffer* CreateBuffer(BufferType type, size_t size);
 
-    Texture* CreateTexture(const TextureSettings& info, size_t size = 0, void* data = nullptr);
+    Texture* CreateTexture(const TextureSettings& info, size_t size = 0, const void* data = nullptr);
 
     Framebuffer* CreateFramebuffer(const FramebufferSettings& info);
 
@@ -252,6 +245,7 @@ public:
     Texture* m_WhiteTexture;
     Texture* m_GrayTexture;
     Texture* m_GreenTexture;
+    Texture* m_NormalTexture;
 
 };
 

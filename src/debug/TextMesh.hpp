@@ -11,9 +11,9 @@ class TextMesh
 public:
     TextMesh(Device* device, const Font& font);
 
-    float Draw(const std::string& str, float x, float y, PackedColor color = Color::White().Pack());
+    float Draw(const std::string& str, float x, float y, Color color = Color::White());
 
-    float Draw(char c, float screenX, float screenY, PackedColor color = Color::White().Pack());
+    float Draw(char c, float screenX, float screenY, Color color = Color::White());
 
     void Clear();
 

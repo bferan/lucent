@@ -1,38 +1,6 @@
-#version 450
-#extension GL_ARB_separate_shader_objects : enable
 
-#define PI 3.14159265358979323846
-
-vec2 Hammersley(uint i, uint n)
-{
-    // Reverse bits to generate Van der Corput value
-    uint bits = i;
-    bits = (bits << 16u) | (bits >> 16u);
-    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
-    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
-    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
-    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
-    float v = float(bits) * 2.3283064365386963e-10; // / 0x100000000
-    return vec2(float(i)/float(n), v);
-}
-
-// Generate a tangent-space sample biased around a GGX lobe
-vec3 SampleBiasedGGX(vec2 rand, float roughness)
-{
-    float a = roughness * roughness;
-
-    float phi = rand.x * 2.0 * PI;
-    float cosTheta = sqrt((1.0 - rand.y)/(1.0 + (a*a - 1.0)*rand.y));
-    float sinTheta = sqrt(1.0 - cosTheta*cosTheta);
-
-    return vec3(sinTheta*cos(phi), sinTheta*sin(phi), cosTheta);
-}
-
-layout(location = 0) attribute vec3 a_Position;
-layout(location = 1) attribute vec3 a_Normal;
-layout(location = 2) attribute vec3 a_Tangent;
-layout(location = 3) attribute vec3 a_Bitangent;
-layout(location = 4) attribute vec2 a_UV;
+#include "shared/VertexLayout"
+#include "shared/PBR"
 
 layout(location = 0) varying vec3 v_Direction;
 
