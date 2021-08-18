@@ -17,7 +17,7 @@ class Device;
 class Importer
 {
 public:
-    Importer(Device* device);
+    explicit Importer(Device* device);
 
     Entity Import(Scene& scene, const std::string& modelFile);
 

@@ -27,18 +27,42 @@ Entity Importer::Import(Scene& scene, const std::string& modelFile)
     std::string err;
     std::string warn;
 
-    auto result = loader.LoadBinaryFromFile(&model, &err, &warn, modelFile);
+    bool result = false;
+    if (modelFile.ends_with(".glb"))
+    {
+        result = loader.LoadBinaryFromFile(&model, &err, &warn, modelFile);
+    }
+    else if (modelFile.ends_with(".gltf"))
+    {
+        result = loader.LoadASCIIFromFile(&model, &err, &warn, modelFile);
+    }
     LC_ASSERT(result);
 
     ImportMaterials(scene, model);
     ImportMeshes(scene, model);
 
-    Entity lastRoot;
-    for (auto& node : model.nodes)
+    // Load all entities from the default scene
+    std::vector<Entity> rootEntities;
+    if (model.defaultScene >= 0)
     {
-        lastRoot = ImportEntities(scene, model, node, Entity{});
+        auto& nodeIndices = model.scenes[model.defaultScene].nodes;
+        rootEntities.reserve(nodeIndices.size());
+        for (auto nodeIndex : nodeIndices)
+        {
+            auto& node = model.nodes[nodeIndex];
+            rootEntities.push_back(ImportEntities(scene, model, node, Entity{}));
+        }
+
+        const Quaternion flip = Quaternion::AxisAngle(Vector3::Up(), kPi);
+        for (auto entity : rootEntities)
+        {
+            // Flip Z-axis to have -Z facing forward
+            auto& transform = entity.Get<Transform>();
+            transform.rotation = flip * transform.rotation;
+            ApplyTransform(entity);
+        }
     }
-    return lastRoot;
+    return rootEntities.empty() ? Entity{} : rootEntities.back();
 }
 
 static Texture* ImportTexture(Device* device, const gltf::Model& model, const gltf::TextureInfo& textureInfo,

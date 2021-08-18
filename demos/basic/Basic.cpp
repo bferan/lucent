@@ -20,25 +20,51 @@ public:
 
         Importer importer(&m_Device);
 
-        importer.Import(m_Scene, "models/DamagedHelmet.glb");
+        auto helmet = importer.Import(m_Scene, "models/DamagedHelmet.glb");
+        helmet.Get<Transform>().position += Vector3::Up();
+        ApplyTransform(helmet);
+
+        auto box = importer.Import(m_Scene, "models/BoxTextured.glb");
+        box.Get<Transform>().position = Vector3(2.0f, 0.0, -1.0f);
+        ApplyTransform(box);
+
+        m_Rotate = helmet;
 
         auto plane = importer.Import(m_Scene, "models/Plane.glb");
-        auto& xform = plane.Get<Transform>();
-        xform.position += Vector3::Down();
-        xform.scale = 10.0f;
+        auto& planeTransform = plane.Get<Transform>();
+        planeTransform.position += Vector3::Down();
+        planeTransform.scale = 10.0f;
+        ApplyTransform(plane);
 
         HdrImporter hdrImporter(&m_Device);
         m_Scene.environment = hdrImporter.Import("textures/chinese_garden_4k.hdr");
 
         // Create camera entity
         m_Scene.mainCamera = m_Scene.CreateEntity();
-        m_Scene.mainCamera.Assign(Transform{ .position = { 0.0f, 2.0f, 2.0f }});
         m_Scene.mainCamera.Assign(Camera{ .horizontalFov = kHalfPi, .aspectRatio = 1600.0f / 900.0f });
+        m_Scene.mainCamera.Assign(Transform{ .position = { 0.0f, 2.0f, 2.0f }});
+
+        auto lightPosition = Vector3{ 3.0f, 4.0f, -4.1f };
+        auto lightRotation = Matrix4::Rotation(Matrix4::LookAt(lightPosition, Vector3::Zero()));
+
+        m_Scene.mainDirectionalLight = m_Scene.CreateEntity();
+        m_Scene.mainDirectionalLight.Assign(DirectionalLight{});
+        m_Scene.mainDirectionalLight.Assign(Transform{
+            .rotation = lightRotation,
+            .position = lightPosition
+        });
     }
 
     void Draw(float dt)
     {
         auto& input = m_Device.m_Input->GetState();
+
+        float rotateSpeed = 0.5f;
+        auto rotate = Quaternion::AxisAngle(Vector3::Up(), rotateSpeed * dt);
+
+        auto& rot = m_Rotate.Get<Transform>().rotation;
+        rot = rotate * rot;
+        ApplyTransform(m_Rotate);
 
         if (!m_Renderer->m_DebugConsole->Active())
         {
@@ -85,8 +111,9 @@ public:
     Device m_Device{};
     std::unique_ptr<SceneRenderer> m_Renderer{};
 
+    Entity m_Rotate;
+
     Scene m_Scene{};
-    Entity m_Player;
 };
 
 }

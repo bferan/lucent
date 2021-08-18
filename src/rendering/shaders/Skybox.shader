@@ -18,7 +18,10 @@ layout(set = 0, binding = 0) uniform Global
 layout(set = 0, binding = 1) uniform samplerCube u_EnvIrradiance;
 layout(set = 0, binding = 2) uniform samplerCube u_EnvSpecular;
 layout(set = 0, binding = 3) uniform sampler2D u_BRDF;
+layout(set = 0, binding = 4) uniform sampler2D u_ShadowMap;
+
 layout(set = 1, binding = 0) uniform samplerCube u_Environment;
+
 
 void vert()
 {

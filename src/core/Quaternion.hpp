@@ -17,6 +17,27 @@ public:
         return { s * axis.x, s * axis.y, s * axis.z, c };
     }
 
+    static Quaternion FromTo(Vector3 fromDirection, Vector3 toDirection, Vector3 up = Vector3::Up())
+    {
+        fromDirection.Normalize();
+        toDirection.Normalize();
+
+        auto dot = fromDirection.Dot(toDirection);
+
+        if (Approximately(dot, -1.0f))
+        {
+            return Quaternion::AxisAngle(up, kPi);
+        }
+        else if (Approximately(dot, 1.0f))
+        {
+            return {};
+        }
+
+        auto axis = fromDirection.Cross(toDirection);
+        auto angle = Acos(dot);
+        return Quaternion::AxisAngle(axis, angle);
+    }
+
 public:
     Quaternion()
         : Quaternion(0.0f, 0.0f, 0.0f, 1.0f)

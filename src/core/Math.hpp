@@ -20,9 +20,9 @@ inline float Sin(float radians)
     return std::sin(radians);
 }
 
-inline float Asin(float radians)
+inline float Asin(float x)
 {
-    return std::asin(radians);
+    return std::asin(x);
 }
 
 inline float Cos(float radians)
@@ -30,9 +30,9 @@ inline float Cos(float radians)
     return std::cos(radians);
 }
 
-inline float Acos(float radians)
+inline float Acos(float x)
 {
-    return std::acos(radians);
+    return std::acos(x);
 }
 
 inline float Tan(float radians)
@@ -40,9 +40,9 @@ inline float Tan(float radians)
     return std::tan(radians);
 }
 
-inline float Atan(float radians)
+inline float Atan(float x)
 {
-    return std::atan(radians);
+    return std::atan(x);
 }
 
 inline float Atan2(float x, float y)
@@ -88,6 +88,11 @@ inline float Abs(float x)
 inline float CopySign(float value, float sign)
 {
     return std::copysign(value, sign);
+}
+
+inline bool Approximately(float x, float y, float epsilon = FLT_EPSILON)
+{
+    return Abs(x - y) <= epsilon;
 }
 
 template<typename T>

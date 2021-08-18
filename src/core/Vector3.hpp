@@ -32,6 +32,14 @@ public:
     {
         return { 0.0f, 0.0f, 1.0f };
     }
+    inline static Vector3 One()
+    {
+        return { 1.0f, 1.0f, 1.0f };
+    }
+    inline static Vector3 Zero()
+    {
+        return { 0.0f, 0.0f, 0.0f };
+    }
 
 public:
     Vector3()
@@ -65,10 +73,24 @@ public:
     void Normalize()
     {
         auto length = Length();
-        if (length != 0.0)
+        if (!Approximately(length, 0.0f))
         {
             (*this) *= 1.0f / Length();
         }
+    }
+
+    Vector3 Cross(Vector3 rhs) const
+    {
+        return {
+            y * rhs.z - z * rhs.y,
+            z * rhs.x - x * rhs.z,
+            x * rhs.y - y * rhs.x
+        };
+    }
+
+    float Dot(Vector3 rhs) const
+    {
+        return x * rhs.x + y * rhs.y + z * rhs.z;
     }
 
     Vector3& operator+=(const Vector3& rhs)

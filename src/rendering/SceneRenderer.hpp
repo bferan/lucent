@@ -7,21 +7,15 @@
 namespace lucent
 {
 
-struct UBO
-{
-    Matrix4 model;
-    Matrix4 view;
-    Matrix4 proj;
-
-    Vector3 cameraPos;
-};
-
 class SceneRenderer
 {
 public:
     explicit SceneRenderer(Device* device);
 
     void Render(Scene& scene);
+
+private:
+    void RenderShadows(Scene& scene);
 
 public:
     Device* m_Device;
@@ -30,10 +24,16 @@ public:
     Pipeline* m_DefaultPipeline;
     Pipeline* m_SkyboxPipeline;
 
-    Buffer* m_UniformBuffer;
-
     // TEMP
     std::unique_ptr<DebugConsole> m_DebugConsole;
+
+    // Shadows
+    Pipeline* m_ShadowPipeline;
+    Texture* m_ShadowMap;
+    Texture* m_ShadowDepth;
+    Framebuffer* m_ShadowFramebuffer;
+    Matrix4 m_ShadowViewProj;
+    Vector3 m_ShadowDir;
 };
 
 }

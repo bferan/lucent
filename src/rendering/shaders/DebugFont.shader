@@ -12,7 +12,9 @@ void vert()
 {
     v_UV = a_UV;
     v_Color = a_Color;
-    gl_Position = vec4(a_Position, 1.0);
+    vec4 pos = vec4(a_Position, 1.0);
+    pos.y = -pos.y;
+    gl_Position = pos;
 }
 
 void frag()

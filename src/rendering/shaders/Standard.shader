@@ -1,31 +1,39 @@
-
 #include "shared/VertexLayout"
+#include "shared/PBR"
 
-layout(location = 0) varying vec2 v_UV;
-layout(location = 1) varying vec3 v_Tangent;
-layout(location = 2) varying vec3 v_Bitangent;
-layout(location = 3) varying vec3 v_Normal;
-layout(location = 4) varying vec3 v_Pos;
+const float C = 80.0;
 
-layout(location = 0) out vec4 o_Color;
+layout(location=0) varying Vertex
+{
+    vec2 v_UV;
+    vec3 v_Tangent;
+    vec3 v_Bitangent;
+    vec3 v_Normal;
+    vec3 v_Pos;
+};
 
-layout(set = 0, binding = 0) uniform Globals
+layout(location=0) out vec4 o_Color;
+
+layout(set=0, binding=0) uniform Globals
 {
     mat4 u_Model;
     mat4 u_View;
     mat4 u_Proj;
+    mat4 u_LightViewProj;
+    vec3 u_LightDir;
     vec3 u_CameraPos;
 };
 
-layout(set = 0, binding = 1) uniform samplerCube u_EnvIrradiance;
-layout(set = 0, binding = 2) uniform samplerCube u_EnvSpecular;
-layout(set = 0, binding = 3) uniform sampler2D u_BRDF;
+layout(set=0, binding=1) uniform samplerCube u_EnvIrradiance;
+layout(set=0, binding=2) uniform samplerCube u_EnvSpecular;
+layout(set=0, binding=3) uniform sampler2D u_BRDF;
+layout(set=0, binding=4) uniform sampler2D u_ShadowMap;
 
-layout(set = 1, binding = 0) uniform sampler2D u_BaseColor;
-layout(set = 1, binding = 1) uniform sampler2D u_MetalRoughness;
-layout(set = 1, binding = 2) uniform sampler2D u_Normal;
-layout(set = 1, binding = 3) uniform sampler2D u_AO;
-layout(set = 1, binding = 4) uniform sampler2D u_Emissive;
+layout(set=1, binding=0) uniform sampler2D u_BaseColor;
+layout(set=1, binding=1) uniform sampler2D u_MetalRoughness;
+layout(set=1, binding=2) uniform sampler2D u_Normal;
+layout(set=1, binding=3) uniform sampler2D u_AO;
+layout(set=1, binding=4) uniform sampler2D u_Emissive;
 
 const vec3 kDielectricSpecular = vec3(0.04);
 const vec3 kBlack = vec3(0.0);
@@ -44,6 +52,22 @@ void vert()
     v_Pos = world.xyz;
 
     gl_Position = u_Proj * u_View * world;
+}
+
+float GGX_G2_fSpec(float NdotL, float NdotV, float a2)
+{
+    float i = max(NdotL, 0.0);
+    float o = max(NdotV, 0.0);
+
+    return 0.5 / (o * sqrt(a2 + i*(i-a2*i)) + i * sqrt(a2 + o*(o - a2*o)));
+}
+
+float GGX_D(vec3 m, vec3 n, float a2)
+{
+    float NdotM = dot(n, m);
+    float denom = 1.0 + NdotM * NdotM * (a2 - 1);
+
+    return NdotM > 0.0 ? a2 / (PI * denom * denom) : 0.0;
 }
 
 void frag()
@@ -84,14 +108,50 @@ void frag()
 
     vec2 brdf = texture(u_BRDF, vec2(NdotV, rough)).rg;
 
-    N.y = -N.y;// TMP
-    vec3 ambient = kD * albedo * texture(u_EnvIrradiance, N).rgb;
+    vec3 N_adj = vec3(N.x, -N.y, N.z); // TMP
+    vec3 ambient = kD * albedo * texture(u_EnvIrradiance, N_adj).rgb;
     ambient += envSpecular * (F * brdf.x + brdf.y);
 
     float ao = texture(u_AO, v_UV).r;
-
     shaded += ao * ambient;
+
+    // Emissive
     shaded += texture(u_Emissive, v_UV).rgb;
+
+    //// Directional light:
+    vec3 L = -u_LightDir;
+    float NdotL = dot(N, L);
+    if (NdotL > 0.0)
+    {
+        vec3 H = normalize(L + V);
+
+        float fresnel_H = pow(1.0 - max(dot(H, L), 0.0), 5.0);
+        vec3 F_H = F0 + (1 - F0) * fresnel_H;
+
+        vec3 cLight = vec3(1.0);
+
+        vec3 fL_diff = kD * (1.0/PI) * albedo;
+        vec3 fL_spec = F_H * GGX_G2_fSpec(NdotL, NdotV, a2) * GGX_D(H, N, a2);
+
+        vec3 fL = fL_diff + fL_spec;
+        vec3 contrib = PI * fL * cLight * NdotL;
+
+        // Test shadowing:
+        vec4 lightPos = u_LightViewProj * vec4(v_Pos, 1.0);;
+        vec2 lightCoords = 0.5 * lightPos.xy + vec2(0.5);
+
+        float ref = texture(u_ShadowMap, lightCoords).r;
+        float depth = exp(-C * lightPos.z);
+
+        // Temp bounds check
+        float shadow = all(lessThan(abs(lightPos.xyz), vec3(0.98))) ? depth * ref : 1.0;
+        shadow = clamp(shadow, 0.0, 1.0);
+
+        contrib *= shadow;
+        shaded += contrib;
+    }
+
+
 
     o_Color = vec4(shaded, 1.0);
 }

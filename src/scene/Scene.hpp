@@ -16,6 +16,9 @@ struct Entity
     T& Get();
 
     template<typename T>
+    bool Has();
+
+    template<typename T>
     void Assign(T&& component);
 
     template<typename T>
@@ -32,12 +35,15 @@ struct Transform
     Vector3 position;    // 12
     float scale = 1.0f;         // 4
     EntityID parent;       // 4
+    Matrix4 model;
 };
 
 struct Parent
 {
     std::vector<EntityID> children;
 };
+
+void ApplyTransform(Entity entity);
 
 struct MeshInstance
 {
@@ -99,6 +105,8 @@ public:
     Entity CreateEntity();
     void Destroy(Entity entity);
 
+    Entity Find(EntityID id);
+
     template<typename... Cs, typename F>
     void Each(F&& func);
 
@@ -111,6 +119,7 @@ public:
     Environment environment;
 
     Entity mainCamera;
+    Entity mainDirectionalLight;
 
 private:
     friend class Entity;
@@ -137,6 +146,12 @@ template<typename T>
 void Entity::Remove()
 {
     scene->GetPool<T>().Remove(id);
+}
+
+template<typename T>
+bool Entity::Has()
+{
+    return scene->GetPool<T>().Contains(id);
 }
 
 template<typename T>
@@ -189,5 +204,6 @@ void Scene::Each(F&& func)
         }
     }
 }
+
 
 }

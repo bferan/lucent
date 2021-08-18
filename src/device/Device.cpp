@@ -72,6 +72,12 @@ static VkFormat TextureFormatToVkFormat(TextureFormat format)
     case TextureFormat::kRGBA8:
         return VK_FORMAT_R8G8B8A8_UNORM;
 
+    case TextureFormat::kR32F:
+        return VK_FORMAT_R32_SFLOAT;
+
+    case TextureFormat::kRG32F:
+        return VK_FORMAT_R32G32_SFLOAT;
+
     case TextureFormat::kRGBA32F:
         return VK_FORMAT_R32G32B32A32_SFLOAT;
 
@@ -102,6 +108,8 @@ static VkImageUsageFlags TextureFormatToUsage(TextureFormat format)
     case TextureFormat::kR8:
     case TextureFormat::kRGBA8_SRGB:
     case TextureFormat::kRGBA8:
+    case TextureFormat::kRG32F:
+    case TextureFormat::kR32F:
     case TextureFormat::kRGBA32F:
         // TODO: Narrow this down
         return VK_IMAGE_USAGE_TRANSFER_DST_BIT
@@ -143,6 +151,9 @@ static VkSamplerAddressMode TextureAddressModeToVk(TextureAddressMode mode)
 
     case TextureAddressMode::kClampToEdge:
         return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+
+    case TextureAddressMode::kClampToBorder:
+        return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
 
     default:
         LC_ASSERT(0 && "Invalid address mode");
@@ -189,10 +200,10 @@ void Device::CreateQuad()
     std::vector<uint32> indices;
 
     vertices.assign({
-        { .position = { -1.0f, -1.0f, 0.0f }, .texCoord0 = { 0.0f, 1.0f }},
-        { .position = { 1.0f, -1.0f, 0.0f }, .texCoord0 = { 1.0f, 1.0f }},
-        { .position = { 1.0f, 1.0f, 0.0f }, .texCoord0 = { 1.0f, 0.0f }},
-        { .position = { -1.0f, 1.0f, 0.0f }, .texCoord0 = { 0.0f, 0.0f }}
+        { .position = { -1.0f, -1.0f, 0.0f }, .texCoord0 = { 0.0f, 0.0f }},
+        { .position = { -1.0f, 1.0f, 0.0f }, .texCoord0 = { 0.0f, 1.0f }},
+        { .position = { 1.0f, 1.0f, 0.0f }, .texCoord0 = { 1.0f, 1.0f }},
+        { .position = { 1.0f, -1.0f, 0.0f }, .texCoord0 = { 1.0f, 0.0f }}
     });
 
     indices.assign({ 0, 1, 2, 2, 3, 0 });
@@ -754,9 +765,9 @@ std::unique_ptr<Pipeline> Device::CreatePipeline(const PipelineSettings& setting
     };
 
     auto viewport = VkViewport{
-        .x = 0.0f, .y = static_cast<float>(framebuffer.extent.height),
+        .x = 0.0f, .y = 0.0f,
         .width = static_cast<float>(framebuffer.extent.width),
-        .height = -static_cast<float>(framebuffer.extent.height),
+        .height = static_cast<float>(framebuffer.extent.height),
         .minDepth = 0.0f, .maxDepth = 1.0f
     };
 
@@ -995,7 +1006,7 @@ Texture* Device::CreateTexture(const TextureSettings& info, size_t size, const v
         .compareOp = VK_COMPARE_OP_ALWAYS, // TODO: Change for shadow maps
         .minLod = 0.0f,
         .maxLod = VK_LOD_CLAMP_NONE,
-        .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+        .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
         .unnormalizedCoordinates = VK_FALSE
     };
 
@@ -1304,7 +1315,7 @@ Context* Device::CreateContext()
     return &ctx;
 }
 
-const Framebuffer& Device::AcquireFramebuffer()
+const Framebuffer* Device::AcquireFramebuffer()
 {
     // Acquire image
     vkAcquireNextImageKHR(m_Handle,
@@ -1314,7 +1325,7 @@ const Framebuffer& Device::AcquireFramebuffer()
         VK_NULL_HANDLE,
         &m_NextImageIndex);
 
-    return m_Swapchain.framebuffers[m_NextImageIndex];
+    return &m_Swapchain.framebuffers[m_NextImageIndex];
 }
 
 void Device::Submit(Context* context)

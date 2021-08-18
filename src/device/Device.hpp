@@ -66,6 +66,8 @@ enum class TextureFormat
     kRGBA8_SRGB,
     kRGBA8,
     kRGBA32F,
+    kRG32F,
+    kR32F,
     kDepth
 };
 
@@ -78,7 +80,8 @@ enum class TextureShape
 enum class TextureAddressMode
 {
     kRepeat,
-    kClampToEdge
+    kClampToEdge,
+    kClampToBorder
 };
 
 struct Texture
@@ -173,7 +176,7 @@ public:
 
     Framebuffer* CreateFramebuffer(const FramebufferSettings& info);
 
-    const Framebuffer& AcquireFramebuffer();
+    const Framebuffer* AcquireFramebuffer();
 
     Context* CreateContext();
     void Submit(Context* context);

@@ -8,8 +8,8 @@ namespace lucent
 constexpr float kScreenWidth = 1600.0f;
 constexpr float kScreenHeight = 900.0f;
 
-constexpr size_t kVertBufferSize = (1 << 18);
-constexpr size_t kIdxBufferSize = (1 << 18);
+constexpr size_t kVertBufferSize = (1 << 20);
+constexpr size_t kIdxBufferSize = (1 << 20);
 
 TextMesh::TextMesh(Device* device, const Font& font)
     : m_Font(font), m_Device(device), m_Dirty(true)

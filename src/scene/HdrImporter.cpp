@@ -73,9 +73,9 @@ void HdrImporter::RenderToCube(Pipeline* pipeline, Texture* src, Texture* dst, i
     ctx.Begin();
     for (int face = 0; face < LC_ARRAY_SIZE(views); ++face)
     {
-        auto& view = views[face];
+        auto view = Matrix4::RotationX(kPi) * views[face];
 
-        ctx.BeginRenderPass(*m_Offscreen, VkExtent2D{ size, size });
+        ctx.BeginRenderPass(m_Offscreen, VkExtent2D{ size, size });
         ctx.Bind(pipeline);
 
         ctx.Bind(m_Device->m_Cube.indices);
@@ -105,7 +105,7 @@ void HdrImporter::RenderToQuad(Pipeline* pipeline, Texture* dst, uint32 size)
     auto& ctx = *m_Context;
 
     ctx.Begin();
-    ctx.BeginRenderPass(*m_Offscreen, VkExtent2D{ size, size });
+    ctx.BeginRenderPass(m_Offscreen, VkExtent2D{ size, size });
     ctx.Bind(pipeline);
 
     ctx.Bind(m_Device->m_Quad.indices);

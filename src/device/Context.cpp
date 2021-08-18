@@ -72,8 +72,9 @@ void Context::End()
     LC_ASSERT(result == VK_SUCCESS);
 }
 
-void Context::BeginRenderPass(const Framebuffer& fbuffer, VkExtent2D extent)
+void Context::BeginRenderPass(const Framebuffer* framebuffer, VkExtent2D extent)
 {
+    auto& fbuffer = *framebuffer;
     if (fbuffer.usage == FramebufferUsage::SwapchainImage)
         m_SwapchainWritten = true;
 
@@ -81,9 +82,9 @@ void Context::BeginRenderPass(const Framebuffer& fbuffer, VkExtent2D extent)
         extent = fbuffer.extent;
 
     auto viewport = VkViewport{
-        .x = 0.0f, .y = static_cast<float>(extent.height),
+        .x = 0.0f, .y = 0.0f,
         .width = static_cast<float>(extent.width),
-        .height = -static_cast<float>(extent.height),
+        .height = static_cast<float>(extent.height),
         .minDepth = 0.0f, .maxDepth = 1.0f
     };
     vkCmdSetViewport(m_CommandBuffer, 0, 1, &viewport);
@@ -498,6 +499,64 @@ void Context::ResetScratchBindings()
         m_ScratchDrawOffset = m_ScratchBindings.back().offset + m_ScratchBindings.back().size;
         m_ScratchBindings.clear();
     }
+}
+
+void Context::TransitionAttachment(Texture* texture)
+{
+    auto imageBarrier = VkImageMemoryBarrier{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+        .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image = texture->image,
+        .subresourceRange = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1
+        }
+    };
+
+    vkCmdPipelineBarrier(m_CommandBuffer,
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        VK_DEPENDENCY_BY_REGION_BIT,
+        0, nullptr,
+        0, nullptr,
+        1, &imageBarrier);
+}
+
+void Context::TransitionImage(Texture* texture)
+{
+    auto imageBarrier = VkImageMemoryBarrier{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .srcAccessMask = VK_ACCESS_NONE_KHR,
+        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .newLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image = texture->image,
+        .subresourceRange = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1
+        }
+    };
+
+    vkCmdPipelineBarrier(m_CommandBuffer,
+        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        VK_DEPENDENCY_BY_REGION_BIT,
+        0, nullptr,
+        0, nullptr,
+        1, &imageBarrier);
 }
 
 }

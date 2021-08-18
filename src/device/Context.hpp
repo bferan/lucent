@@ -16,7 +16,7 @@ public:
     void Begin();
     void End();
 
-    void BeginRenderPass(const Framebuffer& fbuffer, VkExtent2D extent = {});
+    void BeginRenderPass(const Framebuffer* framebuffer, VkExtent2D extent = {});
     void EndRenderPass() const;
 
     void Bind(const Pipeline* pipeline);
@@ -40,6 +40,9 @@ public:
         Texture* src, int srcLayer, int srcLevel,
         Texture* dst, int dstLayer, int dstLevel,
         uint32 width, uint32 height);
+
+    void TransitionAttachment(Texture* texture);
+    void TransitionImage(Texture* texture);
 
 private:
     using NullBinding = std::monostate;
