@@ -47,6 +47,7 @@ struct PipelineSettings
 
     Framebuffer* framebuffer = nullptr;
     bool depthTestEnable = true;
+    bool depthClampEnable = false;
 };
 
 struct Pipeline

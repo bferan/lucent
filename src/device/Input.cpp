@@ -27,7 +27,7 @@ void Input::KeyCallback(GLFWwindow* window, int key, int scancode, int action, i
 {
     auto& state = ((Input*)glfwGetWindowUserPointer(window))->m_State;
 
-    if (key == GLFW_KEY_UNKNOWN) return;
+    if (key == GLFW_KEY_UNKNOWN || key >= state.keysDown.size()) return;
 
     state.keysDown[key] = action != GLFW_RELEASE;
     state.keysPressed[key] |= action == GLFW_PRESS;
@@ -46,7 +46,7 @@ void Input::MouseButtonCallback(GLFWwindow* window, int button, int action, int 
 {
     auto& state = ((Input*)glfwGetWindowUserPointer(window))->m_State;
 
-    if (button >= GLFW_MOUSE_BUTTON_LAST || button < 0) return;
+    if (button >= GLFW_MOUSE_BUTTON_LAST || button < 0 || button >= state.mouseButtonsDown.size()) return;
 
     state.mouseButtonsDown[button] = action != GLFW_RELEASE;
     state.mouseButtonsPressed[button] |= action == GLFW_PRESS;

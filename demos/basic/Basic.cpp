@@ -20,13 +20,24 @@ public:
 
         Importer importer(&m_Device);
 
+        // Axes
+        auto boxX = importer.Import(m_Scene, "models/BoxTextured.glb");
+        boxX.Get<Transform>().position = Vector3(5.0f, -0.5, 0.0f);
+        ApplyTransform(boxX);
+        m_Scene.materials[0].baseColorFactor = Color::Red();
+
+        auto boxZ = importer.Import(m_Scene, "models/BoxTextured.glb");
+        boxZ.Get<Transform>().position = Vector3(0.0f, -0.5, 5.0f);
+        ApplyTransform(boxZ);
+        m_Scene.materials[1].baseColorFactor = Color::Blue();
+
         auto helmet = importer.Import(m_Scene, "models/DamagedHelmet.glb");
         helmet.Get<Transform>().position += Vector3::Up();
         ApplyTransform(helmet);
 
-        auto box = importer.Import(m_Scene, "models/BoxTextured.glb");
-        box.Get<Transform>().position = Vector3(2.0f, 0.0, -1.0f);
-        ApplyTransform(box);
+        auto helmet2 = importer.Import(m_Scene, "models/DamagedHelmet.glb");
+        helmet2.Get<Transform>().position = { 35.0f, 1.0f, 35.0f };
+        ApplyTransform(helmet2);
 
         m_Rotate = helmet;
 
@@ -37,21 +48,30 @@ public:
         ApplyTransform(plane);
 
         HdrImporter hdrImporter(&m_Device);
-        m_Scene.environment = hdrImporter.Import("textures/chinese_garden_4k.hdr");
+        m_Scene.environment = hdrImporter.Import("textures/shanghai_bund_4k.hdr");
 
         // Create camera entity
         m_Scene.mainCamera = m_Scene.CreateEntity();
-        m_Scene.mainCamera.Assign(Camera{ .horizontalFov = kHalfPi, .aspectRatio = 1600.0f / 900.0f });
+        m_Scene.mainCamera.Assign(Camera{ .verticalFov = kHalfPi, .aspectRatio = 1600.0f / 900.0f });
         m_Scene.mainCamera.Assign(Transform{ .position = { 0.0f, 2.0f, 2.0f }});
 
-        auto lightPosition = Vector3{ 3.0f, 4.0f, -4.1f };
-        auto lightRotation = Matrix4::Rotation(Matrix4::LookAt(lightPosition, Vector3::Zero()));
+        // Create directional light
+        auto lightPos = Vector3(3.0f, 4.0f, -4.1f);
 
         m_Scene.mainDirectionalLight = m_Scene.CreateEntity();
-        m_Scene.mainDirectionalLight.Assign(DirectionalLight{});
+
+        m_Scene.mainDirectionalLight.Assign(DirectionalLight{
+            .cascades = {
+                { .start = 0.0f, .end = 10.0f },
+                { .start = 13.0f, .end = 45.0f },
+                { .start = 40.0f, .end = 80.0f },
+                { .start = 75.0f, .end = 150.0f }
+            }
+        });
+
         m_Scene.mainDirectionalLight.Assign(Transform{
-            .rotation = lightRotation,
-            .position = lightPosition
+            .rotation = Matrix4::Rotation(Matrix4::LookAt(lightPos, Vector3::Zero())),
+            .position = lightPos
         });
     }
 

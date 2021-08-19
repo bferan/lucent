@@ -17,6 +17,8 @@ public:
 private:
     void RenderShadows(Scene& scene);
 
+    void CalculateCascades(Scene& scene);
+
 public:
     Device* m_Device;
     Context* m_Context;

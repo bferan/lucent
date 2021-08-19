@@ -40,6 +40,14 @@ public:
     {
         return { 0.0f, 0.0f, 0.0f };
     }
+    inline static Vector3 Infinity()
+    {
+        return { HUGE_VALF, HUGE_VALF, HUGE_VALF };
+    }
+    inline static Vector3 NegativeInfinity()
+    {
+        return { -HUGE_VALF, -HUGE_VALF, -HUGE_VALF };
+    }
 
 public:
     Vector3()
@@ -146,6 +154,23 @@ inline Vector3 operator+(Vector3 lhs, const Vector3& rhs)
 inline Vector3 operator-(Vector3 lhs, const Vector3& rhs)
 {
     return (lhs -= rhs);
+}
+
+inline Vector3 Min(Vector3 lhs, Vector3 rhs)
+{
+    return { Min(lhs.x, rhs.x), Min(lhs.y, rhs.y), Min(lhs.z, rhs.z) };
+}
+
+inline Vector3 Max(Vector3 lhs, Vector3 rhs)
+{
+    return { Max(lhs.x, rhs.x), Max(lhs.y, rhs.y), Max(lhs.z, rhs.z) };
+}
+
+inline bool Approximately(Vector3 lhs, Vector3 rhs)
+{
+    return Approximately(lhs.x, rhs.x) &&
+        Approximately(lhs.y, rhs.y) &&
+        Approximately(lhs.z, rhs.z);
 }
 
 }

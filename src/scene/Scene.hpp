@@ -75,7 +75,7 @@ struct Material
 
 struct Camera
 {
-    float horizontalFov = 1.0f;
+    float verticalFov = 1.0f;
     float aspectRatio = 1.0f;
     float near = 0.01f;
     float far = 10000.0f;
@@ -94,8 +94,23 @@ struct Environment
 
 struct DirectionalLight
 {
+    static constexpr int kNumCascades = 4;
+    static constexpr int kMapWidth = 2048;
 
+    struct Cascade
+    {
+        float start;
+        float end;
+
+        float worldSpaceTexelSize;
+        Vector4 pos;
+        float width;
+        float depth;
+    };
+
+    Cascade cascades[kNumCascades];
 };
+
 
 struct Scene
 {
@@ -204,6 +219,5 @@ void Scene::Each(F&& func)
         }
     }
 }
-
 
 }

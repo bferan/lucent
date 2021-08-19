@@ -146,13 +146,13 @@ public:
 
     static Matrix4 Perspective(float verticalFov, float aspectRatio, float n, float f)
     {
-        // Compute focal distance 'g' from fov
-        auto g = 1.0f / Tan(verticalFov / 2.0f);
+        // Compute focal distance from fov
+        auto focalLength = 1.0f / Tan(verticalFov / 2.0f);
         auto k = f / (f - n);
 
         return {
-            Vector4(g / aspectRatio, 0.0f, 0.0f, 0.0f),
-            Vector4(0.0f, g, 0.0f, 0.0f),
+            Vector4(focalLength / aspectRatio, 0.0f, 0.0f, 0.0f),
+            Vector4(0.0f, focalLength, 0.0f, 0.0f),
             Vector4(0.0f, 0.0f, k, 1.0f),
             Vector4(0.0f, 0.0f, -n * k, 0.0f)
         };
@@ -167,6 +167,9 @@ public:
     {
         auto back = fromPos - toPos;
         back.Normalize();
+
+        if (Approximately(back, up))
+            up = Vector3::Forward();
 
         auto right = up.Cross(back);
         right.Normalize();

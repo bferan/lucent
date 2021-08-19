@@ -10,6 +10,7 @@ layout(location=0) varying Vertex
     vec3 v_Bitangent;
     vec3 v_Normal;
     vec3 v_Pos;
+    vec4 v_LightPos;
 };
 
 layout(location=0) out vec4 o_Color;
@@ -35,6 +36,13 @@ layout(set=1, binding=2) uniform sampler2D u_Normal;
 layout(set=1, binding=3) uniform sampler2D u_AO;
 layout(set=1, binding=4) uniform sampler2D u_Emissive;
 
+layout(set=2, binding=0) uniform Material
+{
+    vec4 u_BaseColorFactor;
+    float u_MetallicFactor;
+    float u_RoughnessFactor;
+};
+
 const vec3 kDielectricSpecular = vec3(0.04);
 const vec3 kBlack = vec3(0.0);
 
@@ -50,6 +58,7 @@ void vert()
     v_Bitangent = normalize(mat3(u_Model) * bitangent);
     v_Normal    = normalize(mat3(u_Model) * a_Normal);
     v_Pos = world.xyz;
+    v_LightPos = u_LightViewProj * world;
 
     gl_Position = u_Proj * u_View * world;
 }
@@ -73,7 +82,7 @@ float GGX_D(vec3 m, vec3 n, float a2)
 void frag()
 {
     vec4 metallicRoughness = texture(u_MetalRoughness, v_UV);
-    vec3 base = texture(u_BaseColor, v_UV).rgb;
+    vec3 base = texture(u_BaseColor, v_UV).rgb * u_BaseColorFactor.rgb;
 
     vec3 t = normalize(v_Tangent);
     vec3 b = normalize(v_Bitangent);
@@ -83,8 +92,8 @@ void frag()
     nTex.y = -nTex.y;
     vec3 N = mat3(t, b, n) * normalize(nTex);
 
-    float metal = metallicRoughness.b;
-    float rough = metallicRoughness.g;
+    float metal = metallicRoughness.b * u_MetallicFactor;
+    float rough = metallicRoughness.g * u_RoughnessFactor;
 
     vec3 shaded = vec3(0.0);
 
@@ -108,7 +117,7 @@ void frag()
 
     vec2 brdf = texture(u_BRDF, vec2(NdotV, rough)).rg;
 
-    vec3 N_adj = vec3(N.x, -N.y, N.z); // TMP
+    vec3 N_adj = vec3(N.x, -N.y, N.z);// TMP
     vec3 ambient = kD * albedo * texture(u_EnvIrradiance, N_adj).rgb;
     ambient += envSpecular * (F * brdf.x + brdf.y);
 
@@ -118,7 +127,7 @@ void frag()
     // Emissive
     shaded += texture(u_Emissive, v_UV).rgb;
 
-    //// Directional light:
+    // Directional light:
     vec3 L = -u_LightDir;
     float NdotL = dot(N, L);
     if (NdotL > 0.0)
@@ -137,21 +146,21 @@ void frag()
         vec3 contrib = PI * fL * cLight * NdotL;
 
         // Test shadowing:
-        vec4 lightPos = u_LightViewProj * vec4(v_Pos, 1.0);;
+        vec4 lightPos = v_LightPos;
         vec2 lightCoords = 0.5 * lightPos.xy + vec2(0.5);
 
         float ref = texture(u_ShadowMap, lightCoords).r;
         float depth = exp(-C * lightPos.z);
+        float shadow = depth * ref;
 
         // Temp bounds check
-        float shadow = all(lessThan(abs(lightPos.xyz), vec3(0.98))) ? depth * ref : 1.0;
+        shadow = all(lessThan(abs(lightPos.xyz), vec3(0.98))) ? shadow : 1.0;
+
         shadow = clamp(shadow, 0.0, 1.0);
 
         contrib *= shadow;
         shaded += contrib;
     }
-
-
 
     o_Color = vec4(shaded, 1.0);
 }

@@ -6,8 +6,6 @@
 namespace lucent
 {
 
-const int kShadowMapRes = 1024;
-
 SceneRenderer::SceneRenderer(Device* device)
     : m_Device(device)
 {
@@ -21,15 +19,15 @@ SceneRenderer::SceneRenderer(Device* device)
 
     // Shadows
     m_ShadowMap = m_Device->CreateTexture(TextureSettings{
-        .width = kShadowMapRes,
-        .height = kShadowMapRes,
+        .width = DirectionalLight::kMapWidth,
+        .height = DirectionalLight::kMapWidth,
         .format = TextureFormat::kR32F,
         .addressMode = TextureAddressMode::kClampToBorder
     });
 
     m_ShadowDepth = m_Device->CreateTexture(TextureSettings{
-        .width = kShadowMapRes,
-        .height = kShadowMapRes,
+        .width = DirectionalLight::kMapWidth,
+        .height = DirectionalLight::kMapWidth,
         .format = TextureFormat::kDepth
     });
 
@@ -40,7 +38,8 @@ SceneRenderer::SceneRenderer(Device* device)
 
     m_ShadowPipeline = m_Device->CreatePipeline(PipelineSettings{
         .shaderName = "StandardShadow.shader",
-        .framebuffer = m_ShadowFramebuffer
+        .framebuffer = m_ShadowFramebuffer,
+        .depthClampEnable = true
     });
 }
 
@@ -56,7 +55,7 @@ void SceneRenderer::Render(Scene& scene)
         Matrix4::RotationY(-camera.yaw) *
         Matrix4::Translation(-transform.position);
 
-    auto proj = Matrix4::Perspective(camera.horizontalFov, camera.aspectRatio, camera.near, camera.far);
+    auto proj = Matrix4::Perspective(camera.verticalFov, camera.aspectRatio, camera.near, camera.far);
 
     // Draw
     auto& ctx = *m_Context;
@@ -94,6 +93,10 @@ void SceneRenderer::Render(Scene& scene)
             ctx.Bind("u_Normal"_id, material.normalMap);
             ctx.Bind("u_AO"_id, material.aoMap);
             ctx.Bind("u_Emissive"_id, material.emissive);
+
+            ctx.Uniform("u_BaseColorFactor"_id, material.baseColorFactor);
+            ctx.Uniform("u_MetallicFactor"_id, material.metallicFactor);
+            ctx.Uniform("u_RoughnessFactor"_id, material.roughnessFactor);
 
             ctx.Bind(mesh.vertexBuffer);
             ctx.Bind(mesh.indexBuffer);
@@ -133,16 +136,7 @@ void SceneRenderer::RenderShadows(Scene& scene)
 {
     auto& ctx = *m_Context;
 
-    // Find view & projection matrix of directional light
-    auto& light = scene.mainDirectionalLight.Get<Transform>();
-
-    m_ShadowViewProj =
-        Matrix4::Orthographic(10.0f, 10.0f, 15.0f) *
-        Matrix4::RotationX(kPi) *
-        Matrix4::Rotation(light.rotation.Inverse()) *
-        Matrix4::Translation(-light.position);
-
-    m_ShadowDir = -Vector3(Matrix4(light.rotation).c3);
+    CalculateCascades(scene);
 
     ctx.TransitionImage(m_ShadowMap);
     ctx.BeginRenderPass(m_ShadowFramebuffer);
@@ -167,6 +161,98 @@ void SceneRenderer::RenderShadows(Scene& scene)
 
     ctx.EndRenderPass();
     ctx.TransitionAttachment(m_ShadowMap);
+}
+
+void SceneRenderer::CalculateCascades(Scene& scene)
+{
+    auto& viewOrigin = scene.mainCamera.Get<Transform>();
+    auto& view = scene.mainCamera.Get<Camera>();
+
+    auto& lightOrigin = scene.mainDirectionalLight.Get<Transform>();
+    auto& light = scene.mainDirectionalLight.Get<DirectionalLight>();
+
+    auto camToWorld =
+        Matrix4::Translation(viewOrigin.position) *
+            Matrix4::RotationY(view.yaw) *
+            Matrix4::RotationX(view.pitch) *
+            Matrix4::RotationX(kPi); // Flip axes
+
+    auto worldToLight =
+        Matrix4::RotationX(kPi) * // Flip axes
+            Matrix4::Rotation(lightOrigin.rotation.Inverse());
+
+    auto lightToWorld =
+        Matrix4::Rotation(lightOrigin.rotation) *
+            Matrix4::RotationX(kPi); // Flip axes
+
+    auto camToLight = worldToLight * camToWorld;
+
+    auto focalLength = 1.0f / Tan(view.verticalFov / 2.0f);
+
+    for (auto& cascade : light.cascades)
+    {
+        // Determine cascade bounds based on max possible diameter of cascade frustum (ceil to int)
+        auto bottomRight = Vector3(view.aspectRatio, 1.0f, focalLength);
+        auto topLeft = Vector3(-view.aspectRatio, -1.0f, focalLength);
+
+        auto back = (view.near + cascade.start) / focalLength;
+        auto front = (view.near + cascade.end) / focalLength;
+
+        auto backBottomRight = back * bottomRight;
+        auto frontBottomRight = front * bottomRight;
+        auto frontTopLeft = front * topLeft;
+
+        auto diameter = Ceil(Max(
+            (frontTopLeft - backBottomRight).Length(),
+            (frontTopLeft - frontBottomRight).Length()));
+
+        // Determine texel size in world space
+        cascade.worldSpaceTexelSize = diameter / (float)DirectionalLight::kMapWidth;
+
+        // Find position of cam for light to the nearest texel size multiple for stability
+        auto minPos = Vector3::Infinity();
+        auto maxPos = Vector3::NegativeInfinity();
+
+        for (auto dist : { cascade.start, cascade.end })
+        {
+            for (auto x : { -view.aspectRatio, view.aspectRatio })
+            {
+                for (auto y : { -1.0f, 1.0f })
+                {
+                    auto camPos = ((view.near + dist) / focalLength) * Vector3(x, y, focalLength);
+                    auto lightPos = Vector3(camToLight * Vector4(camPos, 1.0f));
+
+                    minPos = Min(minPos, lightPos);
+                    maxPos = Max(maxPos, lightPos);
+                }
+            }
+        }
+        auto texelSize = cascade.worldSpaceTexelSize;
+        auto alignedX = Floor((0.5f * (minPos.x + maxPos.x)) / texelSize) * texelSize;
+        auto alignedY = Floor((0.5f * (minPos.y + maxPos.y)) / texelSize) * texelSize;
+
+        cascade.pos = lightToWorld * Vector4(alignedX, alignedY, minPos.z, 1.0);
+        cascade.width = diameter;
+        cascade.depth = maxPos.z - minPos.z;
+    }
+
+    auto& c0 = light.cascades[0];
+
+    m_ShadowViewProj =
+        Matrix4::Orthographic(c0.width, c0.width, c0.depth) *
+            Matrix4::RotationX(kPi) *
+            Matrix4::Rotation(lightOrigin.rotation.Inverse()) *
+            Matrix4::Translation((Vector3) - c0.pos);
+
+    m_ShadowDir = -Vector3(Matrix4(lightOrigin.rotation).c3);
+
+    // Vertex shader outputs cascade-0 space coords
+    // Enable geometry behind near plane to clip to it so that stuff behind renders into the map
+    // Use frontal view frustum planes to get a cascade blend factor [0,1] & to select appropriate cascade
+    // Find offset and scale to get coords of other cascades from cascade 0
+
+    // Adjust cascade index so that all cascades in a quad use the same cascade?
+
 }
 
 }

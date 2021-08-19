@@ -456,6 +456,11 @@ void Device::CreateDevice()
         });
     }
 
+    auto deviceFeatures = VkPhysicalDeviceFeatures{
+        .depthClamp = VK_TRUE,
+        .samplerAnisotropy = VK_TRUE
+    };
+
     // Create device
     std::vector<const char*> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 
@@ -464,7 +469,8 @@ void Device::CreateDevice()
         .queueCreateInfoCount = static_cast<uint32>(queueCreateInfos.size()),
         .pQueueCreateInfos = queueCreateInfos.data(),
         .enabledExtensionCount = static_cast<uint32>(deviceExtensions.size()),
-        .ppEnabledExtensionNames = deviceExtensions.data()
+        .ppEnabledExtensionNames = deviceExtensions.data(),
+        .pEnabledFeatures = &deviceFeatures
     };
 
     auto result = vkCreateDevice(selectedDevice, &deviceCreateInfo, nullptr, &m_Handle);
@@ -786,7 +792,7 @@ std::unique_ptr<Pipeline> Device::CreatePipeline(const PipelineSettings& setting
 
     auto rasterizationInfo = VkPipelineRasterizationStateCreateInfo{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-        .depthClampEnable = VK_FALSE,
+        .depthClampEnable = static_cast<VkBool32>(settings.depthClampEnable),
         .rasterizerDiscardEnable = VK_FALSE,
         .polygonMode = VK_POLYGON_MODE_FILL,
         .cullMode = VK_CULL_MODE_BACK_BIT,
@@ -1000,7 +1006,7 @@ Texture* Device::CreateTexture(const TextureSettings& info, size_t size, const v
         .addressModeV = addressMode,
         .addressModeW = addressMode,
         .mipLodBias = 0,
-        .anisotropyEnable = VK_FALSE, // TODO: Enable anisotropy
+        .anisotropyEnable = VK_TRUE,
         .maxAnisotropy = m_DeviceProperties.limits.maxSamplerAnisotropy,
         .compareEnable = VK_FALSE,
         .compareOp = VK_COMPARE_OP_ALWAYS, // TODO: Change for shadow maps
