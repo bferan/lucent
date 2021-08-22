@@ -29,13 +29,22 @@ public:
     // TEMP
     std::unique_ptr<DebugConsole> m_DebugConsole;
 
-    // Shadows
-    Pipeline* m_ShadowPipeline;
-    Texture* m_ShadowMap;
-    Texture* m_ShadowDepth;
-    Framebuffer* m_ShadowFramebuffer;
+    // Moment shadows
+    static constexpr int kShadowTargets = DirectionalLight::kNumCascades;
+    Texture* m_MomentMap;
+    Texture* m_MomentTempDepth;
+    Array<Framebuffer*, kShadowTargets> m_MomentMapTargets;
+    Array<Texture*, kShadowTargets> m_MomentDepthTextures;
+    Array<Framebuffer*, kShadowTargets> m_MomentDepthTargets;
+    Pipeline* m_MomentDepthOnly;
+    Pipeline* m_MomentResolveDepth;
+
     Matrix4 m_ShadowViewProj;
+    Matrix4 m_ShadowViewProj1;
     Vector3 m_ShadowDir;
+    Vector4 m_ShadowPlane[3];
+    Vector4 m_ShadowScale[3];
+    Vector4 m_ShadowOffset[3];
 };
 
 }

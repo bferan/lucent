@@ -34,6 +34,10 @@ public:
     void Uniform(DescriptorID id, const T& value);
     void Uniform(DescriptorID id, const uint8* data, size_t size);
 
+    template<typename T>
+    void Uniform(DescriptorID id, uint32 arrayIndex, const T& value);
+    void Uniform(DescriptorID id, uint32 arrayIndex, const uint8* data, size_t size);
+
     void Draw(uint32 indexCount);
 
     void CopyTexture(
@@ -41,8 +45,11 @@ public:
         Texture* dst, int dstLayer, int dstLevel,
         uint32 width, uint32 height);
 
-    void TransitionAttachment(Texture* texture);
-    void TransitionImage(Texture* texture);
+    void AttachmentToImage(Texture* texture);
+    void ImageToAttachment(Texture* texture);
+
+    void DepthAttachmentToImage(Texture* texture);
+    void DepthImageToAttachment(Texture* texture);
 
 private:
     using NullBinding = std::monostate;
@@ -105,6 +112,12 @@ template<typename T>
 void Context::Uniform(DescriptorID id, const T& value)
 {
     Uniform(id, (const uint8*)&value, sizeof(value));
+}
+
+template<typename T>
+void Context::Uniform(DescriptorID id, uint32 arrayIndex, const T& value)
+{
+    Uniform(id, arrayIndex, (const uint8*)&value, sizeof(value));
 }
 
 }

@@ -81,7 +81,10 @@ static VkFormat TextureFormatToVkFormat(TextureFormat format)
     case TextureFormat::kRGBA32F:
         return VK_FORMAT_R32G32B32A32_SFLOAT;
 
-    case TextureFormat::kDepth:
+    case TextureFormat::kDepth16U:
+        return VK_FORMAT_D16_UNORM;
+
+    case TextureFormat::kDepth32F:
         return VK_FORMAT_D32_SFLOAT;
 
     default:
@@ -93,7 +96,8 @@ static VkImageAspectFlags TextureFormatToAspect(TextureFormat format)
 {
     switch (format)
     {
-    case TextureFormat::kDepth:
+    case TextureFormat::kDepth16U:
+    case TextureFormat::kDepth32F:
         return VK_IMAGE_ASPECT_DEPTH_BIT;
 
     default:
@@ -117,8 +121,10 @@ static VkImageUsageFlags TextureFormatToUsage(TextureFormat format)
             | VK_IMAGE_USAGE_SAMPLED_BIT
             | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-    case TextureFormat::kDepth:
-        return VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    case TextureFormat::kDepth32F:
+    case TextureFormat::kDepth16U:
+        return VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
+            | VK_IMAGE_USAGE_SAMPLED_BIT;
 
     default:
         LC_ASSERT(0 && "Invalid texture format");
@@ -132,6 +138,9 @@ static VkImageViewType TextureShapeToViewType(TextureShape shape)
     {
     case TextureShape::k2D:
         return VK_IMAGE_VIEW_TYPE_2D;
+
+    case TextureShape::k2DArray:
+        return VK_IMAGE_VIEW_TYPE_2D_ARRAY;
 
     case TextureShape::kCube:
         return VK_IMAGE_VIEW_TYPE_CUBE;
@@ -303,6 +312,16 @@ Device::~Device()
         FreePipeline(pipeline.get());
     }
 
+    // Destroy framebuffers
+    for (auto& fb : m_Framebuffers)
+    {
+        if (fb->colorImageView) vkDestroyImageView(m_Handle, fb->colorImageView, nullptr);
+        if (fb->depthImageView) vkDestroyImageView(m_Handle, fb->depthImageView, nullptr);
+
+        vkDestroyFramebuffer(m_Handle, fb->handle, nullptr);
+        vkDestroyRenderPass(m_Handle, fb->renderPass, nullptr);
+    }
+
     // Destroy buffers
     for (auto& buff : m_Buffers)
     {
@@ -321,7 +340,6 @@ Device::~Device()
     for (auto& ctx : m_Contexts)
     {
         ctx->Dispose();
-
     }
 
     // Destroy shaders
@@ -351,6 +369,13 @@ Device::~Device()
 
     vkDestroyDevice(m_Handle, nullptr);
     vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
+
+    // Destroy debug messenger
+    auto destroyMessenger = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(
+        m_Instance, "vkDestroyDebugUtilsMessengerEXT");
+    if (destroyMessenger)
+        destroyMessenger(m_Instance, m_DebugMessenger, nullptr);
+
     vkDestroyInstance(m_Instance, nullptr);
 
     glslang::FinalizeProcess();
@@ -360,8 +385,13 @@ Device::~Device()
 
 void Device::CreateInstance()
 {
-    uint32 instanceExtCount;
-    const char** instanceExts = glfwGetRequiredInstanceExtensions(&instanceExtCount);
+    std::vector<const char*> instanceExtensions = {
+        VK_EXT_DEBUG_UTILS_EXTENSION_NAME
+    };
+
+    uint32 glfwExtCount;
+    const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtCount);
+    instanceExtensions.insert(instanceExtensions.end(), glfwExtensions, glfwExtensions + glfwExtCount);
 
     std::vector<const char*> validationLayers = {
         "VK_LAYER_KHRONOS_validation"
@@ -378,12 +408,36 @@ void Device::CreateInstance()
         .pApplicationInfo = &appInfo,
         .enabledLayerCount = static_cast<uint32>(validationLayers.size()),
         .ppEnabledLayerNames = validationLayers.data(),
-        .enabledExtensionCount = instanceExtCount,
-        .ppEnabledExtensionNames = instanceExts
+        .enabledExtensionCount = static_cast<uint32_t>(instanceExtensions.size()),
+        .ppEnabledExtensionNames = instanceExtensions.data()
     };
 
     auto result = vkCreateInstance(&createInfo, nullptr, &m_Instance);
     LC_ASSERT(result == VK_SUCCESS);
+
+    // Create debug messenger
+    auto debugMessengerInfo = VkDebugUtilsMessengerCreateInfoEXT{
+        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+
+        .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
+            VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+            VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+
+        .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+            VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+            VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
+
+        .pfnUserCallback = DebugCallback,
+        .pUserData = this
+    };
+
+    auto createMessenger = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(
+        m_Instance, "vkCreateDebugUtilsMessengerEXT");
+    if (createMessenger)
+    {
+        result = createMessenger(m_Instance, &debugMessengerInfo, nullptr, &m_DebugMessenger);
+        LC_ASSERT(result == VK_SUCCESS);
+    }
 }
 
 void Device::CreateDevice()
@@ -626,7 +680,7 @@ void Device::CreateSwapchain()
     auto depthTexture = CreateTexture(TextureSettings{
         .width = chosenExtent.width,
         .height = chosenExtent.height,
-        .format = TextureFormat::kDepth });
+        .format = TextureFormat::kDepth32F });
 
     // Initialize swapchain textures & framebuffers
     m_Swapchain.textures.resize(imageCount);
@@ -659,6 +713,7 @@ void Device::CreateSwapchain()
         result = vkCreateImageView(m_Handle, &viewCreateInfo, nullptr, &tex.imageView);
         LC_ASSERT(result == VK_SUCCESS);
 
+        fb.samples = 1;
         fb.extent = chosenExtent;
         fb.renderPass = renderPass;
         fb.usage = FramebufferUsage::SwapchainImage;
@@ -802,7 +857,7 @@ std::unique_ptr<Pipeline> Device::CreatePipeline(const PipelineSettings& setting
 
     auto multisampleInfo = VkPipelineMultisampleStateCreateInfo{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-        .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+        .rasterizationSamples = static_cast<VkSampleCountFlagBits>(framebuffer.samples),
         .sampleShadingEnable = VK_FALSE
     };
 
@@ -937,8 +992,12 @@ Texture* Device::CreateTexture(const TextureSettings& info, size_t size, const v
     auto viewType = TextureShapeToViewType(info.shape);
     auto addressMode = TextureAddressModeToVk(info.addressMode);
 
+    LC_ASSERT(info.samples > 0 && info.samples <= 64);
+    LC_ASSERT((info.samples & (info.samples - 1)) == 0 && "Requested non-power-of-2 samples");
+    auto samples = (VkSampleCountFlagBits)info.samples;
+
     VkFlags flags = 0;
-    uint32 arrayLayers = 1;
+    uint32 arrayLayers = info.layers;
 
     if (info.shape == TextureShape::kCube)
     {
@@ -948,9 +1007,11 @@ Texture* Device::CreateTexture(const TextureSettings& info, size_t size, const v
         LC_ASSERT(info.width == info.height);
     }
 
+    tex.samples = info.samples;
     tex.texFormat = info.format;
     tex.format = format;
     tex.extent = { .width = info.width, .height = info.height };
+    tex.aspect = aspect;
 
     // Create image
     auto imageInfo = VkImageCreateInfo{
@@ -965,7 +1026,7 @@ Texture* Device::CreateTexture(const TextureSettings& info, size_t size, const v
         },
         .mipLevels = info.levels,
         .arrayLayers = arrayLayers,
-        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .samples = samples,
         .tiling = VK_IMAGE_TILING_OPTIMAL,
         .usage = usage,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
@@ -1150,44 +1211,86 @@ Framebuffer* Device::CreateFramebuffer(const FramebufferSettings& info)
 {
     auto& fb = *m_Framebuffers.emplace_back(std::make_unique<Framebuffer>());
 
-    auto& color = *info.colorTexture;
-    auto& depth = *info.depthTexture;
-
     fb.usage = info.usage;
-    fb.extent = info.colorTexture->extent;
+    fb.colorTexture = info.colorTexture;
+    fb.depthTexture = info.depthTexture;
 
-    // Create render pass
-    VkAttachmentDescription attachments[] =
-        {
-            VkAttachmentDescription{
-                .format = color.format,
-                .samples = VK_SAMPLE_COUNT_1_BIT,
-                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-                .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-                .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                .initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-            },
-            VkAttachmentDescription{
-                .format = depth.format,
-                .samples = VK_SAMPLE_COUNT_1_BIT,
-                .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-                .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                .initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+    fb.extent = info.colorTexture ? info.colorTexture->extent : info.depthTexture->extent;
+    fb.samples = info.colorTexture ? info.colorTexture->samples : info.depthTexture->samples;
+
+    // Create image views if a specific layer is requested
+    auto createTempView = [&](Texture* texture, int layer, VkImageAspectFlags aspectFlags) -> VkImageView
+    {
+        if (!texture || layer < 0) return VK_NULL_HANDLE;
+
+        auto viewInfo = VkImageViewCreateInfo{
+            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .image = texture->image,
+            .viewType = VK_IMAGE_VIEW_TYPE_2D,
+            .format = texture->format,
+            .subresourceRange = {
+                .aspectMask = aspectFlags,
+                .baseMipLevel = 0,
+                .levelCount = VK_REMAINING_MIP_LEVELS,
+                .baseArrayLayer = static_cast<uint32_t>(layer),
+                .layerCount = 1
             }
         };
 
+        VkImageView view;
+        auto result = vkCreateImageView(m_Handle, &viewInfo, nullptr, &view);
+        LC_ASSERT(result == VK_SUCCESS);
+
+        return view;
+    };
+    fb.colorImageView = createTempView(info.colorTexture, info.colorLayer, VK_IMAGE_ASPECT_COLOR_BIT);
+    fb.depthImageView = createTempView(info.depthTexture, info.depthLayer, VK_IMAGE_ASPECT_DEPTH_BIT);
+
+    // Create render pass
+    constexpr int kMaxAttachments = 8;
+    Array <VkAttachmentDescription, kMaxAttachments> attachments;
+    Array <VkImageView, kMaxAttachments> imageViews;
+    auto colorIndex = VK_ATTACHMENT_UNUSED;
+    auto depthIndex = VK_ATTACHMENT_UNUSED;
+
+    if (info.colorTexture)
+    {
+        colorIndex = attachments.size();
+        attachments.emplace_back(VkAttachmentDescription{
+            .format = info.colorTexture->format,
+            .samples = static_cast<VkSampleCountFlagBits>(info.colorTexture->samples),
+            .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            .initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+        });
+        imageViews.push_back(fb.colorImageView ? fb.colorImageView : info.colorTexture->imageView);
+    }
+    if (info.depthTexture)
+    {
+        depthIndex = attachments.size();
+        attachments.emplace_back(VkAttachmentDescription{
+            .format = info.depthTexture->format,
+            .samples = static_cast<VkSampleCountFlagBits>(info.depthTexture->samples),
+            .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            .initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+        });
+        imageViews.push_back(fb.depthImageView ? fb.depthImageView : info.depthTexture->imageView);
+    }
+
     auto colorRef = VkAttachmentReference{
-        .attachment = 0,
-        .layout = attachments[0].finalLayout
+        .attachment = colorIndex,
+        .layout = (colorIndex != VK_ATTACHMENT_UNUSED) ? attachments[colorIndex].finalLayout : VK_IMAGE_LAYOUT_UNDEFINED
     };
     auto depthRef = VkAttachmentReference{
-        .attachment = 1,
-        .layout = attachments[1].finalLayout
+        .attachment = depthIndex,
+        .layout = (depthIndex != VK_ATTACHMENT_UNUSED) ? attachments[depthIndex].finalLayout : VK_IMAGE_LAYOUT_UNDEFINED
     };
 
     auto subpassDesc = VkSubpassDescription{
@@ -1199,8 +1302,8 @@ Framebuffer* Device::CreateFramebuffer(const FramebufferSettings& info)
 
     auto passInfo = VkRenderPassCreateInfo{
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-        .attachmentCount = LC_ARRAY_SIZE(attachments),
-        .pAttachments = attachments,
+        .attachmentCount = static_cast<uint32_t>(attachments.size()),
+        .pAttachments = attachments.data(),
         .subpassCount = 1,
         .pSubpasses = &subpassDesc
     };
@@ -1209,15 +1312,13 @@ Framebuffer* Device::CreateFramebuffer(const FramebufferSettings& info)
     LC_ASSERT(result == VK_SUCCESS);
 
     // Create framebuffer
-    VkImageView views[] = { color.imageView, depth.imageView };
-
     auto fbInfo = VkFramebufferCreateInfo{
         .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
         .renderPass = fb.renderPass,
-        .attachmentCount = LC_ARRAY_SIZE(views),
-        .pAttachments = views,
-        .width = color.extent.width,
-        .height = color.extent.height,
+        .attachmentCount = static_cast<uint32_t>(imageViews.size()),
+        .pAttachments = imageViews.data(),
+        .width = fb.extent.width,
+        .height = fb.extent.height,
         .layers = 1
     };
 
@@ -1241,62 +1342,67 @@ Framebuffer* Device::CreateFramebuffer(const FramebufferSettings& info)
     vkBeginCommandBuffer(cb, &beginInfo);
 
     // Color
-    auto colorBarrier = VkImageMemoryBarrier{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .srcAccessMask = VK_ACCESS_NONE_KHR,
-        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-        .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image = color.image,
-        .subresourceRange = {
-            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-            .baseMipLevel = 0,
-            .levelCount = 1,
-            .baseArrayLayer = 0,
-            .layerCount = 1
-        }
-    };
-    vkCmdPipelineBarrier(cb,
-        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        VK_DEPENDENCY_BY_REGION_BIT,
-        0,
-        nullptr,
-        0,
-        nullptr,
-        1,
-        &colorBarrier);
-
+    if (info.colorTexture)
+    {
+        auto colorBarrier = VkImageMemoryBarrier{
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .srcAccessMask = VK_ACCESS_NONE_KHR,
+            .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image = info.colorTexture->image,
+            .subresourceRange = {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel = 0,
+                .levelCount = VK_REMAINING_MIP_LEVELS,
+                .baseArrayLayer = 0,
+                .layerCount = VK_REMAINING_ARRAY_LAYERS
+            }
+        };
+        vkCmdPipelineBarrier(cb,
+            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            VK_DEPENDENCY_BY_REGION_BIT,
+            0,
+            nullptr,
+            0,
+            nullptr,
+            1,
+            &colorBarrier);
+    }
     // Depth
-    auto depthBarrier = VkImageMemoryBarrier{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .srcAccessMask = VK_ACCESS_NONE_KHR,
-        .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-        .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        .newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image = depth.image,
-        .subresourceRange = {
-            .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-            .baseMipLevel = 0,
-            .levelCount = 1,
-            .baseArrayLayer = 0,
-            .layerCount = 1
-        }
-    };
-    vkCmdPipelineBarrier(cb,
-        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-        VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-        VK_DEPENDENCY_BY_REGION_BIT,
-        0,
-        nullptr,
-        0,
-        nullptr,
-        1,
-        &depthBarrier);
+    if (info.depthTexture)
+    {
+        auto depthBarrier = VkImageMemoryBarrier{
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .srcAccessMask = VK_ACCESS_NONE_KHR,
+            .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+            .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            .newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image = info.depthTexture->image,
+            .subresourceRange = {
+                .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+                .baseMipLevel = 0,
+                .levelCount = VK_REMAINING_MIP_LEVELS,
+                .baseArrayLayer = 0,
+                .layerCount = VK_REMAINING_ARRAY_LAYERS
+            }
+        };
+        vkCmdPipelineBarrier(cb,
+            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+            VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+            VK_DEPENDENCY_BY_REGION_BIT,
+            0,
+            nullptr,
+            0,
+            nullptr,
+            1,
+            &depthBarrier);
+    }
 
     vkEndCommandBuffer(cb);
 
@@ -1375,6 +1481,31 @@ void Device::Present()
     };
     vkQueuePresentKHR(m_PresentQueue.handle, &presentInfo);
     vkDeviceWaitIdle(m_Handle);
+}
+
+VkBool32 Device::DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
+    VkDebugUtilsMessageTypeFlagsEXT types,
+    const VkDebugUtilsMessengerCallbackDataEXT* callbackData,
+    void* userData)
+{
+    switch (severity)
+    {
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
+        LC_INFO(callbackData->pMessage);
+        break;
+
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
+        LC_WARN(callbackData->pMessage);
+        break;
+
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
+        LC_ERROR(callbackData->pMessage);
+        break;
+
+    default:
+        break;
+    }
+    return VK_FALSE;
 }
 
 // Buffer

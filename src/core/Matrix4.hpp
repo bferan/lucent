@@ -259,6 +259,12 @@ public:
         rot.z = CopySign(rot.z, m[0][1] - m[1][0]);
     }
 
+    Vector4 Row(int row)
+    {
+        auto& m = *this;
+        return { m(row, 0), m(row, 1), m(row, 2), m(row, 3) };
+    }
+
 public:
     Vector4 c1;
     Vector4 c2;

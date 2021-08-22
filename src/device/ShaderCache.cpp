@@ -445,21 +445,28 @@ bool ShaderCache::PopulateShaderModules(Shader& shader,
     };
 
     // Detect shader types in source
-    if (source.find(kVertexDefinition) != std::string::npos &&
-        source.find(kFragmentDefinition) != std::string::npos)
+    auto foundVertex = source.find(kVertexDefinition) != std::string::npos;
+    auto foundFragment = source.find(kFragmentDefinition) != std::string::npos;
+    if (foundVertex || foundFragment)
     {
-        std::string vert(source);
-        StripShader(vert, ShaderStage::kVertex);
+        if (foundVertex)
+        {
+            std::string vert(source);
+            StripShader(vert, ShaderStage::kVertex);
 
-        std::string frag(source);
-        StripShader(frag, ShaderStage::kFragment);
+            if (!addShader(vert, EShLangVertex, VK_SHADER_STAGE_VERTEX_BIT,
+                "vert", ShaderStage::kVertex))
+                return false;
+        }
+        if (foundFragment)
+        {
+            std::string frag(source);
+            StripShader(frag, ShaderStage::kFragment);
 
-        if (!addShader(vert, EShLangVertex, VK_SHADER_STAGE_VERTEX_BIT,
-            "vert", ShaderStage::kVertex))
-            return false;
-        if (!addShader(frag, EShLangFragment, VK_SHADER_STAGE_FRAGMENT_BIT,
-            "frag", ShaderStage::kFragment))
-            return false;
+            if (!addShader(frag, EShLangFragment, VK_SHADER_STAGE_FRAGMENT_BIT,
+                "frag", ShaderStage::kFragment))
+                return false;
+        }
     }
     else if (source.find(kComputeDefinition) != std::string::npos)
     {
@@ -472,7 +479,7 @@ bool ShaderCache::PopulateShaderModules(Shader& shader,
     }
     else
     {
-        log.Error("No entrypoint found in shader.");
+        log.Error("No suitable entrypoint combination found in shader.");
         return false;
     }
 

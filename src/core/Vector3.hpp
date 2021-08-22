@@ -125,6 +125,14 @@ public:
         return *this;
     }
 
+    Vector3& operator*=(Vector3 rhs)
+    {
+        x *= rhs.x;
+        y *= rhs.y;
+        z *= rhs.z;
+        return *this;
+    }
+
 public:
     float x;
     float y;
@@ -139,6 +147,11 @@ inline Vector3 operator*(Vector3 lhs, float rhs)
 inline Vector3 operator*(float lhs, Vector3 rhs)
 {
     return (rhs *= lhs);
+}
+
+inline Vector3 operator*(Vector3 lhs, Vector3 rhs)
+{
+    return (lhs *= rhs);
 }
 
 inline Vector3 operator-(const Vector3& rhs)

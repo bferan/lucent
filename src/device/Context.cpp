@@ -1,7 +1,5 @@
 #include "Context.hpp"
 
-#include "core/Hash.hpp"
-
 namespace lucent
 {
 
@@ -89,10 +87,11 @@ void Context::BeginRenderPass(const Framebuffer* framebuffer, VkExtent2D extent)
     };
     vkCmdSetViewport(m_CommandBuffer, 0, 1, &viewport);
 
-    VkClearValue clearValues[] = {
-        { .color = { 0.0f, 0.0f, 0.0f, 1.0f }},
-        { .depthStencil = { .depth = 1.0f, .stencil = 0 }}
-    };
+    Array<VkClearValue, 8> clearValues;
+    if (framebuffer->colorTexture)
+        clearValues.push_back(VkClearValue{ .color = { 0.0f, 0.0f, 0.0f, 1.0f }});
+    if (framebuffer->depthTexture)
+        clearValues.push_back(VkClearValue{ .depthStencil = { .depth = 1.0f, .stencil = 0 }});
 
     auto renderPassBeginInfo = VkRenderPassBeginInfo{
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
@@ -102,8 +101,8 @@ void Context::BeginRenderPass(const Framebuffer* framebuffer, VkExtent2D extent)
             .offset = {},
             .extent = fbuffer.extent
         },
-        .clearValueCount = LC_ARRAY_SIZE(clearValues),
-        .pClearValues = clearValues
+        .clearValueCount = static_cast<uint32_t>(clearValues.size()),
+        .pClearValues = clearValues.data()
     };
     vkCmdBeginRenderPass(m_CommandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 }
@@ -308,6 +307,15 @@ void Context::Uniform(DescriptorID id, const uint8* data, size_t size)
     m_ScratchUniformBuffer->Upload(data, size, offset + entry.offset);
 }
 
+void Context::Uniform(DescriptorID id, uint32 arrayIndex, const uint8* data, size_t size)
+{
+    auto entry = FindDescriptorEntry(id);
+    LC_ASSERT(entry.size == size);
+
+    auto offset = GetScratchOffset(entry.set, entry.binding);
+    m_ScratchUniformBuffer->Upload(data, size, offset + entry.offset + arrayIndex * size);
+}
+
 void Context::EstablishBindings()
 {
     LC_ASSERT(m_BoundPipeline != nullptr);
@@ -501,7 +509,7 @@ void Context::ResetScratchBindings()
     }
 }
 
-void Context::TransitionAttachment(Texture* texture)
+void Context::AttachmentToImage(Texture* texture)
 {
     auto imageBarrier = VkImageMemoryBarrier{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -513,11 +521,11 @@ void Context::TransitionAttachment(Texture* texture)
         .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
         .image = texture->image,
         .subresourceRange = {
-            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .aspectMask = texture->aspect,
             .baseMipLevel = 0,
-            .levelCount = 1,
+            .levelCount = VK_REMAINING_MIP_LEVELS,
             .baseArrayLayer = 0,
-            .layerCount = 1
+            .layerCount = VK_REMAINING_ARRAY_LAYERS
         }
     };
 
@@ -530,7 +538,7 @@ void Context::TransitionAttachment(Texture* texture)
         1, &imageBarrier);
 }
 
-void Context::TransitionImage(Texture* texture)
+void Context::ImageToAttachment(Texture* texture)
 {
     auto imageBarrier = VkImageMemoryBarrier{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -542,17 +550,75 @@ void Context::TransitionImage(Texture* texture)
         .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
         .image = texture->image,
         .subresourceRange = {
-            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .aspectMask = texture->aspect,
             .baseMipLevel = 0,
-            .levelCount = 1,
+            .levelCount = VK_REMAINING_MIP_LEVELS,
             .baseArrayLayer = 0,
-            .layerCount = 1
+            .layerCount = VK_REMAINING_ARRAY_LAYERS
         }
     };
 
     vkCmdPipelineBarrier(m_CommandBuffer,
         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        VK_DEPENDENCY_BY_REGION_BIT,
+        0, nullptr,
+        0, nullptr,
+        1, &imageBarrier);
+}
+
+void Context::DepthAttachmentToImage(Texture* texture)
+{
+    auto imageBarrier = VkImageMemoryBarrier{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+        .oldLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image = texture->image,
+        .subresourceRange = {
+            .aspectMask = texture->aspect,
+            .baseMipLevel = 0,
+            .levelCount = VK_REMAINING_MIP_LEVELS,
+            .baseArrayLayer = 0,
+            .layerCount = VK_REMAINING_ARRAY_LAYERS
+        }
+    };
+
+    vkCmdPipelineBarrier(m_CommandBuffer,
+        VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        VK_DEPENDENCY_BY_REGION_BIT,
+        0, nullptr,
+        0, nullptr,
+        1, &imageBarrier);
+}
+
+void Context::DepthImageToAttachment(Texture* texture)
+{
+    auto imageBarrier = VkImageMemoryBarrier{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .srcAccessMask = VK_ACCESS_NONE_KHR,
+        .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+        .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image = texture->image,
+        .subresourceRange = {
+            .aspectMask = texture->aspect,
+            .baseMipLevel = 0,
+            .levelCount = VK_REMAINING_MIP_LEVELS,
+            .baseArrayLayer = 0,
+            .layerCount = VK_REMAINING_ARRAY_LAYERS
+        }
+    };
+
+    vkCmdPipelineBarrier(m_CommandBuffer,
+        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
         VK_DEPENDENCY_BY_REGION_BIT,
         0, nullptr,
         0, nullptr,

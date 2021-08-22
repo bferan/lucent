@@ -103,9 +103,15 @@ struct DirectionalLight
         float end;
 
         float worldSpaceTexelSize;
-        Vector4 pos;
+
+        Vector3 pos;
         float width;
         float depth;
+        Matrix4 proj;
+
+        Vector3 offset;
+        Vector3 scale;
+        Vector4 frontPlane;
     };
 
     Cascade cascades[kNumCascades];

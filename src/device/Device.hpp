@@ -69,12 +69,15 @@ enum class TextureFormat
     kRGBA32F,
     kRG32F,
     kR32F,
-    kDepth
+
+    kDepth16U,
+    kDepth32F
 };
 
 enum class TextureShape
 {
     k2D,
+    k2DArray,
     kCube
 };
 
@@ -93,6 +96,8 @@ struct Texture
 
     VkExtent2D extent;
     VkFormat format;
+    uint32 samples;
+    VkImageAspectFlags aspect;
 
     VkSampler sampler;
     TextureFormat texFormat;
@@ -103,6 +108,8 @@ struct TextureSettings
     uint32 width = 1;
     uint32 height = 1;
     uint32 levels = 1;
+    uint32 layers = 1;
+    uint32 samples = 1;
     TextureFormat format = TextureFormat::kRGBA8;
     TextureShape shape = TextureShape::k2D;
     TextureAddressMode addressMode = TextureAddressMode::kRepeat;
@@ -118,8 +125,12 @@ enum class FramebufferUsage
 struct FramebufferSettings
 {
     FramebufferUsage usage = FramebufferUsage::Default;
+
     Texture* colorTexture = nullptr;
+    int colorLayer = -1;
+
     Texture* depthTexture = nullptr;
+    int depthLayer = -1;
 };
 
 struct Framebuffer
@@ -127,11 +138,15 @@ struct Framebuffer
     VkFramebuffer handle;
     VkRenderPass renderPass;
     VkExtent2D extent;
+    uint32 samples;
 
     FramebufferUsage usage;
 
     Texture* colorTexture;
+    VkImageView colorImageView;
+
     Texture* depthTexture;
+    VkImageView depthImageView;
 };
 
 struct Swapchain
@@ -195,9 +210,15 @@ private:
     std::unique_ptr<Pipeline> CreatePipeline(const PipelineSettings& settings, Shader* shader);
     void FreePipeline(Pipeline* pipeline);
 
+    static VkBool32 DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
+        VkDebugUtilsMessageTypeFlagsEXT types,
+        const VkDebugUtilsMessengerCallbackDataEXT* callbackData,
+        void* userData);
+
 public:
     GLFWwindow* m_Window;
     VkInstance m_Instance{};
+    VkDebugUtilsMessengerEXT m_DebugMessenger{};
     VkSurfaceKHR m_Surface{};
     VkPhysicalDevice m_PhysicalDevice{};
     VkPhysicalDeviceProperties m_DeviceProperties{};

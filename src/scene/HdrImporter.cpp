@@ -27,7 +27,7 @@ HdrImporter::HdrImporter(Device* device)
     m_OffscreenDepth = m_Device->CreateTexture(TextureSettings{
         .width = kCubeSize,
         .height = kCubeSize,
-        .format = TextureFormat::kDepth
+        .format = TextureFormat::kDepth32F
     });
 
     m_Offscreen = m_Device->CreateFramebuffer(FramebufferSettings{

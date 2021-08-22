@@ -114,6 +114,11 @@ public:
         return N;
     }
 
+    size_t capacity() const
+    {
+        return max_size();
+    }
+
     void clear()
     {
         std::destroy(begin(), end());
@@ -121,7 +126,7 @@ public:
     }
 
 private:
-    size_t m_Count;
+    size_t m_Count = 0;
     T m_Elems[N];
 };
 

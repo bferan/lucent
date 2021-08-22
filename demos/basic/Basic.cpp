@@ -48,7 +48,7 @@ public:
         ApplyTransform(plane);
 
         HdrImporter hdrImporter(&m_Device);
-        m_Scene.environment = hdrImporter.Import("textures/shanghai_bund_4k.hdr");
+        m_Scene.environment = hdrImporter.Import("textures/chinese_garden_4k.hdr");
 
         // Create camera entity
         m_Scene.mainCamera = m_Scene.CreateEntity();
@@ -62,10 +62,10 @@ public:
 
         m_Scene.mainDirectionalLight.Assign(DirectionalLight{
             .cascades = {
-                { .start = 0.0f, .end = 10.0f },
-                { .start = 13.0f, .end = 45.0f },
-                { .start = 40.0f, .end = 80.0f },
-                { .start = 75.0f, .end = 150.0f }
+                { .start = 0.0f, .end = 12.0f },
+                { .start = 10.0f, .end = 32.0f },
+                { .start = 30.0f, .end = 70.0f },
+                { .start = 65.0f, .end = 150.0f }
             }
         });
 
