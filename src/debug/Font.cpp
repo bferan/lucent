@@ -20,7 +20,7 @@ struct BakedFont
     stbtt_bakedchar chars[kNumChars];
 };
 
-Font::Font(Device* device, const std::string& fontFile, float pixelHeight)
+Font::Font(Device* device, Framebuffer* framebuffer, const std::string& fontFile, float pixelHeight)
     : m_Device(device), m_PixelHeight(pixelHeight)
 {
     // Read TTF font file
@@ -47,7 +47,8 @@ Font::Font(Device* device, const std::string& fontFile, float pixelHeight)
     // Create font pipeline & descriptor set
     m_FontPipeline = m_Device->CreatePipeline(PipelineSettings{
             .shaderName = "DebugFont.shader",
-            .depthTestEnable = false,
+            .framebuffer = framebuffer,
+            .depthTestEnable = false
         }
     );
 }
@@ -80,7 +81,7 @@ Glyph Font::GetGlyph(char c) const
 void Font::Bind(Context& context) const
 {
     context.Bind(m_FontPipeline);
-    context.Bind("u_FontTex"_id, m_FontTexture);
+    context.BindTexture("u_FontTex"_id, m_FontTexture);
 }
 
 Font::~Font()

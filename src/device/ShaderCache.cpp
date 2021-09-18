@@ -13,15 +13,20 @@ namespace lucent
 {
 
 // Shader descriptor layout
-static VkDescriptorType BasicTypeToDescriptorType(glslang::TBasicType basicType)
+static VkDescriptorType TypeToDescriptorType(const glslang::TType& type)
 {
-    switch (basicType)
+    switch (type.getBasicType())
     {
     case glslang::EbtBlock:
-        return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+        return type.getQualifier().storage == glslang::EvqBuffer ?
+            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER :
+            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
 
     case glslang::EbtSampler:
-        return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        return type.getSampler().image ?
+            VK_DESCRIPTOR_TYPE_STORAGE_IMAGE :
+            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+
     default:
         LC_ASSERT(0 && "Unsupported uniform type declared in shader");
         return VK_DESCRIPTOR_TYPE_MAX_ENUM;
@@ -331,14 +336,14 @@ static bool ScanLinkerSymbols(const TIntermNode& root,
         // If binding not already present from a previous stage, create it
         if (!layout.sets[set]->bindings[binding])
         {
-            layout.sets[set]->bindings[binding] = BasicTypeToDescriptorType(type.getBasicType());
+            layout.sets[set]->bindings[binding] = TypeToDescriptorType(type);
 
             bool isBlock = type.getBasicType() == glslang::EbtBlock;
             uint32 size = isBlock ? glslang::TIntermediate::getBlockSize(type) : 0;
 
             // Add global scope descriptor
             auto entry = DescriptorEntry{
-                .hash = Hash<uint32>(symbol.getName()),
+                .hash = Hash<uint32>(symbol.getAccessName()),
                 .set = set,
                 .binding = binding,
                 .size = size
@@ -351,7 +356,7 @@ static bool ScanLinkerSymbols(const TIntermNode& root,
                 shader.blocks.emplace_back(entry);
                 int childSize = 0;
                 int offset = 0;
-                for (auto& loc : *type.getStruct())
+                for (auto& loc: *type.getStruct())
                 {
                     auto& child = *loc.type;
                     glslang::TIntermediate::updateOffset(type, child, offset, childSize);
@@ -371,12 +376,12 @@ static bool ScanLinkerSymbols(const TIntermNode& root,
     };
 
     // Scan all uniform linker symbols
-    for (auto node : root.getAsAggregate()->getSequence())
+    for (auto node: root.getAsAggregate()->getSequence())
     {
         auto agg = node->getAsAggregate();
         if (agg->getOp() == glslang::EOpLinkerObjects)
         {
-            for (auto obj : agg->getSequence())
+            for (auto obj: agg->getSequence())
             {
                 auto symbol = obj->getAsSymbolNode();
                 if (symbol->getQualifier().hasUniformLayout())
@@ -526,7 +531,7 @@ bool ShaderCache::PopulateShaderModules(Shader& shader,
 
     // Check for any hash collisions
     uint32 prevHash = -1;
-    for (auto entry : descriptors)
+    for (auto entry: descriptors)
     {
         uint32 hash = entry.hash;
         if (hash == prevHash)
@@ -573,17 +578,17 @@ bool ShaderCache::PopulateShaderLayout(Shader& shader, const PipelineLayout& lay
 
 void ShaderCache::Clear()
 {
-    for (auto&[hash, shader] : m_Shaders)
+    for (auto&[hash, shader]: m_Shaders)
     {
         FreeResources(shader.get());
     }
 
-    for (auto&[layout, vkLayout] : m_SetLayouts)
+    for (auto&[layout, vkLayout]: m_SetLayouts)
     {
         vkDestroyDescriptorSetLayout(m_Device->m_Handle, vkLayout, nullptr);
     }
 
-    for (auto&[layout, vkLayout] : m_PipelineLayouts)
+    for (auto&[layout, vkLayout]: m_PipelineLayouts)
     {
         vkDestroyPipelineLayout(m_Device->m_Handle, vkLayout, nullptr);
     }
@@ -591,7 +596,7 @@ void ShaderCache::Clear()
 
 void ShaderCache::FreeResources(Shader* shader)
 {
-    for (auto& stage : shader->stages)
+    for (auto& stage: shader->stages)
     {
         vkDestroyShaderModule(m_Device->m_Handle, stage.module, nullptr);
     }

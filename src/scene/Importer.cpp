@@ -314,8 +314,8 @@ void Importer::ImportMeshes(Scene& scene, const gltf::Model& model)
             VkDeviceSize vertSize = vertices.size() * sizeof(Vertex);
             VkDeviceSize indexSize = indices.size() * sizeof(uint32);
 
-            mesh.vertexBuffer = m_Device->CreateBuffer(BufferType::Vertex, vertSize);
-            mesh.indexBuffer = m_Device->CreateBuffer(BufferType::Index, indexSize);
+            mesh.vertexBuffer = m_Device->CreateBuffer(BufferType::kVertex, vertSize);
+            mesh.indexBuffer = m_Device->CreateBuffer(BufferType::kIndex, indexSize);
 
             mesh.vertexBuffer->Upload(vertices.data(), vertSize);
             mesh.indexBuffer->Upload(indices.data(), indexSize);

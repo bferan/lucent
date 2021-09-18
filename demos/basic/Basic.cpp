@@ -22,12 +22,12 @@ public:
 
         // Axes
         auto boxX = importer.Import(m_Scene, "models/BoxTextured.glb");
-        boxX.Get<Transform>().position = Vector3(5.0f, -0.5, 0.0f);
+        boxX.Get<Transform>().position = Vector3(5.0f, 0.5, 0.0f);
         ApplyTransform(boxX);
         m_Scene.materials[0].baseColorFactor = Color::Red();
 
         auto boxZ = importer.Import(m_Scene, "models/BoxTextured.glb");
-        boxZ.Get<Transform>().position = Vector3(0.0f, -0.5, 5.0f);
+        boxZ.Get<Transform>().position = Vector3(0.0f, 0.5, 5.0f);
         ApplyTransform(boxZ);
         m_Scene.materials[1].baseColorFactor = Color::Blue();
 
@@ -35,17 +35,40 @@ public:
         helmet.Get<Transform>().position += Vector3::Up();
         ApplyTransform(helmet);
 
-        auto helmet2 = importer.Import(m_Scene, "models/DamagedHelmet.glb");
-        helmet2.Get<Transform>().position = { 35.0f, 1.0f, 35.0f };
-        ApplyTransform(helmet2);
+//        auto helmet2 = importer.Import(m_Scene, "models/DamagedHelmet.glb");
+//        helmet2.Get<Transform>().position = { 35.0f, 1.0f, 35.0f };
+//        ApplyTransform(helmet2);
+//
+//        auto fish = importer.Import(m_Scene, "models/BarramundiFish.glb");
+//        fish.Get<Transform>().position = { -5.0f, 0.0, 0.0 };
+//        fish.Get<Transform>().scale = 5.0f;
+//        ApplyTransform(fish);
 
         m_Rotate = helmet;
 
+//        auto lantern = importer.Import(m_Scene, "models/Lantern.glb");
+//        lantern.Get<Transform>().position = { -3.0f, 0.0, 2.0f };
+//        lantern.Get<Transform>().position += Vector3::Down();
+//        lantern.Get<Transform>().scale = 0.1f;
+//        ApplyTransform(lantern);
+
         auto plane = importer.Import(m_Scene, "models/Plane.glb");
         auto& planeTransform = plane.Get<Transform>();
-        planeTransform.position += Vector3::Down();
         planeTransform.scale = 10.0f;
         ApplyTransform(plane);
+
+        auto& mesh = m_Scene.meshes[plane.Get<MeshInstance>().meshes[0]];
+        auto& mat = m_Scene.materials[mesh.materialIdx];
+
+        mat.baseColorMap = m_Device.m_WhiteTexture;
+        mat.metalRough = m_Device.m_WhiteTexture;
+        mat.baseColorFactor = Color::White();
+        mat.roughnessFactor = 0.0;
+        mat.metallicFactor = 1.0;
+
+        auto sponza = importer.Import(m_Scene, "models/Sponza/Sponza.gltf");
+        sponza.Get<Transform>().scale = 0.015f;
+        ApplyTransform(sponza);
 
         HdrImporter hdrImporter(&m_Device);
         m_Scene.environment = hdrImporter.Import("textures/chinese_garden_4k.hdr");
@@ -56,7 +79,8 @@ public:
         m_Scene.mainCamera.Assign(Transform{ .position = { 0.0f, 2.0f, 2.0f }});
 
         // Create directional light
-        auto lightPos = Vector3(3.0f, 4.0f, -4.1f);
+
+        auto lightPos = Vector3(0.25f, 1.0f, 0.0f);
 
         m_Scene.mainDirectionalLight = m_Scene.CreateEntity();
 

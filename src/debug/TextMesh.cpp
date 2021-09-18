@@ -14,8 +14,8 @@ constexpr size_t kIdxBufferSize = (1 << 20);
 TextMesh::TextMesh(Device* device, const Font& font)
     : m_Font(font), m_Device(device), m_Dirty(true)
 {
-    m_VertexBuffer = m_Device->CreateBuffer(BufferType::Vertex, kVertBufferSize);
-    m_IndexBuffer = m_Device->CreateBuffer(BufferType::Index, kIdxBufferSize);
+    m_VertexBuffer = m_Device->CreateBuffer(BufferType::kVertex, kVertBufferSize);
+    m_IndexBuffer = m_Device->CreateBuffer(BufferType::kIndex, kIdxBufferSize);
 }
 
 float TextMesh::Draw(const std::string& str, float x, float y, Color color)

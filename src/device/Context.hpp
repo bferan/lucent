@@ -11,6 +11,10 @@ class Context
 {
 public:
     explicit Context(Device& device);
+
+    Context(const Context&) = delete;
+    Context& operator=(const Context&) = delete;
+
     void Dispose();
 
     void Begin();
@@ -19,16 +23,22 @@ public:
     void BeginRenderPass(const Framebuffer* framebuffer, VkExtent2D extent = {});
     void EndRenderPass() const;
 
+    void Clear(Color color = Color::Black(), float depth = 1.0f);
+
     void Bind(const Pipeline* pipeline);
     void Bind(const Buffer* buffer);
 
-    void Bind(uint32 set, uint32 binding, const Buffer* buffer);
-    void Bind(uint32 set, uint32 binding, const Buffer* buffer, uint32 dynamicOffset);
-    void Bind(uint32 set, uint32 binding, const Texture* texture);
+    void BindBuffer(uint32 set, uint32 binding, const Buffer* buffer);
+    void BindBuffer(DescriptorID id, const Buffer* buffer);
 
-    void Bind(DescriptorID id, const Buffer* buffer);
-    void Bind(DescriptorID id, const Buffer* buffer, uint32 dynamicOffset);
-    void Bind(DescriptorID id, const Texture* texture);
+    void BindBuffer(uint32 set, uint32 binding, const Buffer* buffer, uint32 dynamicOffset);
+    void BindBuffer(DescriptorID id, const Buffer* buffer, uint32 dynamicOffset);
+
+    void BindTexture(uint32 set, uint32 binding, const Texture* texture, int level = -1);
+    void BindTexture(DescriptorID id, const Texture* texture, int level = -1);
+
+    void BindImage(uint32 set, uint32 binding, const Texture* texture, int level = -1);
+    void BindImage(DescriptorID id, const Texture* texture, int level = -1);
 
     template<typename T>
     void Uniform(DescriptorID id, const T& value);
@@ -40,6 +50,8 @@ public:
 
     void Draw(uint32 indexCount);
 
+    void Dispatch(uint32 x, uint32 y, uint32 z);
+
     void CopyTexture(
         Texture* src, int srcLayer, int srcLevel,
         Texture* dst, int dstLayer, int dstLevel,
@@ -47,15 +59,42 @@ public:
 
     void AttachmentToImage(Texture* texture);
     void ImageToAttachment(Texture* texture);
+    void ImageToGeneral(Texture* texture);
+    void ComputeBarrier(Texture* texture, Buffer* buffer);
 
     void DepthAttachmentToImage(Texture* texture);
     void DepthImageToAttachment(Texture* texture);
 
+    void Transition(Texture* texture,
+        VkPipelineStageFlags srcStage, VkAccessFlags srcAccess,
+        VkPipelineStageFlags dstStage, VkAccessFlags dstAccess,
+        VkImageLayout oldLayout, VkImageLayout newLayout, int level = -1);
+
 private:
-    using NullBinding = std::monostate;
-    using BufferBinding = const Buffer*;
-    using TextureBinding = const Texture*;
-    using Binding = std::variant<NullBinding, BufferBinding, TextureBinding>;
+    struct Binding
+    {
+        enum Type
+        {
+            kNone,
+            kUniformBuffer,
+            kUniformBufferDynamic,
+            kStorageBuffer,
+            kTexture,
+            kImage
+        };
+
+        Type type;
+        union
+        {
+            const void* data;
+            const Buffer* buffer;
+            const Texture* texture;
+        };
+        int level = -1;
+
+        bool operator==(const Binding& rhs) const;
+    };
+
     using BindingArray = std::array<Binding, Shader::kMaxBindingsPerSet>;
 
     // Represents an actively bound set of descriptors
@@ -88,7 +127,7 @@ private:
     uint32 GetScratchOffset(uint32 arg, uint32 binding);
     void ResetScratchBindings();
 
-private:
+public:
     Device& m_Device;
 
     VkCommandPool m_CommandPool{};
@@ -105,6 +144,7 @@ private:
     // Active state
     bool m_SwapchainWritten{};
     const Pipeline* m_BoundPipeline{};
+    const Framebuffer* m_BoundFramebuffer{};
     std::array<BoundSet, Shader::kMaxSets> m_BoundSets{};
 };
 

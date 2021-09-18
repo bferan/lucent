@@ -31,7 +31,7 @@ HdrImporter::HdrImporter(Device* device)
     });
 
     m_Offscreen = m_Device->CreateFramebuffer(FramebufferSettings{
-        .colorTexture = m_OffscreenColor,
+        .colorTextures = { m_OffscreenColor },
         .depthTexture = m_OffscreenDepth
     });
 
@@ -76,6 +76,8 @@ void HdrImporter::RenderToCube(Pipeline* pipeline, Texture* src, Texture* dst, i
         auto view = Matrix4::RotationX(kPi) * views[face];
 
         ctx.BeginRenderPass(m_Offscreen, VkExtent2D{ size, size });
+        ctx.Clear();
+
         ctx.Bind(pipeline);
 
         ctx.Bind(m_Device->m_Cube.indices);
@@ -85,7 +87,7 @@ void HdrImporter::RenderToCube(Pipeline* pipeline, Texture* src, Texture* dst, i
         ctx.Uniform("u_Proj"_id, proj);
         ctx.Uniform("u_Roughness"_id, rough);
 
-        ctx.Bind(0, 1, src);
+        ctx.BindTexture(0, 1, src);
 
         ctx.Draw(m_Device->m_Cube.numIndices);
         ctx.EndRenderPass();
@@ -106,6 +108,8 @@ void HdrImporter::RenderToQuad(Pipeline* pipeline, Texture* dst, uint32 size)
 
     ctx.Begin();
     ctx.BeginRenderPass(m_Offscreen, VkExtent2D{ size, size });
+    ctx.Clear();
+
     ctx.Bind(pipeline);
 
     ctx.Bind(m_Device->m_Quad.indices);

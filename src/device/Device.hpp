@@ -41,6 +41,12 @@ enum class ShaderStage
     kCompute
 };
 
+enum class PipelineType
+{
+    kGraphics,
+    kCompute
+};
+
 struct PipelineSettings
 {
     std::string shaderName;
@@ -52,10 +58,11 @@ struct PipelineSettings
 
 struct Pipeline
 {
-    explicit Pipeline(PipelineSettings settings)
-        : settings(std::move(settings)), shader(), handle()
+    explicit Pipeline(PipelineSettings settings, PipelineType pipelineType)
+        : settings(std::move(settings)), type(pipelineType), shader(), handle()
     {}
 
+    PipelineType type;
     PipelineSettings settings;
     Shader* shader;
     VkPipeline handle;
@@ -88,6 +95,12 @@ enum class TextureAddressMode
     kClampToBorder
 };
 
+enum class TextureFilter
+{
+    kLinear,
+    kNearest
+};
+
 struct Texture
 {
     VkImage image;
@@ -98,9 +111,12 @@ struct Texture
     VkFormat format;
     uint32 samples;
     VkImageAspectFlags aspect;
+    uint32 levels;
 
     VkSampler sampler;
     TextureFormat texFormat;
+
+    std::vector<VkImageView> mipViews;
 };
 
 struct TextureSettings
@@ -113,40 +129,47 @@ struct TextureSettings
     TextureFormat format = TextureFormat::kRGBA8;
     TextureShape shape = TextureShape::k2D;
     TextureAddressMode addressMode = TextureAddressMode::kRepeat;
+    TextureFilter filter = TextureFilter::kLinear;
     bool generateMips = false;
+    bool write = false;
 };
 
 enum class FramebufferUsage
 {
-    SwapchainImage,
-    Default
-};
-
-struct FramebufferSettings
-{
-    FramebufferUsage usage = FramebufferUsage::Default;
-
-    Texture* colorTexture = nullptr;
-    int colorLayer = -1;
-
-    Texture* depthTexture = nullptr;
-    int depthLayer = -1;
+    kSwapchainImage,
+    kDefault
 };
 
 struct Framebuffer
 {
-    VkFramebuffer handle;
-    VkRenderPass renderPass;
-    VkExtent2D extent;
-    uint32 samples;
+    static constexpr int kMaxColorAttachments = 8;
+    static constexpr int kMaxAttachments = kMaxColorAttachments + 1;
+
+    VkFramebuffer handle{};
+    VkRenderPass renderPass{};
+    VkExtent2D extent{};
+    uint32 samples{};
 
     FramebufferUsage usage;
 
-    Texture* colorTexture;
-    VkImageView colorImageView;
+    Array<Texture*, kMaxColorAttachments> colorTextures;
+    Array<VkImageView, kMaxColorAttachments> colorImageViews;
 
-    Texture* depthTexture;
-    VkImageView depthImageView;
+    Texture* depthTexture{};
+    VkImageView depthImageView{};
+};
+
+struct FramebufferSettings
+{
+    FramebufferUsage usage = FramebufferUsage::kDefault;
+
+    Array<Texture*, Framebuffer::kMaxColorAttachments> colorTextures = {};
+    int colorLayer = -1;
+    int colorLevel = -1;
+
+    Texture* depthTexture = nullptr;
+    int depthLayer = -1;
+    int depthLevel = -1;
 };
 
 struct Swapchain
@@ -158,17 +181,25 @@ struct Swapchain
 
 enum class BufferType
 {
-    Vertex,
-    Index,
-    Uniform,
-    UniformDynamic,
-    Staging
+    kVertex,
+    kIndex,
+    kUniform,
+    kUniformDynamic,
+    kStorage,
+    kStaging
 };
 
 struct Buffer
 {
     void Upload(const void* data, size_t size, size_t offset = 0) const;
+
     void Clear(size_t size, size_t offset) const;
+
+    void* Map() const;
+
+    void Flush(size_t size, size_t offset) const;
+
+    void Invalidate(size_t size, size_t offset) const;
 
     Device* device;
     VkBuffer handle;
@@ -183,7 +214,10 @@ public:
     Device();
     ~Device();
 
-    Pipeline* CreatePipeline(const PipelineSettings& settings);
+    Device(const Device&) = delete;
+    Device& operator=(const Device&) = delete;
+
+    Pipeline* CreatePipeline(const PipelineSettings& settings, PipelineType type = PipelineType::kGraphics);
     void ReloadPipelines();
 
     Buffer* CreateBuffer(BufferType type, size_t size);
@@ -195,7 +229,7 @@ public:
     const Framebuffer* AcquireFramebuffer();
 
     Context* CreateContext();
-    void Submit(Context* context);
+    void Submit(Context* context, bool sync = true);
 
     void Present();
 
@@ -207,7 +241,8 @@ private:
     void CreateDevice();
     void CreateSwapchain();
 
-    std::unique_ptr<Pipeline> CreatePipeline(const PipelineSettings& settings, Shader* shader);
+    std::unique_ptr<Pipeline> CreateGraphicsPipeline(const PipelineSettings& settings, Shader* shader);
+    std::unique_ptr<Pipeline> CreateComputePipeline(const PipelineSettings& settings, Shader* shader);
     void FreePipeline(Pipeline* pipeline);
 
     static VkBool32 DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
@@ -251,6 +286,7 @@ public:
 public:
     void CreateCube();
     void CreateQuad();
+    void CreateSphere();
 
     struct Cube
     {
@@ -265,6 +301,13 @@ public:
         Buffer* indices;
         uint32 numIndices;
     } m_Quad;
+
+    struct Sphere
+    {
+        Buffer* vertices;
+        Buffer* indices;
+        uint32 numIndices;
+    } m_Sphere;
 
     Texture* m_BlackTexture;
     Texture* m_WhiteTexture;

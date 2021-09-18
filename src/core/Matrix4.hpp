@@ -158,6 +158,11 @@ public:
         };
     }
 
+    static Matrix4 InversePerspective(float verticalFov, float aspectRatio, float n, float f)
+    {
+
+    }
+
     static Matrix4 Orthographic(float w, float h, float d)
     {
         return Diagonal(2.0f / w, 2.0f / h, 1.0f / d, 1.0f);

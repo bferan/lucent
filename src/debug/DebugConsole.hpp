@@ -23,7 +23,7 @@ struct DebugPrompt
 class DebugConsole : public LogListener
 {
 public:
-    explicit DebugConsole(Device* device, int maxColumns = 120);
+    explicit DebugConsole(Device* device, Framebuffer* framebuffer, int maxColumns = 120);
 
     void AddEntry(std::string text, Color color = Color::White());
 

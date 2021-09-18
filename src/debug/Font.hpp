@@ -23,7 +23,7 @@ struct Glyph
 class Font
 {
 public:
-    Font(Device* device, const std::string& fontFile, float pixelHeight);
+    Font(Device* device, Framebuffer* framebuffer, const std::string& fontFile, float pixelHeight);
 
     ~Font();
 

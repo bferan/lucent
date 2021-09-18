@@ -5,7 +5,7 @@
 namespace lucent
 {
 
-// Encapsulates a fixed capacity array with count
+// A fixed capacity array with count
 template<typename T, size_t N>
 class Array
 {
@@ -19,6 +19,16 @@ public:
     using const_iterator = const T*;
 
 public:
+    Array() = default;
+
+    Array(std::initializer_list<T> list)
+    {
+        for (auto&& elem: list)
+        {
+            emplace_back(elem);
+        }
+    }
+
     // STL interface
     template<typename... V>
     decltype(auto) emplace_back(V&& ... vals)
@@ -102,6 +112,16 @@ public:
     const_iterator cend() const
     {
         return m_Elems + m_Count;
+    }
+
+    const_iterator begin() const
+    {
+        return cbegin();
+    }
+
+    const_iterator end() const
+    {
+        return cend();
     }
 
     size_type size() const

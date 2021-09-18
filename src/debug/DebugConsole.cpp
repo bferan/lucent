@@ -11,9 +11,9 @@ const auto kPromptIndicator = "> "s;
 constexpr char kPromptCursor = '_';
 constexpr float kMaxScreenY = 800.0f;
 
-DebugConsole::DebugConsole(Device* device, int maxColumns)
+DebugConsole::DebugConsole(Device* device, Framebuffer* framebuffer, int maxColumns)
     : m_Device(device)
-    , m_Font(device, "fonts/JetBrainsMono-Medium.ttf", 26.0f)
+    , m_Font(device, framebuffer, "fonts/JetBrainsMono-Medium.ttf", 26.0f)
     , m_TextLog(device, m_Font)
     , m_TextPrompt(device, m_Font)
     , m_MaxColumns(maxColumns)

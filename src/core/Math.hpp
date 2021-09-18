@@ -75,6 +75,11 @@ inline float Mod(float value, float by)
     return std::fmod(value, by);
 }
 
+inline float Exp(float value)
+{
+    return std::exp(value);
+}
+
 inline float Pow(float base, float exp)
 {
     return std::powf(base, exp);
@@ -95,6 +100,11 @@ inline bool Approximately(float x, float y, float epsilon = FLT_EPSILON)
     return Abs(x - y) <= epsilon;
 }
 
+inline float Log2(float x)
+{
+    return std::log2(x);
+}
+
 template<typename T>
 T Min(T a, T b)
 {
@@ -105,6 +115,17 @@ template<typename T>
 T Max(T a, T b)
 {
     return a < b ? b : a;
+}
+
+// Temporary RNG implementation
+inline float RandF()
+{
+    return (float)std::rand() / RAND_MAX;
+}
+
+inline int Rand()
+{
+    return std::rand();
 }
 
 }

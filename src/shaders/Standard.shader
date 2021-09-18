@@ -32,6 +32,9 @@ layout(set=0, binding=1) uniform samplerCube u_EnvIrradiance;
 layout(set=0, binding=2) uniform samplerCube u_EnvSpecular;
 layout(set=0, binding=3) uniform sampler2D u_BRDF;
 layout(set=0, binding=4) uniform sampler2DArray u_ShadowMap;
+layout(set=0, binding=5) uniform sampler2D u_AOMap;
+layout(set=0, binding=6) uniform sampler2D u_NormalMap;
+layout(set=0, binding=7) uniform sampler2D u_Reflections;
 
 layout(set=1, binding=0) uniform sampler2D u_BaseColor;
 layout(set=1, binding=1) uniform sampler2D u_MetalRoughness;
@@ -84,7 +87,7 @@ float GGX_G2_fSpec(float NdotL, float NdotV, float a2)
 float GGX_D(vec3 m, vec3 n, float a2)
 {
     float NdotM = dot(n, m);
-    float denom = 1.0 + NdotM * NdotM * (a2 - 1);
+    float denom = 1.0 + NdotM * NdotM * (a2 - 1.0);
 
     return NdotM > 0.0 ? a2 / (PI * denom * denom) : 0.0;
 }
@@ -92,6 +95,7 @@ float GGX_D(vec3 m, vec3 n, float a2)
 const float depthBias = 0.0;
 const vec4 momentBiasTarget = vec4(0.0, 0.375, 0.0, 0.375);
 const float momentBiasWeight = 0.0000003;
+const float intensityScale = 1.02;
 
 float getShadow(vec3 coord, float depth)
 {
@@ -101,7 +105,7 @@ float getShadow(vec3 coord, float depth)
     vec4 moments = texture(u_ShadowMap, coord);
     vec4 b = mix(moments, momentBiasTarget, momentBiasWeight);
 
-    // Compute entries of the LDL* decomposition of the Hankel matrix B
+    // Compute entries of the LDL* decomposition of the Hankel moment matrix B
     float L21xD11 = fma(-b.x, b.y, b.z);
     float D11 = fma(-b.x, b.x, b.y);
     float D22a = fma(-b.y, b.y, b.w);
@@ -131,12 +135,12 @@ float getShadow(vec3 coord, float depth)
     float z1 = -p * 0.5 - r;
     float z2 = -p * 0.5 + r;
 
-    vec4 s = z2 < z ? vec4(z1, z, 1.0, 1.0) :
-        (z1 < z ? vec4(z, z1, 0.0, 1.0) : vec4(0.0, 0.0, 0.0, 0.0));
+    vec4 mask = z2 < z ? vec4(z1, z, 1.0, 1.0) :
+    (z1 < z ? vec4(z, z1, 0.0, 1.0) : vec4(0.0, 0.0, 0.0, 0.0));
 
-    float quotient = (s.x*z2 - b.x*(s.x + z2) +b.y) / ((z2 - s.y)*(z -z1));
-    float intensity = s.z + s.w * quotient;
-    intensity *= 1.02;
+    float quotient = (mask.x*z2 - b.x*(mask.x + z2) +b.y) / ((z2 - mask.y)*(z -z1));
+    float intensity = mask.z + mask.w * quotient;
+    intensity *= intensityScale;
 
     return 1.0 - clamp(intensity, 0.0, 1.0);
 }
@@ -177,13 +181,23 @@ void frag()
     R.y = -R.y;// TMP
     vec3 envSpecular = textureLod(u_EnvSpecular, R, rough * 5.0).rgb;
 
+    envSpecular = vec3(0.4);
+
+    ivec2 coord = ivec2(gl_FragCoord.xy);
+
+    vec4 ssrSpecular = texelFetch(u_Reflections, coord, 0).rgba;
+
     vec2 brdf = texture(u_BRDF, vec2(NdotV, rough)).rg;
 
     vec3 N_adj = vec3(N.x, -N.y, N.z);// TMP
     vec3 ambient = kD * albedo * texture(u_EnvIrradiance, N_adj).rgb;
+
     ambient += envSpecular * (F * brdf.x + brdf.y);
 
-    float ao = texture(u_AO, v_UV).r;
+    float ao = texelFetch(u_AOMap, coord, 0).r;
+
+    //float ao = texture(u_AO, v_UV).r;
+    //ao = 1.0;
     shaded += ao * ambient;
 
     // Emissive
@@ -237,6 +251,9 @@ void frag()
         contrib *= shadow;
         shaded += contrib;
     }
+
+    //    shaded = vec3(ao);
+    //shaded = texelFetch(u_Reflections, coord, 0).xyz;
 
     o_Color = vec4(shaded, 1.0);
 }

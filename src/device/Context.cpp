@@ -3,6 +3,18 @@
 namespace lucent
 {
 
+static VkPipelineBindPoint GetBindPoint(PipelineType type)
+{
+    switch (type)
+    {
+    case PipelineType::kGraphics:
+        return VK_PIPELINE_BIND_POINT_GRAPHICS;
+
+    case PipelineType::kCompute:
+        return VK_PIPELINE_BIND_POINT_COMPUTE;
+    }
+}
+
 Context::Context(Device& device)
     : m_Device(device)
 {
@@ -30,17 +42,29 @@ Context::Context(Device& device)
     VkDescriptorPoolSize descPoolSizes[] = {
         {
             .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .descriptorCount = 1024
+            .descriptorCount = 4096
         },
         {
             .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .descriptorCount = 1024
+            .descriptorCount = 4096
+        },
+        {
+            .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+            .descriptorCount = 4096,
+        },
+        {
+            .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            .descriptorCount = 4096
+        },
+        {
+            .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            .descriptorCount = 4096
         }
     };
 
     auto descPoolInfo = VkDescriptorPoolCreateInfo{
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-        .maxSets = 1024,
+        .maxSets = 4096,
         .poolSizeCount = LC_ARRAY_SIZE(descPoolSizes),
         .pPoolSizes = descPoolSizes
     };
@@ -52,6 +76,9 @@ Context::Context(Device& device)
 void Context::Begin()
 {
     vkResetCommandPool(m_Device.m_Handle, m_CommandPool, 0);
+
+    vkResetDescriptorPool(m_Device.m_Handle, m_DescriptorPool, 0);
+    m_DescriptorSets.clear();
 
     m_ScratchBindings.clear();
     m_ScratchDrawOffset = 0;
@@ -73,12 +100,15 @@ void Context::End()
 void Context::BeginRenderPass(const Framebuffer* framebuffer, VkExtent2D extent)
 {
     auto& fbuffer = *framebuffer;
-    if (fbuffer.usage == FramebufferUsage::SwapchainImage)
+    if (fbuffer.usage == FramebufferUsage::kSwapchainImage)
         m_SwapchainWritten = true;
+
+    m_BoundFramebuffer = framebuffer;
 
     if (extent.width == 0 | extent.height == 0)
         extent = fbuffer.extent;
 
+    // Configure viewport
     auto viewport = VkViewport{
         .x = 0.0f, .y = 0.0f,
         .width = static_cast<float>(extent.width),
@@ -87,12 +117,6 @@ void Context::BeginRenderPass(const Framebuffer* framebuffer, VkExtent2D extent)
     };
     vkCmdSetViewport(m_CommandBuffer, 0, 1, &viewport);
 
-    Array<VkClearValue, 8> clearValues;
-    if (framebuffer->colorTexture)
-        clearValues.push_back(VkClearValue{ .color = { 0.0f, 0.0f, 0.0f, 1.0f }});
-    if (framebuffer->depthTexture)
-        clearValues.push_back(VkClearValue{ .depthStencil = { .depth = 1.0f, .stencil = 0 }});
-
     auto renderPassBeginInfo = VkRenderPassBeginInfo{
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
         .renderPass = fbuffer.renderPass,
@@ -100,9 +124,7 @@ void Context::BeginRenderPass(const Framebuffer* framebuffer, VkExtent2D extent)
         .renderArea = {
             .offset = {},
             .extent = fbuffer.extent
-        },
-        .clearValueCount = static_cast<uint32_t>(clearValues.size()),
-        .pClearValues = clearValues.data()
+        }
     };
     vkCmdBeginRenderPass(m_CommandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 }
@@ -112,9 +134,40 @@ void Context::EndRenderPass() const
     vkCmdEndRenderPass(m_CommandBuffer);
 }
 
+void Context::Clear(Color color, float depth)
+{
+    LC_ASSERT(m_BoundFramebuffer);
+
+    Array <VkClearAttachment, Framebuffer::kMaxAttachments> clears;
+
+    auto rect = VkClearRect{
+        .rect = { .offset = {}, .extent = m_BoundFramebuffer->extent },
+        .baseArrayLayer = 0,
+        .layerCount = 1
+    };
+
+    for (uint32 attachment = 0; attachment < m_BoundFramebuffer->colorTextures.size(); ++attachment)
+    {
+        clears.push_back(VkClearAttachment{
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .colorAttachment = attachment,
+            .clearValue = VkClearValue{ .color = { color.r, color.g, color.b, color.a }}
+        });
+    }
+    if (m_BoundFramebuffer->depthTexture)
+    {
+        clears.push_back(VkClearAttachment{
+            .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+            .clearValue = VkClearValue{ .depthStencil = { .depth = depth }}
+        });
+    }
+
+    vkCmdClearAttachments(m_CommandBuffer, clears.size(), clears.data(), 1, &rect);
+}
+
 void Context::Bind(const Pipeline* pipeline)
 {
-    vkCmdBindPipeline(m_CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->handle);
+    vkCmdBindPipeline(m_CommandBuffer, GetBindPoint(pipeline->type), pipeline->handle);
     m_BoundPipeline = pipeline;
 }
 
@@ -122,20 +175,20 @@ void Context::Bind(const Buffer* buffer)
 {
     switch (buffer->type)
     {
-    case BufferType::Vertex:
+    case BufferType::kVertex:
     {
         VkDeviceSize offset = 0;
         vkCmdBindVertexBuffers(m_CommandBuffer, 0, 1, &buffer->handle, &offset);
         break;
     }
-    case BufferType::Index:
+    case BufferType::kIndex:
     {
         vkCmdBindIndexBuffer(m_CommandBuffer, buffer->handle, 0, VK_INDEX_TYPE_UINT32);
         break;
     }
     default:
     {
-        LC_ERROR("Attempted to bind invalid buffer type with Context::Bind");
+        LC_ERROR("Attempted to bind invalid buffer type with Context::BindTexture");
         LC_ASSERT(0);
         break;
     }
@@ -146,6 +199,13 @@ void Context::Draw(uint32 indexCount)
 {
     EstablishBindings();
     vkCmdDrawIndexed(m_CommandBuffer, indexCount, 1, 0, 0, 0);
+    ResetScratchBindings();
+}
+
+void Context::Dispatch(uint32 x, uint32 y, uint32 z)
+{
+    EstablishBindings();
+    vkCmdDispatch(m_CommandBuffer, x, y, z);
     ResetScratchBindings();
 }
 
@@ -181,7 +241,7 @@ void Context::CopyTexture(
             VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 0, nullptr, 1, &imgBarrier);
     };
 
-    // SRC: COLOR_ATTACHMENT -> TRANSFER_SRC
+    // SRC: ATTACHMENT -> TRANSFER_SRC
     transition(src->image,
         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
@@ -201,14 +261,14 @@ void Context::CopyTexture(
 
     auto copyInfo = VkImageCopy{
         .srcSubresource = {
-            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .aspectMask = src->aspect,
             .mipLevel = static_cast<uint32>(srcLevel),
             .baseArrayLayer = static_cast<uint32>(srcLayer),
             .layerCount = 1
         },
         .srcOffset = {},
         .dstSubresource = {
-            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .aspectMask = dst->aspect,
             .mipLevel = static_cast<uint32>(dstLevel),
             .baseArrayLayer = static_cast<uint32>(dstLayer),
             .layerCount = 1
@@ -226,7 +286,7 @@ void Context::CopyTexture(
         1, &copyInfo
     );
 
-    // SRC: TRANSFER_SRC -> COLOR_ATTACHMENT
+    // SRC: TRANSFER_SRC -> ATTACHMENT
     transition(src->image,
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -253,49 +313,63 @@ void Context::Dispose()
     vkDestroyDescriptorPool(m_Device.m_Handle, m_DescriptorPool, nullptr);
 }
 
-void Context::Bind(uint32 set, uint32 binding, const Buffer* buffer)
+void Context::BindBuffer(uint32 set, uint32 binding, const Buffer* buffer)
 {
-    LC_ASSERT(buffer->type == BufferType::Uniform);
+    LC_ASSERT(buffer->type == BufferType::kUniform || buffer->type == BufferType::kStorage);
 
     auto& bound = m_BoundSets[set];
-    bound.bindings[binding] = buffer;
+    bound.bindings[binding] = { (buffer->type == BufferType::kUniform) ?
+        Binding::kUniformBuffer : Binding::kStorageBuffer, buffer };
     bound.dirty = true;
 }
 
-void Context::Bind(uint32 set, uint32 binding, const Buffer* buffer, uint32 dynamicOffset)
+void Context::BindBuffer(uint32 set, uint32 binding, const Buffer* buffer, uint32 dynamicOffset)
 {
-    LC_ASSERT(buffer->type == BufferType::UniformDynamic);
+    LC_ASSERT(buffer->type == BufferType::kUniformDynamic);
 
     auto& bound = m_BoundSets[set];
-    bound.bindings[binding] = buffer;
+    bound.bindings[binding] = { Binding::kUniformBufferDynamic, buffer };
     // TODO: Ensure order of dynamic offsets matches order in descriptor set
     bound.dynamicOffsets.push_back(dynamicOffset);
     bound.dirty = true;
 }
 
-void Context::Bind(uint32 set, uint32 binding, const Texture* texture)
+void Context::BindTexture(uint32 set, uint32 binding, const Texture* texture, int level)
 {
     auto& bound = m_BoundSets[set];
-    bound.bindings[binding] = texture;
+    bound.bindings[binding] = Binding{ Binding::kTexture, texture, level };
     bound.dirty = true;
 }
 
-void Context::Bind(DescriptorID id, const Buffer* buffer)
+void Context::BindImage(uint32 set, uint32 binding, const Texture* texture, int level)
 {
-    auto entry = FindDescriptorEntry(id);
-    Bind(entry.set, entry.binding, buffer);
+    auto& bound = m_BoundSets[set];
+    bound.bindings[binding] = Binding{ Binding::kImage, texture, level };
+    bound.dirty = true;
 }
 
-void Context::Bind(DescriptorID id, const Buffer* buffer, uint32 dynamicOffset)
+void Context::BindBuffer(DescriptorID id, const Buffer* buffer)
 {
     auto entry = FindDescriptorEntry(id);
-    Bind(entry.set, entry.binding, buffer, dynamicOffset);
+    BindBuffer(entry.set, entry.binding, buffer);
 }
 
-void Context::Bind(DescriptorID id, const Texture* texture)
+void Context::BindBuffer(DescriptorID id, const Buffer* buffer, uint32 dynamicOffset)
 {
     auto entry = FindDescriptorEntry(id);
-    Bind(entry.set, entry.binding, texture);
+    BindBuffer(entry.set, entry.binding, buffer, dynamicOffset);
+}
+
+void Context::BindTexture(DescriptorID id, const Texture* texture, int level)
+{
+    auto entry = FindDescriptorEntry(id);
+    BindTexture(entry.set, entry.binding, texture, level);
+}
+
+void Context::BindImage(DescriptorID id, const Texture* texture, int level)
+{
+    auto entry = FindDescriptorEntry(id);
+    BindImage(entry.set, entry.binding, texture, level);
 }
 
 void Context::Uniform(DescriptorID id, const uint8* data, size_t size)
@@ -332,7 +406,7 @@ void Context::EstablishBindings()
 
             // Bind set
             vkCmdBindDescriptorSets(m_CommandBuffer,
-                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                GetBindPoint(m_BoundPipeline->type),
                 m_BoundPipeline->shader->pipelineLayout,
                 setIndex,
                 1,
@@ -380,41 +454,73 @@ VkDescriptorSet Context::FindDescriptorSet(const BindingArray& bindings, VkDescr
             VkDescriptorBufferInfo* bufferInfo = nullptr;
             VkDescriptorType descriptorType{};
 
-            if (holds_alternative<NullBinding>(binding))
+            switch (binding.type)
             {
+            case Binding::kNone:
                 continue;
-            }
-            else if (std::holds_alternative<BufferBinding>(binding))
+
+            case Binding::kUniformBuffer:
             {
-                auto buffer = get<BufferBinding>(binding);
                 bufferInfo = &bufferWrites.emplace_back(VkDescriptorBufferInfo{
-                    .buffer = buffer->handle,
+                    .buffer = binding.buffer->handle,
                     .offset = 0,
                     .range = VK_WHOLE_SIZE
                 });
-
-                switch (buffer->type)
-                {
-                case BufferType::Uniform:
-                    descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-                    break;
-                case BufferType::UniformDynamic:
-                    descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-                    break;
-                default:
-                    LC_ERROR("Attempted to bind non-uniform buffer as descriptor");
-                    LC_ASSERT(0);
-                }
+                descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+                break;
             }
-            else if (std::holds_alternative<TextureBinding>(binding))
+
+            case Binding::kUniformBufferDynamic:
             {
-                auto texture = get<TextureBinding>(binding);
+                bufferInfo = &bufferWrites.emplace_back(VkDescriptorBufferInfo{
+                    .buffer = binding.buffer->handle,
+                    .offset = 0,
+                    .range = VK_WHOLE_SIZE
+                });
+                descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+                break;
+            }
+
+            case Binding::kStorageBuffer:
+            {
+                bufferInfo = &bufferWrites.emplace_back(VkDescriptorBufferInfo{
+                    .buffer = binding.buffer->handle,
+                    .offset = 0,
+                    .range = VK_WHOLE_SIZE
+                });
+                descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+                break;
+            }
+
+            case Binding::kTexture:
+            {
+                auto view = binding.level >= 0 ?
+                    binding.texture->mipViews[binding.level] :
+                    binding.texture->imageView;
+
                 imageInfo = &imageWrites.emplace_back(VkDescriptorImageInfo{
-                    .sampler = texture->sampler,
-                    .imageView = texture->imageView,
+                    .sampler = binding.texture->sampler,
+                    .imageView = view,
                     .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
                 });
                 descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                break;
+            }
+
+            case Binding::kImage:
+            {
+                auto view = binding.level >= 0 ?
+                    binding.texture->mipViews[binding.level] :
+                    binding.texture->imageView;
+
+                imageInfo = &imageWrites.emplace_back(VkDescriptorImageInfo{
+                    .sampler = binding.texture->sampler,
+                    .imageView = view,
+                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL
+                });
+                descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+                break;
+            }
             }
 
             writes.emplace_back(VkWriteDescriptorSet{
@@ -448,7 +554,7 @@ DescriptorEntry Context::FindDescriptorEntry(DescriptorID id)
 
     if (it == descriptors.end() || id.hash != it->hash)
     {
-        LC_ERROR("Failed to find descriptor with ID \"{}\"", id.name);
+        LC_ERROR("ERROR: Failed to find descriptor with ID \"{}\"", id.name);
         return {};
     }
     return *it;
@@ -458,7 +564,7 @@ uint32 Context::GetScratchOffset(uint32 set, uint32 binding)
 {
     if (!m_ScratchUniformBuffer)
     {
-        m_ScratchUniformBuffer = m_Device.CreateBuffer(BufferType::UniformDynamic, 65536);
+        m_ScratchUniformBuffer = m_Device.CreateBuffer(BufferType::kUniformDynamic, 65536);
     }
 
     auto matchBinding = [=](auto& arg)
@@ -488,7 +594,7 @@ uint32 Context::GetScratchOffset(uint32 set, uint32 binding)
         m_ScratchUniformBuffer->Clear(block->size, offset);
 
         // Bind to uniform block
-        Bind(set, binding, m_ScratchUniformBuffer, offset);
+        BindBuffer(set, binding, m_ScratchUniformBuffer, offset);
 
         it = &m_ScratchBindings.emplace_back(ScratchBinding{
             .set = set,
@@ -506,6 +612,13 @@ void Context::ResetScratchBindings()
     {
         m_ScratchDrawOffset = m_ScratchBindings.back().offset + m_ScratchBindings.back().size;
         m_ScratchBindings.clear();
+
+        // TODO: REMOVE THIS
+        if (m_ScratchDrawOffset > 60000)
+        {
+            m_ScratchUniformBuffer = m_Device.CreateBuffer(BufferType::kUniformDynamic, 65536);
+            m_ScratchDrawOffset = 0;
+        }
     }
 }
 
@@ -531,7 +644,7 @@ void Context::AttachmentToImage(Texture* texture)
 
     vkCmdPipelineBarrier(m_CommandBuffer,
         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         VK_DEPENDENCY_BY_REGION_BIT,
         0, nullptr,
         0, nullptr,
@@ -589,7 +702,7 @@ void Context::DepthAttachmentToImage(Texture* texture)
 
     vkCmdPipelineBarrier(m_CommandBuffer,
         VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         VK_DEPENDENCY_BY_REGION_BIT,
         0, nullptr,
         0, nullptr,
@@ -623,6 +736,121 @@ void Context::DepthImageToAttachment(Texture* texture)
         0, nullptr,
         0, nullptr,
         1, &imageBarrier);
+}
+
+void Context::ImageToGeneral(Texture* texture)
+{
+    auto imageBarrier = VkImageMemoryBarrier{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .srcAccessMask = VK_ACCESS_NONE_KHR,
+        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+        .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image = texture->image,
+        .subresourceRange = {
+            .aspectMask = texture->aspect,
+            .baseMipLevel = 0,
+            .levelCount = VK_REMAINING_MIP_LEVELS,
+            .baseArrayLayer = 0,
+            .layerCount = VK_REMAINING_ARRAY_LAYERS
+        }
+    };
+
+    vkCmdPipelineBarrier(m_CommandBuffer,
+        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        VK_DEPENDENCY_BY_REGION_BIT,
+        0, nullptr,
+        0, nullptr,
+        1, &imageBarrier);
+}
+
+void Context::ComputeBarrier(Texture* texture, Buffer* buffer)
+{
+    auto imageBarrier = VkImageMemoryBarrier{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+        .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
+        .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image = texture->image,
+        .subresourceRange = {
+            .aspectMask = texture->aspect,
+            .baseMipLevel = 0,
+            .levelCount = VK_REMAINING_MIP_LEVELS,
+            .baseArrayLayer = 0,
+            .layerCount = VK_REMAINING_ARRAY_LAYERS
+        }
+    };
+
+    vkCmdPipelineBarrier(m_CommandBuffer,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        VK_DEPENDENCY_BY_REGION_BIT,
+        0, nullptr,
+        0, nullptr,
+        1, &imageBarrier);
+
+    auto bufferBarrier = VkBufferMemoryBarrier{
+        .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+        .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+        .dstAccessMask = VK_ACCESS_HOST_READ_BIT,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .buffer = buffer->handle,
+        .offset = 0,
+        .size = VK_WHOLE_SIZE
+    };
+
+    vkCmdPipelineBarrier(m_CommandBuffer,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        VK_PIPELINE_STAGE_HOST_BIT,
+        VK_DEPENDENCY_BY_REGION_BIT,
+        0, nullptr,
+        1, &bufferBarrier,
+        0, nullptr);
+}
+
+void Context::Transition(Texture* texture,
+    VkPipelineStageFlags srcStage, VkAccessFlags srcAccess,
+    VkPipelineStageFlags dstStage, VkAccessFlags dstAccess,
+    VkImageLayout oldLayout, VkImageLayout newLayout,
+    int level)
+{
+    auto imageBarrier = VkImageMemoryBarrier{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .srcAccessMask = srcAccess,
+        .dstAccessMask = dstAccess,
+        .oldLayout = oldLayout,
+        .newLayout = newLayout,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image = texture->image,
+        .subresourceRange = {
+            .aspectMask = texture->aspect,
+            .baseMipLevel = level >= 0 ? level : 0u,
+            .levelCount = level >= 0 ? 1 : VK_REMAINING_MIP_LEVELS,
+            .baseArrayLayer = 0,
+            .layerCount = VK_REMAINING_ARRAY_LAYERS
+        }
+    };
+
+    vkCmdPipelineBarrier(m_CommandBuffer,
+        srcStage,
+        dstStage,
+        VK_DEPENDENCY_BY_REGION_BIT,
+        0, nullptr,
+        0, nullptr,
+        1, &imageBarrier);
+}
+
+bool Context::Binding::operator==(const Binding& rhs) const
+{
+    return type == rhs.type && data == rhs.data && level == rhs.level;
 }
 
 }
