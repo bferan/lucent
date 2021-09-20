@@ -2,8 +2,9 @@
 
 #include "GLFW/glfw3.h"
 
-#include "device/Device.hpp"
+#include "device/vulkan/VulkanDevice.hpp"
 #include "rendering/SceneRenderer.hpp"
+#include "rendering/Geometry.hpp"
 #include "scene/Importer.hpp"
 #include "scene/HdrImporter.hpp"
 
@@ -15,8 +16,8 @@ class BasicDemo
 public:
     void Init()
     {
-        LC_INFO("Welcome to LUCENT!");
-        m_Renderer = std::make_unique<SceneRenderer>(&m_Device);
+        RenderSettings settings{};
+        m_Renderer = std::make_unique<SceneRenderer>(settings, &m_Device);
 
         Importer importer(&m_Device);
 
@@ -52,19 +53,19 @@ public:
 //        lantern.Get<Transform>().scale = 0.1f;
 //        ApplyTransform(lantern);
 
-        auto plane = importer.Import(m_Scene, "models/Plane.glb");
-        auto& planeTransform = plane.Get<Transform>();
-        planeTransform.scale = 10.0f;
-        ApplyTransform(plane);
-
-        auto& mesh = m_Scene.meshes[plane.Get<MeshInstance>().meshes[0]];
-        auto& mat = m_Scene.materials[mesh.materialIdx];
-
-        mat.baseColorMap = m_Device.m_WhiteTexture;
-        mat.metalRough = m_Device.m_WhiteTexture;
-        mat.baseColorFactor = Color::White();
-        mat.roughnessFactor = 0.0;
-        mat.metallicFactor = 1.0;
+//        auto plane = importer.Import(m_Scene, "models/Plane.glb");
+//        auto& planeTransform = plane.Get<Transform>();
+//        planeTransform.scale = 10.0f;
+//        ApplyTransform(plane);
+//
+//        auto& mesh = m_Scene.meshes[plane.Get<MeshInstance>().meshes[0]];
+//        auto& mat = m_Scene.materials[mesh.materialIdx];
+//
+//        mat.baseColorMap = g_WhiteTexture;
+//        mat.metalRough = g_WhiteTexture;
+//        mat.baseColorFactor = Color::White();
+//        mat.roughnessFactor = 0.0;
+//        mat.metallicFactor = 1.0;
 
         auto sponza = importer.Import(m_Scene, "models/Sponza/Sponza.gltf");
         sponza.Get<Transform>().scale = 0.015f;
@@ -152,7 +153,7 @@ public:
 
 public:
     LogStdOut logStdOut{};
-    Device m_Device{};
+    VulkanDevice m_Device{};
     std::unique_ptr<SceneRenderer> m_Renderer{};
 
     Entity m_Rotate;

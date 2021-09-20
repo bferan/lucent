@@ -84,8 +84,8 @@ void TextMesh::Render(Context& context)
 {
     m_Font.Bind(context);
 
-    context.Bind(m_IndexBuffer);
-    context.Bind(m_VertexBuffer);
+    context.BindBuffer(m_IndexBuffer);
+    context.BindBuffer(m_VertexBuffer);
     context.Draw(m_Indices.size());
 }
 

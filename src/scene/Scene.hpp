@@ -117,7 +117,6 @@ struct DirectionalLight
     Cascade cascades[kNumCascades];
 };
 
-
 struct Scene
 {
 public:

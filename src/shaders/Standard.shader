@@ -181,8 +181,6 @@ void frag()
     R.y = -R.y;// TMP
     vec3 envSpecular = textureLod(u_EnvSpecular, R, rough * 5.0).rgb;
 
-    envSpecular = vec3(0.4);
-
     ivec2 coord = ivec2(gl_FragCoord.xy);
 
     vec4 ssrSpecular = texelFetch(u_Reflections, coord, 0).rgba;

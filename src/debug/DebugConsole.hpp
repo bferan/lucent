@@ -1,7 +1,7 @@
 #pragma once
 
 #include "device/Device.hpp"
-#include "device/Input.hpp"
+#include "Input.hpp"
 #include "debug/TextMesh.hpp"
 
 namespace lucent

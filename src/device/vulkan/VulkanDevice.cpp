@@ -1,15 +1,23 @@
-#include "Device.hpp"
+#include "VulkanDevice.hpp"
 
 #include "GLFW/glfw3.h"
 #include "glslang/Public/ShaderLang.h"
 
-#include "device/ShaderCache.hpp"
-#include "device/Context.hpp"
+#include "device/vulkan/ShaderCache.hpp"
+#include "device/vulkan/VulkanBuffer.hpp"
+#include "device/vulkan/VulkanTexture.hpp"
+#include "device/vulkan/VulkanPipeline.hpp"
+#include "device/vulkan/VulkanContext.hpp"
+#include "device/vulkan/VulkanFramebuffer.hpp"
+#include "device/vulkan/ShaderCache.hpp"
+#include "rendering/Geometry.hpp"
+
+#include "windows.h"
+#include "renderdoc_app.h"
 
 namespace lucent
 {
 
-// Device
 static VkBufferUsageFlags BufferTypeToFlags(BufferType type)
 {
     VkBufferUsageFlags flags = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
@@ -113,32 +121,40 @@ static VkImageAspectFlags TextureFormatToAspect(TextureFormat format)
     }
 }
 
-static VkImageUsageFlags TextureFormatToUsage(TextureFormat format)
+static VkImageUsageFlags TextureUsageToVkUsage(TextureUsage usage)
 {
-    switch (format)
+    VkImageUsageFlags flags = 0;
+
+    switch (usage)
     {
-    case TextureFormat::kR8:
-    case TextureFormat::kRGBA8_SRGB:
-    case TextureFormat::kRGBA8:
-    case TextureFormat::kRG32F:
-    case TextureFormat::kR32F:
-    case TextureFormat::kRGBA32F:
-        // TODO: Narrow this down
-        return VK_IMAGE_USAGE_TRANSFER_DST_BIT
-            | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
-            | VK_IMAGE_USAGE_SAMPLED_BIT
-            | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-
-    case TextureFormat::kDepth32F:
-    case TextureFormat::kDepth16U:
-        return VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
-            | VK_IMAGE_USAGE_SAMPLED_BIT
-            | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-
-    default:
-        LC_ASSERT(0 && "Invalid texture format");
-        return 0;
+    case TextureUsage::kReadOnly:
+    {
+        flags |= VK_IMAGE_USAGE_SAMPLED_BIT;
+        flags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+        flags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+        flags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        break;
     }
+    case TextureUsage::kReadWrite:
+    {
+        flags |= VK_IMAGE_USAGE_SAMPLED_BIT;
+        flags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+        flags |= VK_IMAGE_USAGE_STORAGE_BIT;
+        flags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+        flags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        break;
+    }
+    case TextureUsage::kDepthAttachment:
+    {
+        flags |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+        flags |= VK_IMAGE_USAGE_SAMPLED_BIT;
+        flags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+        break;
+    }
+    default:
+        break;
+    }
+    return flags;
 }
 
 static VkImageViewType TextureShapeToViewType(TextureShape shape)
@@ -190,117 +206,23 @@ static VkFilter TextureFilterToVk(TextureFilter filter)
     }
 }
 
-void Device::CreateCube()
-{
-    std::vector<Vertex> vertices;
-    std::vector<uint32> indices;
+RENDERDOC_API_1_4_1* g_API;
 
-    vertices.assign({
-        { .position = { -1.0f, -1.0f, -1.0f }},
-        { .position = { -1.0f, -1.0f, 1.0f }},
-        { .position = { 1.0f, -1.0f, 1.0f }},
-        { .position = { 1.0f, -1.0f, -1.0f }},
-        { .position = { -1.0f, 1.0f, -1.0f }},
-        { .position = { -1.0f, 1.0f, 1.0f }},
-        { .position = { 1.0f, 1.0f, 1.0f }},
-        { .position = { 1.0f, 1.0f, -1.0f }},
-    });
-
-    indices.assign({
-        0, 1, 2, 2, 3, 0,
-        0, 4, 5, 5, 1, 0,
-        0, 3, 7, 7, 4, 0,
-        2, 1, 5, 5, 6, 2,
-        3, 2, 6, 6, 7, 3,
-        4, 7, 6, 6, 5, 4
-    });
-
-    m_Cube.vertices = CreateBuffer(BufferType::kVertex, vertices.size() * sizeof(Vertex));
-    m_Cube.vertices->Upload(vertices.data(), vertices.size() * sizeof(Vertex));
-
-    m_Cube.indices = CreateBuffer(BufferType::kIndex, indices.size() * sizeof(uint32));
-    m_Cube.indices->Upload(indices.data(), indices.size() * sizeof(uint32));
-    m_Cube.numIndices = indices.size();
-}
-
-void Device::CreateQuad()
-{
-    std::vector<Vertex> vertices;
-    std::vector<uint32> indices;
-
-    vertices.assign({
-        { .position = { -1.0f, -1.0f, 0.0f }, .texCoord0 = { 0.0f, 0.0f }},
-        { .position = { -1.0f, 1.0f, 0.0f }, .texCoord0 = { 0.0f, 1.0f }},
-        { .position = { 1.0f, 1.0f, 0.0f }, .texCoord0 = { 1.0f, 1.0f }},
-        { .position = { 1.0f, -1.0f, 0.0f }, .texCoord0 = { 1.0f, 0.0f }}
-    });
-
-    indices.assign({ 0, 1, 2, 2, 3, 0 });
-
-    m_Quad.vertices = CreateBuffer(BufferType::kVertex, vertices.size() * sizeof(Vertex));
-    m_Quad.vertices->Upload(vertices.data(), vertices.size() * sizeof(Vertex));
-
-    m_Quad.indices = CreateBuffer(BufferType::kIndex, indices.size() * sizeof(uint32));
-    m_Quad.indices->Upload(indices.data(), indices.size() * sizeof(uint32));
-    m_Quad.numIndices = indices.size();
-}
-
-void Device::CreateSphere()
-{
-    std::vector<Vertex> vertices;
-    std::vector<uint32> indices;
-
-    constexpr int kNumSegments = 32;
-    constexpr int kNumRings = 16;
-
-    for (int ring = 0; ring <= kNumRings; ++ring)
-    {
-        auto theta = (float)ring * kPi / kNumRings;
-        for (int segment = 0; segment < kNumSegments; ++segment)
-        {
-            auto phi = (float)segment * k2Pi / kNumSegments;
-            auto pos = Vector3(Sin(theta) * Cos(phi), Cos(theta), Sin(theta) * Sin(phi));
-
-            vertices.push_back(Vertex{
-                .position = pos,
-                .normal = pos,
-                .texCoord0 = { (float)segment / kNumSegments, (float)ring / kNumRings }
-            });
-        }
-    }
-
-    for (int ring = 1; ring <= kNumRings; ++ring)
-    {
-        for (int segment = 0; segment < kNumSegments; ++segment)
-        {
-            int start = ring * kNumSegments;
-            int prev = start - kNumSegments;
-
-            int pos = start + segment;
-
-            indices.push_back(pos);
-            indices.push_back(pos - kNumSegments);
-            indices.push_back(((pos - kNumSegments + 1) % kNumSegments) + prev);
-
-            indices.push_back(((pos - kNumSegments + 1) % kNumSegments) + prev);
-            indices.push_back(((pos + 1) % kNumSegments) + start);
-            indices.push_back(pos);
-        }
-    }
-
-    m_Sphere.vertices = CreateBuffer(BufferType::kVertex, vertices.size() * sizeof(Vertex));
-    m_Sphere.vertices->Upload(vertices.data(), vertices.size() * sizeof(Vertex));
-
-    m_Sphere.indices = CreateBuffer(BufferType::kIndex, indices.size() * sizeof(uint32));
-    m_Sphere.indices->Upload(indices.data(), indices.size() * sizeof(uint32));
-    m_Sphere.numIndices = indices.size();
-}
-
-Device::Device()
+VulkanDevice::VulkanDevice()
 {
     // Set up GLFW
     if (!glfwInit())
         return;
+
+    //AddDllDirectory(L"C:\\Program Files\\RenderDoc");
+//    if(HMODULE mod = LoadLibraryA("renderdoc.dll"))
+//    {
+//        auto RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)GetProcAddress(mod, "RENDERDOC_GetAPI");
+//        int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_4_1, (void **)&g_API);
+//        LC_ASSERT(ret == 1);
+//    }
+//    g_API->SetCaptureOptionU32(eRENDERDOC_Option_CaptureCallstacks, 1);
+//    g_API->SetCaptureFilePathTemplate("../lucent-captures/lucent-capture");
 
     glslang::InitializeProcess();
 
@@ -312,9 +234,6 @@ Device::Device()
         nullptr, nullptr);
 
     LC_ASSERT(m_Window != nullptr);
-
-    // Init input
-    m_Input = std::make_unique<Input>(m_Window);
 
     CreateInstance();
     glfwCreateWindowSurface(m_Instance, m_Window, nullptr, &m_Surface);
@@ -337,7 +256,8 @@ Device::Device()
     vkCreateSemaphore(m_Handle, &semaphoreInfo, nullptr, &m_RenderFinished);
 
     // Create transfer buffer
-    m_TransferBuffer = CreateBuffer(BufferType::kStaging, 128 * 1024 * 1024);
+    m_TransferBuffer = VulkanDevice::CreateBuffer(BufferType::kStaging, 128 * 1024 * 1024);
+    m_OneShotContext = VulkanDevice::CreateContext();
 
     auto poolInfo = VkCommandPoolCreateInfo{
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -352,29 +272,11 @@ Device::Device()
 
     CreateSwapchain();
 
-    // Create dummy textures
-    uint32 black = 0xff000000;
-    m_BlackTexture = CreateTexture(TextureSettings{}, sizeof(black), &black);
-
-    uint32 white = 0xffffffff;
-    m_WhiteTexture = CreateTexture(TextureSettings{}, sizeof(white), &white);
-
-    uint32 gray = 0xff808080;
-    m_GrayTexture = CreateTexture(TextureSettings{}, sizeof(gray), &gray);
-
-    uint32 normal = Color(0.5f, 0.5f, 1.0f).Pack();
-    m_NormalTexture = CreateTexture(TextureSettings{}, sizeof(normal), &normal);
-
-    uint32 green = 0xff00ff00;
-    m_GreenTexture = CreateTexture(TextureSettings{}, sizeof(green), &green);
-
-    // Create primitive meshes
-    CreateCube();
-    CreateQuad();
-    CreateSphere();
+    InitGeometry(this);
+    m_Input = std::make_unique<Input>(m_Window);
 }
 
-Device::~Device()
+VulkanDevice::~VulkanDevice()
 {
     vkDeviceWaitIdle(m_Handle);
 
@@ -414,7 +316,7 @@ Device::~Device()
     // Destroy contexts
     for (auto& ctx: m_Contexts)
     {
-        ctx->Dispose();
+        ctx->lucent::VulkanContext::~VulkanContext();
     }
 
     // Destroy shaders
@@ -458,7 +360,7 @@ Device::~Device()
     glfwTerminate();
 }
 
-void Device::CreateInstance()
+void VulkanDevice::CreateInstance()
 {
     std::vector<const char*> instanceExtensions = {
         VK_EXT_DEBUG_UTILS_EXTENSION_NAME
@@ -495,7 +397,7 @@ void Device::CreateInstance()
         .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
 
         .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
-            VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+            VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
             VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
 
         .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
@@ -515,7 +417,7 @@ void Device::CreateInstance()
     }
 }
 
-void Device::CreateDevice()
+void VulkanDevice::CreateDevice()
 {
     // Find suitable physical device
     uint32 deviceCount;
@@ -612,7 +514,7 @@ void Device::CreateDevice()
     vkGetDeviceQueue(m_Handle, presentFamilyIdx, 0, &m_PresentQueue.handle);
 }
 
-void Device::CreateSwapchain()
+void VulkanDevice::CreateSwapchain()
 {
     // Find suitable format, extent and present mode
     VkSurfaceCapabilitiesKHR surfaceCapabilities;
@@ -622,7 +524,10 @@ void Device::CreateSwapchain()
     uint32 surfaceFormatCount = 0;
     vkGetPhysicalDeviceSurfaceFormatsKHR(m_PhysicalDevice, m_Surface, &surfaceFormatCount, nullptr);
     surfaceFormats.resize(surfaceFormatCount);
-    vkGetPhysicalDeviceSurfaceFormatsKHR(m_PhysicalDevice, m_Surface, &surfaceFormatCount, surfaceFormats.data());
+    vkGetPhysicalDeviceSurfaceFormatsKHR(m_PhysicalDevice,
+        m_Surface,
+        &surfaceFormatCount,
+        surfaceFormats.data());
 
     VkSurfaceFormatKHR chosenFormat;
     for (auto& format: surfaceFormats)
@@ -744,7 +649,9 @@ void Device::CreateSwapchain()
     auto depthTexture = CreateTexture(TextureSettings{
         .width = chosenExtent.width,
         .height = chosenExtent.height,
-        .format = TextureFormat::kDepth32F });
+        .format = TextureFormat::kDepth32F,
+        .usage = TextureUsage::kDepthAttachment
+    });
 
     // Initialize swapchain textures & framebuffers
     m_Swapchain.textures.resize(imageCount);
@@ -754,11 +661,14 @@ void Device::CreateSwapchain()
         auto& tex = m_Swapchain.textures[i];
         auto& fb = m_Swapchain.framebuffers[i];
 
+        tex.width = chosenExtent.width;
+        tex.height = chosenExtent.height;
         tex.image = images[i];
         tex.alloc = VK_NULL_HANDLE;
         tex.extent = chosenExtent;
         tex.format = chosenFormat.format;
         tex.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+        tex.usage = TextureUsage::kPresentSrc;
 
         // Create image view
         auto viewCreateInfo = VkImageViewCreateInfo{
@@ -786,7 +696,7 @@ void Device::CreateSwapchain()
         fb.depthTexture = depthTexture;
 
         // Create framebuffer
-        VkImageView fbAttachments[] = { fb.colorTextures.front()->imageView, fb.depthTexture->imageView };
+        VkImageView fbAttachments[] = { Get(fb.colorTextures.front())->imageView, Get(fb.depthTexture)->imageView };
 
         auto framebufferInfo = VkFramebufferCreateInfo{
             .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
@@ -802,27 +712,29 @@ void Device::CreateSwapchain()
     }
 }
 
-Pipeline* Device::CreatePipeline(const PipelineSettings& settings, PipelineType type)
+Pipeline* VulkanDevice::CreatePipeline(const PipelineSettings& settings)
 {
     auto shader = m_ShaderCache->Compile(settings.shaderName);
 
-    auto pipeline = type == PipelineType::kGraphics ?
+    auto pipeline = settings.type == PipelineType::kGraphics ?
         CreateGraphicsPipeline(settings, shader) :
         CreateComputePipeline(settings, shader);
 
     return m_Pipelines.emplace_back(std::move(pipeline)).get();
 }
 
-std::unique_ptr<Pipeline> Device::CreateGraphicsPipeline(const PipelineSettings& settings, Shader* shaderPtr)
+std::unique_ptr<VulkanPipeline> VulkanDevice::CreateGraphicsPipeline(
+    const PipelineSettings& settings, Shader* shaderPtr)
 {
-    auto pipelinePtr = std::make_unique<Pipeline>(settings, PipelineType::kGraphics);
+    auto pipelinePtr = std::make_unique<VulkanPipeline>(settings);
 
     if (!shaderPtr) return pipelinePtr;
 
     auto& shader = *shaderPtr;
     auto& pipeline = *pipelinePtr;
-    auto& framebuffer = settings.framebuffer ? *settings.framebuffer : m_Swapchain.framebuffers[0];
+    auto& framebuffer = settings.framebuffer ? *Get(settings.framebuffer) : m_Swapchain.framebuffers[0];
 
+    pipeline.type = PipelineType::kGraphics;
     pipeline.shader = shaderPtr;
     shader.uses++;
 
@@ -940,7 +852,7 @@ std::unique_ptr<Pipeline> Device::CreateGraphicsPipeline(const PipelineSettings&
         .stencilTestEnable = VK_FALSE,
     };
 
-    Array <VkPipelineColorBlendAttachmentState, Framebuffer::kMaxColorAttachments> colorAttachments;
+    Array <VkPipelineColorBlendAttachmentState, kMaxColorAttachments> colorAttachments;
     for (int i = 0; i < framebuffer.colorTextures.size(); ++i)
     {
         auto colorBlendAttachmentInfo = VkPipelineColorBlendAttachmentState{
@@ -1007,14 +919,16 @@ std::unique_ptr<Pipeline> Device::CreateGraphicsPipeline(const PipelineSettings&
     return pipelinePtr;
 }
 
-std::unique_ptr<Pipeline> Device::CreateComputePipeline(const PipelineSettings& settings, Shader* shaderPtr)
+std::unique_ptr<VulkanPipeline> VulkanDevice::CreateComputePipeline(
+    const PipelineSettings& settings, Shader* shaderPtr)
 {
-    auto pipelinePtr = std::make_unique<Pipeline>(settings, PipelineType::kCompute);
+    auto pipelinePtr = std::make_unique<VulkanPipeline>(settings);
     if (!shaderPtr) return pipelinePtr;
 
     auto& shader = *shaderPtr;
     auto& pipeline = *pipelinePtr;
 
+    pipeline.type = PipelineType::kCompute;
     pipeline.shader = shaderPtr;
     shader.uses++;
 
@@ -1038,7 +952,7 @@ std::unique_ptr<Pipeline> Device::CreateComputePipeline(const PipelineSettings& 
     return pipelinePtr;
 }
 
-void Device::ReloadPipelines()
+void VulkanDevice::ReloadPipelines()
 {
     vkDeviceWaitIdle(m_Handle);
     for (auto& pipeline: m_Pipelines)
@@ -1060,14 +974,14 @@ void Device::ReloadPipelines()
     }
 }
 
-void Device::FreePipeline(Pipeline* pipeline)
+void VulkanDevice::FreePipeline(VulkanPipeline* pipeline)
 {
     vkDestroyPipeline(m_Handle, pipeline->handle, nullptr);
 }
 
-Buffer* Device::CreateBuffer(BufferType type, size_t size)
+Buffer* VulkanDevice::CreateBuffer(BufferType type, size_t size)
 {
-    auto& buff = *m_Buffers.emplace_back(std::make_unique<Buffer>());
+    auto& buff = *m_Buffers.emplace_back(std::make_unique<VulkanBuffer>());
 
     buff.type = type;
     buff.device = this;
@@ -1090,13 +1004,13 @@ Buffer* Device::CreateBuffer(BufferType type, size_t size)
     return &buff;
 }
 
-Texture* Device::CreateTexture(const TextureSettings& info, size_t size, const void* data)
+Texture* VulkanDevice::CreateTexture(const TextureSettings& info)
 {
-    auto& tex = *m_Textures.emplace_back(std::make_unique<Texture>());
+    auto& tex = *m_Textures.emplace_back(std::make_unique<VulkanTexture>());
 
     auto format = TextureFormatToVkFormat(info.format);
     auto aspect = TextureFormatToAspect(info.format);
-    auto usage = TextureFormatToUsage(info.format);
+    auto usage = TextureUsageToVkUsage(info.usage);
     auto viewType = TextureShapeToViewType(info.shape);
     auto addressMode = TextureAddressModeToVk(info.addressMode);
     auto filter = TextureFilterToVk(info.filter);
@@ -1116,17 +1030,16 @@ Texture* Device::CreateTexture(const TextureSettings& info, size_t size, const v
         LC_ASSERT(info.width == info.height);
     }
 
-    if (info.write)
-    {
-        usage |= VK_IMAGE_USAGE_STORAGE_BIT;
-    }
-
     tex.samples = info.samples;
     tex.texFormat = info.format;
     tex.format = format;
     tex.extent = { .width = info.width, .height = info.height };
     tex.aspect = aspect;
     tex.levels = info.levels;
+    tex.usage = info.usage;
+    tex.device = this;
+    tex.width = info.width;
+    tex.height = info.height;
 
     // Create image
     auto imageInfo = VkImageCreateInfo{
@@ -1152,8 +1065,7 @@ Texture* Device::CreateTexture(const TextureSettings& info, size_t size, const v
         .usage = VMA_MEMORY_USAGE_GPU_ONLY
     };
 
-    auto result = vmaCreateImage(m_Allocator, &imageInfo, &allocInfo, &tex.image, &tex.alloc, nullptr);
-    LC_ASSERT(result == VK_SUCCESS);
+    LC_CHECK(vmaCreateImage(m_Allocator, &imageInfo, &allocInfo, &tex.image, &tex.alloc, nullptr));
 
     // Create image view
     auto viewInfo = VkImageViewCreateInfo{
@@ -1170,8 +1082,7 @@ Texture* Device::CreateTexture(const TextureSettings& info, size_t size, const v
             .layerCount = arrayLayers
         }
     };
-    result = vkCreateImageView(m_Handle, &viewInfo, nullptr, &tex.imageView);
-    LC_ASSERT(result == VK_SUCCESS);
+    LC_CHECK(vkCreateImageView(m_Handle, &viewInfo, nullptr, &tex.imageView));
 
     // Create mip level views
     if (tex.levels > 1)
@@ -1184,8 +1095,7 @@ Texture* Device::CreateTexture(const TextureSettings& info, size_t size, const v
             mipInfo.subresourceRange.levelCount = 1;
 
             VkImageView view;
-            result = vkCreateImageView(m_Handle, &mipInfo, nullptr, &view);
-            LC_ASSERT(result == VK_SUCCESS);
+            LC_CHECK(vkCreateImageView(m_Handle, &mipInfo, nullptr, &view));
 
             tex.mipViews.push_back(view);
         }
@@ -1204,7 +1114,7 @@ Texture* Device::CreateTexture(const TextureSettings& info, size_t size, const v
         .anisotropyEnable = VK_TRUE,
         .maxAnisotropy = m_DeviceProperties.limits.maxSamplerAnisotropy,
         .compareEnable = VK_FALSE,
-        .compareOp = VK_COMPARE_OP_ALWAYS, // TODO: Change for shadow maps
+        .compareOp = VK_COMPARE_OP_ALWAYS,
         .minLod = 0.0f,
         .maxLod = VK_LOD_CLAMP_NONE,
         .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
@@ -1213,12 +1123,10 @@ Texture* Device::CreateTexture(const TextureSettings& info, size_t size, const v
 
     vkCreateSampler(m_Handle, &samplerInfo, nullptr, &tex.sampler);
 
-    if (size > 0 && data)
+    // Transition image to starting layout
     {
-        // Stage texture
-        m_TransferBuffer->Upload(data, size);
+        auto startLayout = tex.StartingLayout();
 
-        // Alloc command buffer
         VkCommandBuffer cb;
         auto cbAllocInfo = VkCommandBufferAllocateInfo{
             .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -1234,93 +1142,33 @@ Texture* Device::CreateTexture(const TextureSettings& info, size_t size, const v
         };
         vkBeginCommandBuffer(cb, &beginInfo);
 
-        // Transition NONE -> DST_OPTIMAL
-        auto imgDstBarrier = VkImageMemoryBarrier{
+        auto imgBarrier = VkImageMemoryBarrier{
             .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
             .srcAccessMask = VK_ACCESS_NONE_KHR,
-            .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+            .dstAccessMask = VK_ACCESS_NONE_KHR,
             .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-            .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .newLayout = startLayout,
             .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
             .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
             .image = tex.image,
             .subresourceRange = {
-                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .aspectMask = tex.aspect,
                 .baseMipLevel = 0,
-                .levelCount = 1,
+                .levelCount = VK_REMAINING_MIP_LEVELS,
                 .baseArrayLayer = 0,
-                .layerCount = 1
+                .layerCount = VK_REMAINING_ARRAY_LAYERS
             }
         };
         vkCmdPipelineBarrier(cb,
             VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
             VK_DEPENDENCY_BY_REGION_BIT,
             0,
             nullptr,
             0,
             nullptr,
             1,
-            &imgDstBarrier);
-
-        // Transfer image
-        auto imgCopyRegion = VkBufferImageCopy{
-            .bufferOffset = 0,
-            .bufferRowLength = 0,
-            .bufferImageHeight = 0,
-            .imageSubresource = {
-                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                .mipLevel = 0,
-                .baseArrayLayer = 0,
-                .layerCount = 1
-            },
-            .imageOffset = {},
-            .imageExtent = {
-                .width = info.width,
-                .height = info.height,
-                .depth = 1
-            }
-        };
-        vkCmdCopyBufferToImage(cb,
-            m_TransferBuffer->handle,
-            tex.image,
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            1,
-            &imgCopyRegion);
-
-        if (info.generateMips)
-        {
-            // TODO: Generate mip levels here
-        }
-
-        // Transition DST_OPTIMAL -> SHADER_READ_ONLY_OPTIMAL
-        auto imgSrcBarrier = VkImageMemoryBarrier{
-            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-            .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-            .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-            .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .image = tex.image,
-            .subresourceRange = {
-                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                .baseMipLevel = 0,
-                .levelCount = 1,
-                .baseArrayLayer = 0,
-                .layerCount = 1
-            }
-        };
-        vkCmdPipelineBarrier(cb,
-            VK_PIPELINE_STAGE_TRANSFER_BIT,
-            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-            VK_DEPENDENCY_BY_REGION_BIT,
-            0,
-            nullptr,
-            0,
-            nullptr,
-            1,
-            &imgSrcBarrier);
+            &imgBarrier);
 
         vkEndCommandBuffer(cb);
 
@@ -1329,8 +1177,7 @@ Texture* Device::CreateTexture(const TextureSettings& info, size_t size, const v
             .commandBufferCount = 1,
             .pCommandBuffers = &cb
         };
-        result = vkQueueSubmit(m_GraphicsQueue.handle, 1, &submitInfo, VK_NULL_HANDLE);
-        LC_ASSERT(result == VK_SUCCESS);
+        LC_CHECK(vkQueueSubmit(m_GraphicsQueue.handle, 1, &submitInfo, VK_NULL_HANDLE));
 
         // Free command buffer
         vkQueueWaitIdle(m_GraphicsQueue.handle);
@@ -1341,63 +1188,64 @@ Texture* Device::CreateTexture(const TextureSettings& info, size_t size, const v
     return &tex;
 }
 
-Framebuffer* Device::CreateFramebuffer(const FramebufferSettings& info)
+Framebuffer* VulkanDevice::CreateFramebuffer(const FramebufferSettings& info)
 {
-    auto& fb = *m_Framebuffers.emplace_back(std::make_unique<Framebuffer>());
+    auto& fb = *m_Framebuffers.emplace_back(std::make_unique<VulkanFramebuffer>());
 
     fb.usage = info.usage;
     fb.colorTextures = info.colorTextures;
     fb.depthTexture = info.depthTexture;
 
-    fb.extent = info.colorTextures.empty() ? info.depthTexture->extent : info.colorTextures.front()->extent;
-    fb.samples = info.colorTextures.empty() ? info.depthTexture->samples : info.colorTextures.front()->samples;
+    fb.extent = Get(info.colorTextures.empty() ? info.depthTexture : info.colorTextures.front())->extent;
+    fb.samples = Get(info.colorTextures.empty() ? info.depthTexture : info.colorTextures.front())->samples;
 
     // Create image views if a specific layer or level is requested
-    auto createTempView = [&](Texture* texture, int layer, int level, VkImageAspectFlags aspectFlags) -> VkImageView
-    {
-        if (!texture || (layer < 0 && level < 0)) return VK_NULL_HANDLE;
+    auto createTempView =
+        [&](VulkanTexture* texture, int layer, int level, VkImageAspectFlags aspectFlags) -> VkImageView
+        {
+            if (!texture || (layer < 0 && level < 0)) return VK_NULL_HANDLE;
 
-        auto viewInfo = VkImageViewCreateInfo{
-            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            .image = texture->image,
-            .viewType = VK_IMAGE_VIEW_TYPE_2D,
-            .format = texture->format,
-            .subresourceRange = {
-                .aspectMask = aspectFlags,
-                .baseMipLevel = static_cast<uint32_t>(level < 0 ? 0 : level),
-                .levelCount = 1,
-                .baseArrayLayer = static_cast<uint32_t>(layer < 0 ? 0 : layer),
-                .layerCount = 1
-            }
+            auto viewInfo = VkImageViewCreateInfo{
+                .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+                .image = texture->image,
+                .viewType = VK_IMAGE_VIEW_TYPE_2D,
+                .format = texture->format,
+                .subresourceRange = {
+                    .aspectMask = aspectFlags,
+                    .baseMipLevel = static_cast<uint32_t>(level < 0 ? 0 : level),
+                    .levelCount = 1,
+                    .baseArrayLayer = static_cast<uint32_t>(layer < 0 ? 0 : layer),
+                    .layerCount = 1
+                }
+            };
+
+            VkImageView view;
+            LC_CHECK(vkCreateImageView(m_Handle, &viewInfo, nullptr, &view));
+
+            return view;
         };
-
-        VkImageView view;
-        auto result = vkCreateImageView(m_Handle, &viewInfo, nullptr, &view);
-        LC_ASSERT(result == VK_SUCCESS);
-
-        return view;
-    };
 
     for (auto texture: fb.colorTextures)
     {
         fb.colorImageViews
-            .push_back(createTempView(texture, info.colorLayer, info.colorLevel, VK_IMAGE_ASPECT_COLOR_BIT));
+            .push_back(createTempView(Get(texture), info.colorLayer, info.colorLevel, VK_IMAGE_ASPECT_COLOR_BIT));
     }
-    fb.depthImageView = createTempView(info.depthTexture, info.depthLayer, info.depthLevel, VK_IMAGE_ASPECT_DEPTH_BIT);
+    fb.depthImageView =
+        createTempView(Get(info.depthTexture), info.depthLayer, info.depthLevel, VK_IMAGE_ASPECT_DEPTH_BIT);
 
     // Create render pass
 
     // Internal convention used here is that all color attachments are placed at indices starting at 0, then the depth
     // attachment (if present) is placed at the end
 
-    Array <VkAttachmentDescription, Framebuffer::kMaxAttachments> attachments;
-    Array <VkImageView, Framebuffer::kMaxAttachments> imageViews;
+    Array <VkAttachmentDescription, kMaxAttachments> attachments;
+    Array <VkImageView, kMaxAttachments> imageViews;
     auto depthIndex = VK_ATTACHMENT_UNUSED;
 
     // Populate attachment descriptions
     for (int i = 0; i < fb.colorTextures.size(); ++i)
     {
-        auto colorTexture = fb.colorTextures[i];
+        auto colorTexture = Get(fb.colorTextures[i]);
         auto colorView = fb.colorImageViews[i] ? fb.colorImageViews[i] : colorTexture->imageView;
 
         attachments.emplace_back(VkAttachmentDescription{
@@ -1416,8 +1264,8 @@ Framebuffer* Device::CreateFramebuffer(const FramebufferSettings& info)
     {
         depthIndex = attachments.size();
         attachments.emplace_back(VkAttachmentDescription{
-            .format = info.depthTexture->format,
-            .samples = static_cast<VkSampleCountFlagBits>(info.depthTexture->samples),
+            .format = Get(info.depthTexture)->format,
+            .samples = static_cast<VkSampleCountFlagBits>(Get(info.depthTexture)->samples),
             .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
             .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
             .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
@@ -1425,11 +1273,11 @@ Framebuffer* Device::CreateFramebuffer(const FramebufferSettings& info)
             .initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
             .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
         });
-        imageViews.push_back(fb.depthImageView ? fb.depthImageView : info.depthTexture->imageView);
+        imageViews.push_back(fb.depthImageView ? fb.depthImageView : Get(info.depthTexture)->imageView);
     }
 
     // Populate attachment references
-    Array <VkAttachmentReference, Framebuffer::kMaxColorAttachments> colorRefs;
+    Array <VkAttachmentReference, kMaxColorAttachments> colorRefs;
     for (uint32 i = 0; i < fb.colorTextures.size(); ++i)
     {
         colorRefs.push_back(VkAttachmentReference{
@@ -1456,9 +1304,7 @@ Framebuffer* Device::CreateFramebuffer(const FramebufferSettings& info)
         .subpassCount = 1,
         .pSubpasses = &subpassDesc
     };
-
-    auto result = vkCreateRenderPass(m_Handle, &passInfo, nullptr, &fb.renderPass);
-    LC_ASSERT(result == VK_SUCCESS);
+    LC_CHECK(vkCreateRenderPass(m_Handle, &passInfo, nullptr, &fb.renderPass));
 
     // Create framebuffer
     auto fbInfo = VkFramebufferCreateInfo{
@@ -1470,114 +1316,18 @@ Framebuffer* Device::CreateFramebuffer(const FramebufferSettings& info)
         .height = fb.extent.height,
         .layers = 1
     };
-
-    result = vkCreateFramebuffer(m_Handle, &fbInfo, nullptr, &fb.handle);
-    LC_ASSERT(result == VK_SUCCESS);
-
-    // Transition images to correct layout
-    VkCommandBuffer cb;
-    auto cbAllocInfo = VkCommandBufferAllocateInfo{
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .commandPool = m_OneShotCmdPool,
-        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-        .commandBufferCount = 1
-    };
-    vkAllocateCommandBuffers(m_Handle, &cbAllocInfo, &cb);
-
-    auto beginInfo = VkCommandBufferBeginInfo{
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
-    };
-    vkBeginCommandBuffer(cb, &beginInfo);
-
-    // Color
-    for (auto colorTexture: fb.colorTextures)
-    {
-        auto colorBarrier = VkImageMemoryBarrier{
-            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-            .srcAccessMask = VK_ACCESS_NONE_KHR,
-            .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-            .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .image = colorTexture->image,
-            .subresourceRange = {
-                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                .baseMipLevel = 0,
-                .levelCount = VK_REMAINING_MIP_LEVELS,
-                .baseArrayLayer = 0,
-                .layerCount = VK_REMAINING_ARRAY_LAYERS
-            }
-        };
-        vkCmdPipelineBarrier(cb,
-            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            VK_DEPENDENCY_BY_REGION_BIT,
-            0,
-            nullptr,
-            0,
-            nullptr,
-            1,
-            &colorBarrier);
-    }
-
-    // Depth
-    if (info.depthTexture)
-    {
-        auto depthBarrier = VkImageMemoryBarrier{
-            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-            .srcAccessMask = VK_ACCESS_NONE_KHR,
-            .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-            .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-            .newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .image = info.depthTexture->image,
-            .subresourceRange = {
-                .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-                .baseMipLevel = 0,
-                .levelCount = VK_REMAINING_MIP_LEVELS,
-                .baseArrayLayer = 0,
-                .layerCount = VK_REMAINING_ARRAY_LAYERS
-            }
-        };
-        vkCmdPipelineBarrier(cb,
-            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-            VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-            VK_DEPENDENCY_BY_REGION_BIT,
-            0,
-            nullptr,
-            0,
-            nullptr,
-            1,
-            &depthBarrier);
-    }
-
-    vkEndCommandBuffer(cb);
-
-    auto submitInfo = VkSubmitInfo{
-        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        .commandBufferCount = 1,
-        .pCommandBuffers = &cb
-    };
-    result = vkQueueSubmit(m_GraphicsQueue.handle, 1, &submitInfo, VK_NULL_HANDLE);
-    LC_ASSERT(result == VK_SUCCESS);
-
-    vkQueueWaitIdle(m_GraphicsQueue.handle);
-    vkFreeCommandBuffers(m_Handle, m_OneShotCmdPool, 1, &cb);
-    vkResetCommandPool(m_Handle, m_OneShotCmdPool, 0);
+    LC_CHECK(vkCreateFramebuffer(m_Handle, &fbInfo, nullptr, &fb.handle));
 
     return &fb;
 }
 
-Context* Device::CreateContext()
+Context* VulkanDevice::CreateContext()
 {
-    auto& ctx = *m_Contexts.emplace_back(std::make_unique<Context>(*this));
+    auto& ctx = *m_Contexts.emplace_back(std::make_unique<VulkanContext>(*this));
     return &ctx;
 }
 
-const Framebuffer* Device::AcquireFramebuffer()
+const Framebuffer* VulkanDevice::AcquireFramebuffer()
 {
     // Acquire image
     vkAcquireNextImageKHR(m_Handle,
@@ -1590,11 +1340,12 @@ const Framebuffer* Device::AcquireFramebuffer()
     return &m_Swapchain.framebuffers[m_NextImageIndex];
 }
 
-void Device::Submit(Context* context, bool sync)
+void VulkanDevice::Submit(Context* generalContext, bool sync)
 {
+    auto context = Get(generalContext);
     VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
 
-    auto submitInfo = context->m_SwapchainWritten ?
+    auto submitInfo = sync ?
         VkSubmitInfo{
             .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
             .waitSemaphoreCount = sync ? 1u : 0u,
@@ -1618,7 +1369,7 @@ void Device::Submit(Context* context, bool sync)
     vkQueueWaitIdle(m_GraphicsQueue.handle);
 }
 
-void Device::Present()
+void VulkanDevice::Present()
 {
     // Present
     auto presentInfo = VkPresentInfoKHR{
@@ -1633,7 +1384,7 @@ void Device::Present()
     vkDeviceWaitIdle(m_Handle);
 }
 
-VkBool32 Device::DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
+VkBool32 VulkanDevice::DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
     VkDebugUtilsMessageTypeFlagsEXT types,
     const VkDebugUtilsMessengerCallbackDataEXT* callbackData,
     void* userData)
@@ -1658,48 +1409,25 @@ VkBool32 Device::DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
     return VK_FALSE;
 }
 
-// Buffer
-void Buffer::Upload(const void* data, size_t size, size_t offset) const
+void VulkanDevice::DestroyBuffer(Buffer* buffer)
 {
-    LC_ASSERT(offset + size <= bufSize);
 
-    // TODO: Use staging buffer
-    uint8* ptr;
-    vmaMapMemory(device->m_Allocator, allocation, (void**)&ptr);
-    ptr += offset;
-    memcpy(ptr, data, size);
-    vmaUnmapMemory(device->m_Allocator, allocation);
-    vmaFlushAllocation(device->m_Allocator, allocation, offset, size);
 }
-
-void Buffer::Clear(size_t size, size_t offset) const
+void VulkanDevice::DestroyTexture(Texture* texture)
 {
-    LC_ASSERT(offset + size <= bufSize);
 
-    uint8* ptr;
-    vmaMapMemory(device->m_Allocator, allocation, (void**)&ptr);
-    ptr += offset;
-    memset(ptr, 0, size);
-    vmaUnmapMemory(device->m_Allocator, allocation);
-    vmaFlushAllocation(device->m_Allocator, allocation, offset, size);
 }
-
-void* Buffer::Map() const
+void VulkanDevice::DestroyPipeline(Pipeline* pipeline)
 {
-    void* data;
-    auto result = vmaMapMemory(device->m_Allocator, allocation, &data);
-    LC_ASSERT(result == VK_SUCCESS);
-    return data;
+
 }
-
-void Buffer::Flush(size_t size, size_t offset) const
+void VulkanDevice::DestroyFramebuffer(Framebuffer* framebuffer)
 {
-    vmaFlushAllocation(device->m_Allocator, allocation, offset, size);
+
 }
-
-void Buffer::Invalidate(size_t size, size_t offset) const
+void VulkanDevice::DestroyContext(Context* context)
 {
-    vmaInvalidateAllocation(device->m_Allocator, allocation, offset, size);
+
 }
 
 }

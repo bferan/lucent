@@ -3,7 +3,7 @@
 namespace lucent
 {
 
-class DescriptorCache
+class Engine
 {
 };
 

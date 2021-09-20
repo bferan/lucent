@@ -36,6 +36,9 @@ private:
     Pipeline* m_GenIrradiance;
     Pipeline* m_GenSpecular;
     Pipeline* m_GenBRDF;
+
+
+
 };
 
 }

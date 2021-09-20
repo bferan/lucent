@@ -1,4 +1,4 @@
-#include "device/ShaderCache.hpp"
+#include "ShaderCache.hpp"
 
 #include "glslang/Public/ShaderLang.h"
 #include "glslang/Include/Types.h"
@@ -6,8 +6,8 @@
 #include "glslang/SPIRV/GlslangToSpv.h"
 
 #include "core/Utility.hpp"
-#include "device/Device.hpp"
-#include "device/ResourceLimits.hpp"
+#include "device/vulkan/VulkanDevice.hpp"
+#include "ResourceLimits.hpp"
 
 namespace lucent
 {
@@ -251,7 +251,7 @@ private:
 };
 
 // Shader cache
-ShaderCache::ShaderCache(Device* device)
+ShaderCache::ShaderCache(VulkanDevice* device)
     : m_Device(device)
     , m_Resolver(new DefaultResolver())
 {}
@@ -342,7 +342,7 @@ static bool ScanLinkerSymbols(const TIntermNode& root,
             uint32 size = isBlock ? glslang::TIntermediate::getBlockSize(type) : 0;
 
             // Add global scope descriptor
-            auto entry = DescriptorEntry{
+            auto entry = Descriptor{
                 .hash = Hash<uint32>(symbol.getAccessName()),
                 .set = set,
                 .binding = binding,
@@ -361,7 +361,7 @@ static bool ScanLinkerSymbols(const TIntermNode& root,
                     auto& child = *loc.type;
                     glslang::TIntermediate::updateOffset(type, child, offset, childSize);
 
-                    shader.descriptors.emplace_back(DescriptorEntry{
+                    shader.descriptors.emplace_back(Descriptor{
                         .hash = Hash<uint32>(child.getFieldName()),
                         .set = set,
                         .binding = binding,

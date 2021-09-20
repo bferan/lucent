@@ -2,6 +2,7 @@
 
 #include "core/Utility.hpp"
 #include "device/Context.hpp"
+#include "rendering/Geometry.hpp"
 
 #include <random>
 
@@ -18,9 +19,9 @@ static std::vector<Vector2> GenerateBlueNoise(int size)
 
     // Fill with white noise
     std::vector<Vector2> noise(size * size);
-    for (int i = 0; i < noise.size(); ++i)
+    for (auto& i: noise)
     {
-        noise[i] = { RandF(), RandF() };
+        i = { RandF(), RandF() };
     }
 
     // Energy function to minimise
@@ -43,7 +44,7 @@ static std::vector<Vector2> GenerateBlueNoise(int size)
 
                 total += Exp(
                     -distSqr / kSigmaDistSqr
-                    - (sample - value).Length()/kSigmaValueSqr
+                        - (sample - value).Length() / kSigmaValueSqr
                 );
             }
         }
@@ -73,27 +74,26 @@ static std::vector<Vector2> GenerateBlueNoise(int size)
     return noise;
 }
 
-SceneRenderer::SceneRenderer(Device* device)
-    : m_Device(device)
+SceneRenderer::SceneRenderer(const RenderSettings& settings, Device* device)
+    : m_Settings(settings), m_Device(device)
 {
     m_Context = m_Device->CreateContext();
 
-    auto extent = m_Device->m_Swapchain.textures[0].extent;
-
     // Output
     m_SceneColor = m_Device->CreateTexture(TextureSettings{
-        .width = extent.width,
-        .height = extent.height,
+        .width = m_Settings.width,
+        .height = m_Settings.height,
         .format = TextureFormat::kRGBA8,
         .addressMode = TextureAddressMode::kClampToBorder
     });
 
     m_GDepth = m_Device->CreateTexture(TextureSettings{
-        .width = extent.width,
-        .height = extent.height,
+        .width = m_Settings.width,
+        .height = m_Settings.height,
         .format = TextureFormat::kDepth32F,
         .addressMode = TextureAddressMode::kClampToEdge,
         .filter = TextureFilter::kNearest,
+        .usage = TextureUsage::kDepthAttachment
     });
 
     m_SceneColorFramebuffer = m_Device->CreateFramebuffer(FramebufferSettings{
@@ -127,9 +127,10 @@ SceneRenderer::SceneRenderer(Device* device)
     });
 
     m_MomentTempDepth = m_Device->CreateTexture(TextureSettings{
-        .width = m_MomentMap->extent.width,
-        .height = m_MomentMap->extent.height,
-        .format = TextureFormat::kDepth16U
+        .width = DirectionalLight::kMapWidth,
+        .height = DirectionalLight::kMapWidth,
+        .format = TextureFormat::kDepth16U,
+        .usage = TextureUsage::kDepthAttachment
     });
 
     for (int i = 0; i < kShadowTargets; ++i)
@@ -138,7 +139,8 @@ SceneRenderer::SceneRenderer(Device* device)
             .width = DirectionalLight::kMapWidth,
             .height = DirectionalLight::kMapWidth,
             .samples = 8,
-            .format = TextureFormat::kDepth16U
+            .format = TextureFormat::kDepth16U,
+            .usage = TextureUsage::kDepthAttachment
         }));
 
         m_MomentDepthTargets.emplace_back(m_Device->CreateFramebuffer(FramebufferSettings{
@@ -164,33 +166,33 @@ SceneRenderer::SceneRenderer(Device* device)
     });
 
     // GBuffer
-    auto levels = (uint32)Floor(Log2((float)Max(extent.width, extent.height))) + 1;
+    auto levels = (uint32)Floor(Log2((float)Max(m_Settings.width, m_Settings.height))) + 1;
 
     m_GBaseColor = m_Device->CreateTexture(TextureSettings{
-        .width = extent.width,
-        .height = extent.height,
+        .width = m_Settings.width,
+        .height = m_Settings.height,
         .format = TextureFormat::kRGBA32F
     });
 
     m_GMinZ = m_Device->CreateTexture(TextureSettings{
-        .width = extent.width,
-        .height = extent.height,
+        .width = m_Settings.width,
+        .height = m_Settings.height,
         .levels = levels,
         .format = TextureFormat::kR32F,
         .addressMode = TextureAddressMode::kClampToEdge,
         .filter = TextureFilter::kNearest,
-        .write = true
+        .usage = TextureUsage::kReadWrite
     });
 
     m_GNormals = m_Device->CreateTexture(TextureSettings{
-        .width = extent.width,
-        .height = extent.height,
+        .width = m_Settings.width,
+        .height = m_Settings.height,
         .format = TextureFormat::kRGBA32F
     });
 
     m_GMetalRoughness = m_Device->CreateTexture(TextureSettings{
-        .width = extent.width,
-        .height = extent.height,
+        .width = m_Settings.width,
+        .height = m_Settings.height,
         .format = TextureFormat::kRG32F
     });
 
@@ -205,47 +207,51 @@ SceneRenderer::SceneRenderer(Device* device)
     });
 
     m_GenMinZ = m_Device->CreatePipeline(PipelineSettings{
-        .shaderName = "MinZ.shader"
-    }, PipelineType::kCompute);
+        .shaderName = "MinZ.shader",
+        .type = PipelineType::kCompute
+    });
 
     m_TransferBuffer = m_Device->CreateBuffer(BufferType::kStaging, 32 * 1024 * 1024);
 
     // AO
     m_AOMap = m_Device->CreateTexture(TextureSettings{
-        .width = extent.width,
-        .height = extent.height,
+        .width = m_Settings.width,
+        .height = m_Settings.height,
         .format = TextureFormat::kR32F,
-        .write = true
+        .usage = TextureUsage::kReadWrite
     });
 
     m_ComputeAO = m_Device->CreatePipeline(PipelineSettings{
-        .shaderName = "GTAO.shader"
-    }, PipelineType::kCompute);
+        .shaderName = "GTAO.shader",
+        .type = PipelineType::kCompute
+    });
 
     // SSR
     m_BlueNoise = GenerateHaltonNoiseTexture(128);
 
     m_ReflectionResult = m_Device->CreateTexture(TextureSettings{
-        .width = extent.width,
-        .height = extent.height,
+        .width = m_Settings.width,
+        .height = m_Settings.height,
         .format = TextureFormat::kRGBA32F,
-        .write = true
+        .usage = TextureUsage::kReadWrite
     });
 
     m_ReflectionResolve = m_Device->CreateTexture(TextureSettings{
-        .width = extent.width,
-        .height = extent.height,
+        .width = m_Settings.width,
+        .height = m_Settings.height,
         .format = TextureFormat::kRGBA32F,
-        .write = true
+        .usage = TextureUsage::kReadWrite
     });
 
     m_TraceReflections = m_Device->CreatePipeline(PipelineSettings{
-        .shaderName = "TraceMinZ.shader"
-    }, PipelineType::kCompute);
+        .shaderName = "TraceMinZ.shader",
+        .type = PipelineType::kCompute
+    });
 
     m_ResolveReflections = m_Device->CreatePipeline(PipelineSettings{
-        .shaderName = "ResolveSSR.shader"
-    }, PipelineType::kCompute);
+        .shaderName = "ResolveSSR.shader",
+        .type = PipelineType::kCompute
+    });
 }
 
 void SceneRenderer::Render(Scene& scene)
@@ -280,15 +286,10 @@ void SceneRenderer::Render(Scene& scene)
     RenderReflections(scene, proj, invView);
 
     // Main forward pass
-    ctx.Transition(m_SceneColor,
-        VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_NONE_KHR,
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-
     ctx.BeginRenderPass(m_SceneColorFramebuffer);
     ctx.Clear();
 
-    ctx.Bind(m_DefaultPipeline);
+    ctx.BindPipeline(m_DefaultPipeline);
 
     // Draw entities
     scene.Each<MeshInstance, Transform>([&](MeshInstance& instance, Transform& local)
@@ -330,14 +331,14 @@ void SceneRenderer::Render(Scene& scene)
             ctx.Uniform("u_MetallicFactor"_id, material.metallicFactor);
             ctx.Uniform("u_RoughnessFactor"_id, material.roughnessFactor);
 
-            ctx.Bind(mesh.vertexBuffer);
-            ctx.Bind(mesh.indexBuffer);
+            ctx.BindBuffer(mesh.vertexBuffer);
+            ctx.BindBuffer(mesh.indexBuffer);
             ctx.Draw(mesh.numIndices);
         }
     });
 
     // Draw skybox
-    ctx.Bind(m_SkyboxPipeline);
+    ctx.BindPipeline(m_SkyboxPipeline);
 
     ctx.Uniform("u_Model"_id, Matrix4::Identity());
     ctx.Uniform("u_View"_id, view);
@@ -351,9 +352,9 @@ void SceneRenderer::Render(Scene& scene)
 
     ctx.BindTexture("u_Environment"_id, scene.environment.cubeMap);
 
-    ctx.Bind(m_Device->m_Cube.indices);
-    ctx.Bind(m_Device->m_Cube.vertices);
-    ctx.Draw(m_Device->m_Cube.numIndices);
+    ctx.BindBuffer(g_Cube.indices);
+    ctx.BindBuffer(g_Cube.vertices);
+    ctx.Draw(g_Cube.numIndices);
 
     ctx.EndRenderPass();
     ctx.End();
@@ -364,7 +365,6 @@ void SceneRenderer::Render(Scene& scene)
     m_DebugShapeBuffer->Invalidate(VK_WHOLE_SIZE, 0);
 
     auto outputFramebuffer = m_Device->AcquireFramebuffer();
-
     ctx.Begin();
 
     ctx.BeginRenderPass(m_SceneColorFramebuffer);
@@ -372,51 +372,10 @@ void SceneRenderer::Render(Scene& scene)
     ctx.EndRenderPass();
 
     // Blit image to output framebuffer
-    ctx.Transition(m_SceneColor,
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-
-    ctx.Transition(m_ReflectionResolve,
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT,
-        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-
-    auto srcTexture = m_ReflectionResolve;
+    auto srcTexture = m_SceneColor;
     auto dstTexture = outputFramebuffer->colorTextures.front();
 
-    ctx.Transition(dstTexture,
-        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_ACCESS_NONE_KHR,
-        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
-        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-    auto srcExtent = srcTexture->extent;
-    auto dstExtent = dstTexture->extent;
-
-    auto blit = VkImageBlit{
-        .srcSubresource = { .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .layerCount = 1 },
-        .srcOffsets = {{}, { static_cast<int32_t>(srcExtent.width), static_cast<int32_t>(srcExtent.height), 1 }},
-        .dstSubresource = { .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .layerCount = 1 },
-        .dstOffsets = {{}, { static_cast<int32_t>(dstExtent.width), static_cast<int32_t>(dstExtent.height), 1 }}
-    };
-
-    vkCmdBlitImage(ctx.m_CommandBuffer,
-        srcTexture->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        dstTexture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        1, &blit, VK_FILTER_NEAREST);
-
-    ctx.m_SwapchainWritten = true;
-
-    ctx.Transition(dstTexture,
-        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
-        VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_NONE_KHR,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
-
-    ctx.Transition(m_SceneColor,
-        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-        VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_NONE_KHR,
-        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-
+    ctx.BlitTexture(srcTexture, 0, 0, dstTexture, 0, 0, dstTexture->width, dstTexture->height);
     ctx.End();
 
     m_Device->Submit(&ctx, true);
@@ -428,15 +387,10 @@ void SceneRenderer::RenderGBuffer(Scene& scene, Matrix4 view, Matrix4 proj) cons
 {
     auto& ctx = *m_Context;
 
-    ctx.DepthImageToAttachment(m_GDepth);
-    ctx.ImageToAttachment(m_GBaseColor);
-    ctx.ImageToAttachment(m_GNormals);
-    ctx.ImageToAttachment(m_GMetalRoughness);
-
     ctx.BeginRenderPass(m_GFramebuffer);
     ctx.Clear();
 
-    ctx.Bind(m_GenGBuffer);
+    ctx.BindPipeline(m_GenGBuffer);
     scene.Each<MeshInstance, Transform>([&](MeshInstance& instance, Transform& local)
     {
         for (auto idx: instance.meshes)
@@ -460,87 +414,23 @@ void SceneRenderer::RenderGBuffer(Scene& scene, Matrix4 view, Matrix4 proj) cons
             ctx.Uniform("u_MetallicFactor"_id, material.metallicFactor);
             ctx.Uniform("u_RoughnessFactor"_id, material.roughnessFactor);
 
-            ctx.Bind(mesh.vertexBuffer);
-            ctx.Bind(mesh.indexBuffer);
+            ctx.BindBuffer(mesh.vertexBuffer);
+            ctx.BindBuffer(mesh.indexBuffer);
             ctx.Draw(mesh.numIndices);
         }
     });
     ctx.EndRenderPass();
 
-    ctx.AttachmentToImage(m_GBaseColor);
-    ctx.AttachmentToImage(m_GNormals);
-    ctx.AttachmentToImage(m_GMetalRoughness);
-
     // Create min-Z depth pyramid
     {
-        // Copy depth texture to level-0 of mip pyramid
-        {
-            ctx.Transition(m_GDepth,
-                VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-                VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-                VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+        // Copy depth texture to level-0 of color mip pyramid
+        ctx.CopyTexture(m_GDepth, 0, 0, m_TransferBuffer, 0, m_GDepth->width, m_GDepth->height);
+        ctx.CopyTexture(m_TransferBuffer, 0, m_GMinZ, 0, 0, m_GMinZ->width, m_GMinZ->height);
 
-            // Copy depth image to buffer
-            auto imageToBuffer = VkBufferImageCopy{
-                .bufferOffset = 0,
-                .bufferRowLength = 0,
-                .bufferImageHeight = 0,
-                .imageSubresource = {
-                    .aspectMask = m_GDepth->aspect,
-                    .mipLevel = 0,
-                    .baseArrayLayer = 0,
-                    .layerCount = 1
-                },
-                .imageOffset = {},
-                .imageExtent = {
-                    .width = m_GDepth->extent.width,
-                    .height = m_GDepth->extent.height,
-                    .depth = 1
-                }
-            };
-            vkCmdCopyImageToBuffer(ctx.m_CommandBuffer, m_GDepth->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                m_TransferBuffer->handle, 1, &imageToBuffer);
+        uint32 width = m_GMinZ->width;
+        uint32 height = m_GMinZ->height;
 
-            auto bufferBarrier = VkBufferMemoryBarrier{
-                .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
-                .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-                .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
-                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                .buffer = m_TransferBuffer->handle,
-                .offset = 0,
-                .size = VK_WHOLE_SIZE
-            };
-            vkCmdPipelineBarrier(ctx.m_CommandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                0, 0, nullptr, 1, &bufferBarrier, 0, nullptr);
-
-            ctx.Transition(m_GMinZ,
-                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE_KHR,
-                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
-                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-            // Copy buffer to color image
-            auto bufferToImage = imageToBuffer;
-            bufferToImage.imageSubresource.aspectMask = m_GMinZ->aspect;
-            vkCmdCopyBufferToImage(ctx.m_CommandBuffer, m_TransferBuffer->handle, m_GMinZ->image,
-                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferToImage);
-
-            ctx.Transition(m_GMinZ,
-                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
-                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT,
-                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
-        }
-
-        uint32 width = m_GMinZ->extent.width;
-        uint32 height = m_GMinZ->extent.height;
-
-        ctx.Transition(m_GMinZ,
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT,
-            VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0);
-
-        ctx.Bind(m_GenMinZ);
+        ctx.BindPipeline(m_GenMinZ);
         for (int level = 1; level < m_GMinZ->levels; ++level)
         {
             width = Max(width / 2u, 1u);
@@ -550,20 +440,7 @@ void SceneRenderer::RenderGBuffer(Scene& scene, Matrix4 view, Matrix4 proj) cons
             ctx.BindImage("u_Output"_id, m_GMinZ, level);
 
             ctx.Dispatch(width, height, 1);
-
-            ctx.Transition(m_GMinZ,
-                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT,
-                VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, level);
         }
-
-        ctx.Transition(m_GDepth,
-            VK_PIPELINE_STAGE_TRANSFER_BIT,
-            VK_ACCESS_TRANSFER_READ_BIT,
-            VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
     }
 
 }
@@ -579,13 +456,12 @@ void SceneRenderer::RenderShadows(Scene& scene)
     for (int i = 0; i < kShadowTargets; ++i)
     {
         auto depthImage = m_MomentDepthTextures[i];
-        ctx.DepthImageToAttachment(depthImage);
 
         ctx.BeginRenderPass(m_MomentDepthTargets[i]);
         ctx.Clear();
 
         auto& cascade = cascades[i];
-        ctx.Bind(m_MomentDepthOnly);
+        ctx.BindPipeline(m_MomentDepthOnly);
         scene.Each<MeshInstance, Transform>([&](MeshInstance& instance, Transform& local)
         {
             for (auto idx: instance.meshes)
@@ -594,8 +470,8 @@ void SceneRenderer::RenderShadows(Scene& scene)
                 auto mvp = cascade.proj * local.model;
                 ctx.Uniform("u_MVP"_id, mvp);
 
-                ctx.Bind(mesh.vertexBuffer);
-                ctx.Bind(mesh.indexBuffer);
+                ctx.BindBuffer(mesh.vertexBuffer);
+                ctx.BindBuffer(mesh.indexBuffer);
                 ctx.Draw(mesh.numIndices);
             }
         });
@@ -603,26 +479,22 @@ void SceneRenderer::RenderShadows(Scene& scene)
     }
 
     // Calculate moments from depth values using custom resolve
-    ctx.ImageToAttachment(m_MomentMap);
     for (int i = 0; i < kShadowTargets; ++i)
     {
         auto depthImage = m_MomentDepthTextures[i];
         auto target = m_MomentMapTargets[i];
 
-        ctx.DepthAttachmentToImage(depthImage);
-
         ctx.BeginRenderPass(target);
 
-        ctx.Bind(m_MomentResolveDepth);
+        ctx.BindPipeline(m_MomentResolveDepth);
         ctx.BindTexture("u_Depth"_id, depthImage);
 
-        ctx.Bind(m_Device->m_Quad.vertices);
-        ctx.Bind(m_Device->m_Quad.indices);
-        ctx.Draw(m_Device->m_Quad.numIndices);
+        ctx.BindBuffer(g_Quad.vertices);
+        ctx.BindBuffer(g_Quad.indices);
+        ctx.Draw(g_Quad.numIndices);
 
         ctx.EndRenderPass();
     }
-    ctx.AttachmentToImage(m_MomentMap);
 
     // TODO: Blur moment map with gaussian kernel
     // TODO: Generate MIP chain for moment map
@@ -749,16 +621,13 @@ void SceneRenderer::RenderAmbientOcclusion(Scene& scene, Matrix4 view, Matrix4 p
     auto& ctx = *m_Context;
 
     // Compute GTAO
-    auto extent = m_Device->m_Swapchain.textures.back().extent;
-    ctx.ImageToGeneral(m_AOMap);
-
-    ctx.Bind(m_ComputeAO);
+    ctx.BindPipeline(m_ComputeAO);
     ctx.BindTexture("u_Depth"_id, m_GMinZ, 0);
     ctx.BindTexture("u_Normals"_id, m_GNormals);
     ctx.BindImage("u_AO"_id, m_AOMap);
 
-    float w = 1600.0f;
-    float h = 900.0f;
+    float w = (float)m_Settings.width;
+    float h = (float)m_Settings.height;
 
     ctx.Uniform("u_ScreenToViewFactors"_id, Vector3(
         2.0f * (1.0f / proj(0, 0)) / w,
@@ -790,9 +659,7 @@ void SceneRenderer::RenderAmbientOcclusion(Scene& scene, Matrix4 view, Matrix4 p
     ctx.Uniform("u_ViewToWorld"_id, invView);
 
     /**********************/
-    ctx.Dispatch(extent.width, extent.height, 1);
-
-    ctx.ComputeBarrier(m_AOMap, m_DebugShapeBuffer);
+    ctx.Dispatch(m_Settings.width, m_Settings.height, 1);
 
     // Spatial blur
 
@@ -804,7 +671,7 @@ void SceneRenderer::RenderDebugOverlay(Scene& scene, Matrix4 view, Matrix4 proj)
 {
     auto& ctx = *m_Context;
 
-    ctx.Bind(m_DebugShapePipeline);
+    ctx.BindPipeline(m_DebugShapePipeline);
     for (int i = 0; i < m_DebugShapes->numShapes; ++i)
     {
         auto& shape = m_DebugShapes->shapes[i];
@@ -816,9 +683,9 @@ void SceneRenderer::RenderDebugOverlay(Scene& scene, Matrix4 view, Matrix4 proj)
         ctx.Uniform("u_MVP"_id, mvp);
         ctx.Uniform("u_Color"_id, shape.color);
 
-        ctx.Bind(m_Device->m_Sphere.vertices);
-        ctx.Bind(m_Device->m_Sphere.indices);
-        ctx.Draw(m_Device->m_Sphere.numIndices);
+        ctx.BindBuffer(g_Sphere.vertices);
+        ctx.BindBuffer(g_Sphere.indices);
+        ctx.Draw(g_Sphere.numIndices);
     }
 
     m_DebugConsole->Render(ctx);
@@ -862,38 +729,24 @@ Texture* SceneRenderer::GenerateHaltonNoiseTexture(uint32 size)
 //        };
 //    }
 
-    return m_Device->CreateTexture(TextureSettings{
+    auto tex = m_Device->CreateTexture(TextureSettings{
         .width = size,
         .height = size,
         .format = TextureFormat::kRG32F,
         .addressMode = TextureAddressMode::kRepeat,
         .filter = TextureFilter::kNearest
-    }, data.size() * sizeof(Vector2), data.data());
+    });
+    tex->Upload(data.size() * sizeof(Vector2), data.data());
+
+    return tex;
 }
 
 void SceneRenderer::RenderReflections(Scene& scene, Matrix4 proj, Matrix4 invView) const
 {
     auto& ctx = *m_Context;
 
-    auto extent = m_ReflectionResult->extent;
-
-    ctx.Transition(m_SceneColor,
-        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_ACCESS_NONE_KHR,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT,
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-    ctx.Transition(m_ReflectionResult,
-        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_ACCESS_NONE_KHR,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-
-    ctx.Transition(m_ReflectionResolve,
-        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_ACCESS_NONE_KHR,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-
     // Trace reflection rays
-    ctx.Bind(m_TraceReflections);
+    ctx.BindPipeline(m_TraceReflections);
     ctx.BindTexture("u_MinZ"_id, m_GMinZ);
     ctx.BindTexture("u_HaltonNoise"_id, m_BlueNoise);
     ctx.BindTexture("u_Normals"_id, m_GNormals);
@@ -907,15 +760,10 @@ void SceneRenderer::RenderReflections(Scene& scene, Matrix4 proj, Matrix4 invVie
 
     ctx.Uniform("u_Proj"_id, proj);
 
-    ctx.Dispatch(extent.width, extent.height, 1);
-
-    ctx.Transition(m_ReflectionResult,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT,
-        VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    ctx.Dispatch(m_Settings.width, m_Settings.height, 1);
 
     // Resolve reflections
-    ctx.Bind(m_ResolveReflections);
+    ctx.BindPipeline(m_ResolveReflections);
     ctx.BindTexture("u_Rays"_id, m_ReflectionResult);
     ctx.BindTexture("u_PrevColor"_id, m_SceneColor);
     ctx.BindTexture("u_Depth"_id, m_GMinZ);
@@ -931,12 +779,7 @@ void SceneRenderer::RenderReflections(Scene& scene, Matrix4 proj, Matrix4 invVie
 
     ctx.Uniform("u_Proj"_id, proj);
 
-    ctx.Dispatch(extent.width, extent.height, 1);
-
-    ctx.Transition(m_ReflectionResolve,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT,
-        VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    ctx.Dispatch(m_Settings.width, m_Settings.height, 1);
 }
 
 }

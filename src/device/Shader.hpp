@@ -28,6 +28,13 @@ public:
     std::string error;
 };
 
+enum class ShaderStage
+{
+    kVertex,
+    kFragment,
+    kCompute
+};
+
 class ShaderResolver
 {
 public:
@@ -45,7 +52,7 @@ public:
 };
 
 // Binary search these
-struct DescriptorEntry
+struct Descriptor
 {
     uint32 hash: 32;
     uint32 set: 2;
@@ -53,7 +60,7 @@ struct DescriptorEntry
     uint32 offset: 16;
     uint32 size: 16;
 };
-static_assert(sizeof(DescriptorEntry) == 12);
+static_assert(sizeof(Descriptor) == 12);
 
 struct Shader
 {
@@ -70,10 +77,12 @@ struct Shader
         VkShaderModule module;
     };
 
+    Descriptor* Lookup(DescriptorID id);
+
     Array <Stage, kMaxStages> stages;
     Array <VkDescriptorSetLayout, kMaxSets> setLayouts;
-    Array <DescriptorEntry, kMaxDescriptors> descriptors;
-    Array <DescriptorEntry, kMaxDescriptorBlocks> blocks;
+    Array <Descriptor, kMaxDescriptors> descriptors;
+    Array <Descriptor, kMaxDescriptorBlocks> blocks;
     VkPipelineLayout pipelineLayout;
     uint64 hash;
     uint32 uses;

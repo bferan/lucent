@@ -5,13 +5,13 @@
 namespace lucent
 {
 
-class Device;
+class VulkanDevice;
 
 // Specific to the Vulkan backend, could be made general
 class ShaderCache
 {
 public:
-    explicit ShaderCache(Device* device);
+    explicit ShaderCache(VulkanDevice* device);
 
     Shader* Compile(const std::string& name);
 
@@ -57,7 +57,7 @@ private:
     VkDescriptorSetLayout FindSetLayout(const SetLayout& layout);
 
 private:
-    Device* m_Device;
+    VulkanDevice* m_Device;
     std::vector<uint32> m_SpirvBuffer;
     std::unique_ptr<ShaderResolver> m_Resolver;
     std::unordered_map<uint64, std::unique_ptr<Shader>> m_Shaders;

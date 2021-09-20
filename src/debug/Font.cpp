@@ -42,7 +42,8 @@ Font::Font(Device* device, Framebuffer* framebuffer, const std::string& fontFile
         .height = kBitmapHeight,
         .format = TextureFormat::kR8
     };
-    m_FontTexture = m_Device->CreateTexture(texInfo, bitmap.size(), bitmap.data());
+    m_FontTexture = m_Device->CreateTexture(texInfo);
+    m_FontTexture->Upload(bitmap.size(), bitmap.data());
 
     // Create font pipeline & descriptor set
     m_FontPipeline = m_Device->CreatePipeline(PipelineSettings{
@@ -80,7 +81,7 @@ Glyph Font::GetGlyph(char c) const
 
 void Font::Bind(Context& context) const
 {
-    context.Bind(m_FontPipeline);
+    context.BindPipeline(m_FontPipeline);
     context.BindTexture("u_FontTex"_id, m_FontTexture);
 }
 

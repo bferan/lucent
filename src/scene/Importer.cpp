@@ -5,6 +5,8 @@
 #include "mikktspace.h"
 #include "weldmesh.h"
 
+#include "rendering/Geometry.hpp"
+
 namespace gltf = tinygltf;
 
 namespace lucent
@@ -81,7 +83,8 @@ static Texture* ImportTexture(Device* device, const gltf::Model& model, const gl
         .width = uint32(img.width),
         .height = uint32(img.height),
         .format = linear ? TextureFormat::kRGBA8 : TextureFormat::kRGBA8_SRGB
-    }, img.image.size(), img.image.data());
+    });
+    imported->Upload(img.image.size(), img.image.data());
 
     return imported;
 }
@@ -113,11 +116,11 @@ void Importer::ImportMaterials(Scene& scene, const gltf::Model& model)
         auto& pbr = data.pbrMetallicRoughness;
 
         // Create textures
-        material.baseColorMap = ImportTexture(m_Device, model, pbr.baseColorTexture, m_Device->m_BlackTexture, false);
-        material.metalRough = ImportTexture(m_Device, model, pbr.metallicRoughnessTexture, m_Device->m_GreenTexture);
-        material.normalMap = ImportTexture(m_Device, model, data.normalTexture, m_Device->m_NormalTexture);
-        material.aoMap = ImportTexture(m_Device, model, data.occlusionTexture, m_Device->m_WhiteTexture);
-        material.emissive = ImportTexture(m_Device, model, data.emissiveTexture, m_Device->m_BlackTexture, false);
+        material.baseColorMap = ImportTexture(m_Device, model, pbr.baseColorTexture, g_BlackTexture, false);
+        material.metalRough = ImportTexture(m_Device, model, pbr.metallicRoughnessTexture, g_GreenTexture);
+        material.normalMap = ImportTexture(m_Device, model, data.normalTexture, g_NormalTexture);
+        material.aoMap = ImportTexture(m_Device, model, data.occlusionTexture, g_WhiteTexture);
+        material.emissive = ImportTexture(m_Device, model, data.emissiveTexture, g_BlackTexture, false);
 
         // Material parameters
         auto& col = pbr.baseColorFactor;
@@ -328,11 +331,11 @@ void Importer::ImportMeshes(Scene& scene, const gltf::Model& model)
             {
                 // Create default material
                 Material material{};
-                material.baseColorMap = m_Device->m_WhiteTexture;
-                material.metalRough = m_Device->m_GreenTexture;
-                material.normalMap = m_Device->m_NormalTexture;
-                material.aoMap = m_Device->m_WhiteTexture;
-                material.emissive = m_Device->m_BlackTexture;
+                material.baseColorMap = g_WhiteTexture;
+                material.metalRough = g_GreenTexture;
+                material.normalMap = g_NormalTexture;
+                material.aoMap = g_WhiteTexture;
+                material.emissive = g_BlackTexture;
 
                 material.baseColorFactor = Color::Gray();
                 material.metallicFactor = 0.0f;

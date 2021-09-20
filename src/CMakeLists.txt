@@ -4,6 +4,9 @@ target_include_directories(lucent PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_precompile_headers(lucent PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/core/Core.hpp>")
 
 target_sources(lucent PRIVATE
+        Engine.cpp
+        Engine.hpp
+
         core/Array.hpp
         core/Color.hpp
         core/Hash.hpp
@@ -24,22 +27,36 @@ target_sources(lucent PRIVATE
         debug/Font.hpp
         debug/TextMesh.cpp
         debug/TextMesh.hpp
+        debug/Input.cpp
+        debug/Input.hpp
+        debug/Keys.hpp
 
         device/Context.cpp
         device/Context.hpp
-        device/DescriptorCache.cpp
-        device/DescriptorCache.hpp
-        device/Device.cpp
         device/Device.hpp
-        device/Input.cpp
-        device/Input.hpp
-        device/Keys.hpp
-        device/ResourceLimits.hpp
+        device/Framebuffer.hpp
         device/Shader.cpp
         device/Shader.hpp
-        device/ShaderCache.cpp
-        device/ShaderCache.hpp
+        device/Texture.hpp
 
+        device/vulkan/ResourceLimits.hpp
+        device/vulkan/ShaderCache.cpp
+        device/vulkan/ShaderCache.hpp
+        device/vulkan/VulkanBuffer.cpp
+        device/vulkan/VulkanBuffer.hpp
+        device/vulkan/VulkanContext.cpp
+        device/vulkan/VulkanContext.hpp
+        device/vulkan/VulkanDevice.hpp
+        device/vulkan/VulkanDevice.cpp
+        device/vulkan/VulkanFramebuffer.cpp
+        device/vulkan/VulkanFramebuffer.hpp
+        device/vulkan/VulkanPipeline.cpp
+        device/vulkan/VulkanPipeline.hpp
+        device/vulkan/VulkanTexture.cpp
+        device/vulkan/VulkanTexture.hpp
+
+        rendering/Geometry.cpp
+        rendering/Geometry.hpp
         rendering/SceneRenderer.cpp
         rendering/SceneRenderer.hpp
 

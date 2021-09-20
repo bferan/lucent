@@ -1,6 +1,6 @@
 #pragma once
 
-#include "device/Keys.hpp"
+#include "Keys.hpp"
 
 struct GLFWwindow;
 

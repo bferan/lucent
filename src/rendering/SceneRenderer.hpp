@@ -24,10 +24,16 @@ struct DebugShapeBuffer
     DebugShape shapes[kNumDebugShapes];
 };
 
+struct RenderSettings
+{
+    uint32 width = 1600;
+    uint32 height = 900;
+};
+
 class SceneRenderer
 {
 public:
-    explicit SceneRenderer(Device* device);
+    explicit SceneRenderer(const RenderSettings& settings, Device* device);
 
     void Render(Scene& scene);
 
@@ -47,6 +53,7 @@ private:
     void CalculateCascades(Scene& scene);
 
 public:
+    RenderSettings m_Settings;
     Device* m_Device;
     Context* m_Context;
 
@@ -101,8 +108,6 @@ public:
     Pipeline* m_ResolveReflections;
 
     Buffer* m_TransferBuffer;
-
-
 };
 
 }
