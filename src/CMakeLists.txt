@@ -57,8 +57,14 @@ target_sources(lucent PRIVATE
 
         rendering/Geometry.cpp
         rendering/Geometry.hpp
+        rendering/GeometryPass.cpp
+        rendering/GeometryPass.hpp
         rendering/SceneRenderer.cpp
         rendering/SceneRenderer.hpp
+        rendering/Renderer.cpp
+        rendering/Renderer.hpp
+        rendering/RenderSettings.hpp
+        rendering/RenderSettings.cpp
 
         scene/ComponentPool.hpp
         scene/EntityPool.hpp

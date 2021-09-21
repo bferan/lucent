@@ -82,7 +82,7 @@ static Texture* ImportTexture(Device* device, const gltf::Model& model, const gl
     auto imported = device->CreateTexture(TextureSettings{
         .width = uint32(img.width),
         .height = uint32(img.height),
-        .format = linear ? TextureFormat::kRGBA8 : TextureFormat::kRGBA8_SRGB
+        .format = linear ? TextureFormat::kRGBA8 : TextureFormat::kRGBA8_sRGB
     });
     imported->Upload(img.image.size(), img.image.data());
 

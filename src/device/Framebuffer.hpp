@@ -16,8 +16,6 @@ enum class FramebufferUsage
 
 struct FramebufferSettings
 {
-    FramebufferUsage usage = FramebufferUsage::kDefault;
-
     Array<Texture*, kMaxColorAttachments> colorTextures = {};
     int colorLayer = -1;
     int colorLevel = -1;
@@ -25,6 +23,8 @@ struct FramebufferSettings
     Texture* depthTexture = nullptr;
     int depthLayer = -1;
     int depthLevel = -1;
+
+    FramebufferUsage usage = FramebufferUsage::kDefault;
 };
 
 struct Framebuffer

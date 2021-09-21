@@ -82,17 +82,29 @@ static VkFormat TextureFormatToVkFormat(TextureFormat format)
     case TextureFormat::kR8:
         return VK_FORMAT_R8_UNORM;
 
-    case TextureFormat::kRGBA8_SRGB:
-        return VK_FORMAT_R8G8B8A8_SRGB;
+    case TextureFormat::kRG8:
+        return VK_FORMAT_R8G8_UNORM;
+
+    case TextureFormat::kRGB8:
+        return VK_FORMAT_R8G8B8_UNORM;
 
     case TextureFormat::kRGBA8:
         return VK_FORMAT_R8G8B8A8_UNORM;
+
+    case TextureFormat::kRGBA8_sRGB:
+        return VK_FORMAT_R8G8B8A8_SRGB;
+
+    case TextureFormat::kRGB10A2:
+        return VK_FORMAT_A2R10G10B10_UNORM_PACK32;
 
     case TextureFormat::kR32F:
         return VK_FORMAT_R32_SFLOAT;
 
     case TextureFormat::kRG32F:
         return VK_FORMAT_R32G32_SFLOAT;
+
+    case TextureFormat::kRGB32F:
+        return VK_FORMAT_R32G32B32_SFLOAT;
 
     case TextureFormat::kRGBA32F:
         return VK_FORMAT_R32G32B32A32_SFLOAT;
@@ -208,12 +220,8 @@ static VkFilter TextureFilterToVk(TextureFilter filter)
 
 RENDERDOC_API_1_4_1* g_API;
 
-VulkanDevice::VulkanDevice()
+VulkanDevice::VulkanDevice(GLFWwindow* window)
 {
-    // Set up GLFW
-    if (!glfwInit())
-        return;
-
     //AddDllDirectory(L"C:\\Program Files\\RenderDoc");
 //    if(HMODULE mod = LoadLibraryA("renderdoc.dll"))
 //    {
@@ -224,16 +232,9 @@ VulkanDevice::VulkanDevice()
 //    g_API->SetCaptureOptionU32(eRENDERDOC_Option_CaptureCallstacks, 1);
 //    g_API->SetCaptureFilePathTemplate("../lucent-captures/lucent-capture");
 
+    m_Window = window;
+
     glslang::InitializeProcess();
-
-    // Create window
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    m_Window = glfwCreateWindow(
-        1600, 900,
-        "Lucent",
-        nullptr, nullptr);
-
-    LC_ASSERT(m_Window != nullptr);
 
     CreateInstance();
     glfwCreateWindowSurface(m_Instance, m_Window, nullptr, &m_Surface);

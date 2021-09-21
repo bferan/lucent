@@ -12,7 +12,7 @@ namespace lucent
 class VulkanDevice : public Device
 {
 public:
-    VulkanDevice();
+    explicit VulkanDevice(GLFWwindow* window);
     ~VulkanDevice() override;
 
     Buffer* CreateBuffer(BufferType type, size_t size) override;
@@ -92,7 +92,7 @@ public:
     uint32 m_NextImageIndex{};
 
     Buffer* m_TransferBuffer;
-    VkCommandPool m_OneShotCmdPool;
+    VkCommandPool m_OneShotCmdPool{};
     Context* m_OneShotContext;
 
     std::unique_ptr<ShaderCache> m_ShaderCache;

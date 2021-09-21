@@ -423,7 +423,6 @@ void SceneRenderer::RenderGBuffer(Scene& scene, Matrix4 view, Matrix4 proj) cons
 
     // Create min-Z depth pyramid
     {
-        // Copy depth texture to level-0 of color mip pyramid
         ctx.CopyTexture(m_GDepth, 0, 0, m_TransferBuffer, 0, m_GDepth->width, m_GDepth->height);
         ctx.CopyTexture(m_TransferBuffer, 0, m_GMinZ, 0, 0, m_GMinZ->width, m_GMinZ->height);
 
@@ -662,9 +661,7 @@ void SceneRenderer::RenderAmbientOcclusion(Scene& scene, Matrix4 view, Matrix4 p
     ctx.Dispatch(m_Settings.width, m_Settings.height, 1);
 
     // Spatial blur
-
     // Temporal blur
-
 }
 
 void SceneRenderer::RenderDebugOverlay(Scene& scene, Matrix4 view, Matrix4 proj) const

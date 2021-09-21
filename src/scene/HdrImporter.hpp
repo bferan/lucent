@@ -6,13 +6,6 @@
 namespace lucent
 {
 
-struct HdrUBO
-{
-    Matrix4 view;
-    Matrix4 proj;
-    float rough;
-};
-
 class HdrImporter
 {
 public:
@@ -36,9 +29,6 @@ private:
     Pipeline* m_GenIrradiance;
     Pipeline* m_GenSpecular;
     Pipeline* m_GenBRDF;
-
-
-
 };
 
 }

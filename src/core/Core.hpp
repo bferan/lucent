@@ -13,6 +13,7 @@
 #include <optional>
 #include <utility>
 #include <variant>
+#include <functional>
 
 #include "core/Array.hpp"
 #include "core/Color.hpp"

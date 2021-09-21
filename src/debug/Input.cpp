@@ -5,8 +5,6 @@
 namespace lucent
 {
 
-// TODO: Flip mouse so screen space has origin at bottom left
-
 Input::Input(GLFWwindow* window)
     : m_Window(window)
 {

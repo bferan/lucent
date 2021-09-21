@@ -5,13 +5,22 @@ namespace lucent
 
 enum class TextureFormat
 {
+    // Unsigned normalized
     kR8,
-    kRGBA8_SRGB,
+    kRG8,
+    kRGB8,
     kRGBA8,
-    kRGBA32F,
-    kRG32F,
-    kR32F,
+    kRGBA8_sRGB,
 
+    kRGB10A2,
+
+    // Floating point
+    kR32F,
+    kRG32F,
+    kRGB32F,
+    kRGBA32F,
+
+    // Depth
     kDepth16U,
     kDepth32F
 };
