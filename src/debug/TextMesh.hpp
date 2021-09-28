@@ -11,6 +11,8 @@ class TextMesh
 public:
     TextMesh(Device* device, const Font& font);
 
+    void SetScreenSize(uint32 width, uint32 height);
+
     float Draw(const std::string& str, float x, float y, Color color = Color::White());
 
     float Draw(char c, float screenX, float screenY, Color color = Color::White());
@@ -32,6 +34,8 @@ private:
     Buffer* m_VertexBuffer;
     Buffer* m_IndexBuffer;
 
+    uint32 m_ScreenWidth;
+    uint32 m_ScreenHeight;
 };
 
 }

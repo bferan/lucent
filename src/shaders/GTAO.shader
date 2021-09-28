@@ -41,7 +41,7 @@ layout(set=1, binding=1) uniform DebugGlobals
     mat4 u_ViewToWorld;
 };
 
-void debugDrawSphere(vec3 pos, float r, vec4 color)
+void DebugDrawSphere(vec3 pos, float r, vec4 color)
 {
     uint entry = atomicAdd(d_NumShapes, 1u);
     if (entry < kMaxDebugShapes)
@@ -56,7 +56,7 @@ void debugDrawSphere(vec3 pos, float r, vec4 color)
     }
 }
 
-void debugDrawRay(vec3 srcPos, vec3 dstPos, vec4 color)
+void DebugDrawRay(vec3 srcPos, vec3 dstPos, vec4 color)
 {
     uint entry = atomicAdd(d_NumShapes, 1u);
     if (entry < kMaxDebugShapes)
@@ -75,7 +75,7 @@ void debugDrawRay(vec3 srcPos, vec3 dstPos, vec4 color)
 
 
 // Get view space position from screen coordinate
-vec3 inverseProject(vec2 screenCoord)
+vec3 InverseProject(vec2 screenCoord)
 {
     float depth = texture(u_Depth, u_InvScreenSize * screenCoord).r;
     float z = u_ScreenToViewFactors.z / (depth - u_ScreenToViewOffsets.z);
@@ -88,11 +88,11 @@ vec3 inverseProject(vec2 screenCoord)
 // Screen space - coordinate
 // View space - position
 
-void compute()
+void Compute()
 {
     ivec2 imgCoord = ivec2(gl_GlobalInvocationID.xy);
     vec2 coord = vec2(imgCoord) + vec2(0.5);
-    vec3 pos = inverseProject(coord);
+    vec3 pos = InverseProject(coord);
     vec3 view = normalize(-pos);
 
     // Approximate geometric view space normal from differences
@@ -130,8 +130,8 @@ void compute()
 
             vec2 coordOffset = s * maxPixelRadius * sliceDir.xy;
 
-            vec3 samplePosR = inverseProject(coord + coordOffset);
-            vec3 samplePosL = inverseProject(coord - coordOffset);
+            vec3 samplePosR = InverseProject(coord + coordOffset);
+            vec3 samplePosL = InverseProject(coord - coordOffset);
 
             vec3 horizonR = samplePosR - pos;
             vec3 horizonL = samplePosL - pos;

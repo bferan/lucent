@@ -42,7 +42,7 @@ target_link_libraries(lucent PUBLIC glfw)
 
 # renderdoc
 add_subdirectory(extern/renderdoc)
-target_link_libraries(lucent PRIVATE renderdoc)
+target_link_libraries(lucent PUBLIC renderdoc)
 
 # stb
 add_subdirectory(extern/stb)

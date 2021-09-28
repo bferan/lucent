@@ -67,6 +67,7 @@ struct TextureSettings
     TextureAddressMode addressMode = TextureAddressMode::kRepeat;
     TextureFilter filter = TextureFilter::kLinear;
     TextureUsage usage = TextureUsage::kReadOnly;
+    bool generateMips = false;
 };
 
 struct Texture
@@ -77,6 +78,8 @@ struct Texture
     uint32 width;
     uint32 height;
     uint32 levels;
+
+    TextureSettings settings;
 };
 
 }

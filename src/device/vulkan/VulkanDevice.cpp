@@ -222,7 +222,6 @@ RENDERDOC_API_1_4_1* g_API;
 
 VulkanDevice::VulkanDevice(GLFWwindow* window)
 {
-    //AddDllDirectory(L"C:\\Program Files\\RenderDoc");
 //    if(HMODULE mod = LoadLibraryA("renderdoc.dll"))
 //    {
 //        auto RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)GetProcAddress(mod, "RENDERDOC_GetAPI");
@@ -249,24 +248,9 @@ VulkanDevice::VulkanDevice(GLFWwindow* window)
     };
     vmaCreateAllocator(&allocatorInfo, &m_Allocator);
 
-    // Create semaphores and fences
-    auto semaphoreInfo = VkSemaphoreCreateInfo{
-        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-    };
-    vkCreateSemaphore(m_Handle, &semaphoreInfo, nullptr, &m_ImageAvailable);
-    vkCreateSemaphore(m_Handle, &semaphoreInfo, nullptr, &m_RenderFinished);
-
     // Create transfer buffer
     m_TransferBuffer = VulkanDevice::CreateBuffer(BufferType::kStaging, 128 * 1024 * 1024);
-    m_OneShotContext = VulkanDevice::CreateContext();
-
-    auto poolInfo = VkCommandPoolCreateInfo{
-        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-        .flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
-        .queueFamilyIndex = m_GraphicsQueue.familyIndex
-    };
-    auto result = vkCreateCommandPool(m_Handle, &poolInfo, nullptr, &m_OneShotCmdPool);
-    LC_ASSERT(result == VK_SUCCESS);
+    m_OneShotContext = Get(VulkanDevice::CreateContext());
 
     // Create shader cache
     m_ShaderCache = std::make_unique<ShaderCache>(this);
@@ -315,32 +299,12 @@ VulkanDevice::~VulkanDevice()
     }
 
     // Destroy contexts
-    for (auto& ctx: m_Contexts)
-    {
-        ctx->lucent::VulkanContext::~VulkanContext();
-    }
+    m_Contexts.clear();
 
     // Destroy shaders
     m_ShaderCache->Clear();
 
-    // Destroy swapchain
-    vkDestroyRenderPass(m_Handle, m_Swapchain.framebuffers[0].renderPass, nullptr);
-    for (auto& tex: m_Swapchain.textures)
-    {
-        vkDestroyImageView(m_Handle, tex.imageView, nullptr);
-    }
-    for (auto& fb: m_Swapchain.framebuffers)
-    {
-        vkDestroyFramebuffer(m_Handle, fb.handle, nullptr);
-    }
-    vkDestroySwapchainKHR(m_Handle, m_Swapchain.handle, nullptr);
-
-    // Destroy semaphores
-    vkDestroySemaphore(m_Handle, m_ImageAvailable, nullptr);
-    vkDestroySemaphore(m_Handle, m_RenderFinished, nullptr);
-
-    // Destroy one shot command pool
-    vkDestroyCommandPool(m_Handle, m_OneShotCmdPool, nullptr);
+    DestroySwapchain();
 
     // VMA
     vmaDestroyAllocator(m_Allocator);
@@ -389,9 +353,7 @@ void VulkanDevice::CreateInstance()
         .enabledExtensionCount = static_cast<uint32_t>(instanceExtensions.size()),
         .ppEnabledExtensionNames = instanceExtensions.data()
     };
-
-    auto result = vkCreateInstance(&createInfo, nullptr, &m_Instance);
-    LC_ASSERT(result == VK_SUCCESS);
+    LC_CHECK(vkCreateInstance(&createInfo, nullptr, &m_Instance));
 
     // Create debug messenger
     auto debugMessengerInfo = VkDebugUtilsMessengerCreateInfoEXT{
@@ -413,8 +375,7 @@ void VulkanDevice::CreateInstance()
         m_Instance, "vkCreateDebugUtilsMessengerEXT");
     if (createMessenger)
     {
-        result = createMessenger(m_Instance, &debugMessengerInfo, nullptr, &m_DebugMessenger);
-        LC_ASSERT(result == VK_SUCCESS);
+        LC_CHECK(createMessenger(m_Instance, &debugMessengerInfo, nullptr, &m_DebugMessenger));
     }
 }
 
@@ -504,9 +465,7 @@ void VulkanDevice::CreateDevice()
         .ppEnabledExtensionNames = deviceExtensions.data(),
         .pEnabledFeatures = &deviceFeatures
     };
-
-    auto result = vkCreateDevice(selectedDevice, &deviceCreateInfo, nullptr, &m_Handle);
-    LC_ASSERT(result == VK_SUCCESS);
+    LC_CHECK(vkCreateDevice(selectedDevice, &deviceCreateInfo, nullptr, &m_Handle));
 
     m_GraphicsQueue.familyIndex = graphicsFamilyIdx;
     m_PresentQueue.familyIndex = presentFamilyIdx;
@@ -517,18 +476,15 @@ void VulkanDevice::CreateDevice()
 
 void VulkanDevice::CreateSwapchain()
 {
-    // Find suitable format, extent and present mode
     VkSurfaceCapabilitiesKHR surfaceCapabilities;
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_PhysicalDevice, m_Surface, &surfaceCapabilities);
 
+    // Choose suitable sRGB surface format
     std::vector<VkSurfaceFormatKHR> surfaceFormats;
     uint32 surfaceFormatCount = 0;
     vkGetPhysicalDeviceSurfaceFormatsKHR(m_PhysicalDevice, m_Surface, &surfaceFormatCount, nullptr);
     surfaceFormats.resize(surfaceFormatCount);
-    vkGetPhysicalDeviceSurfaceFormatsKHR(m_PhysicalDevice,
-        m_Surface,
-        &surfaceFormatCount,
-        surfaceFormats.data());
+    vkGetPhysicalDeviceSurfaceFormatsKHR(m_PhysicalDevice, m_Surface, &surfaceFormatCount, surfaceFormats.data());
 
     VkSurfaceFormatKHR chosenFormat;
     for (auto& format: surfaceFormats)
@@ -540,8 +496,10 @@ void VulkanDevice::CreateSwapchain()
         }
     }
 
+    // Choose suitable present mode
     VkPresentModeKHR chosenPresentMode = VK_PRESENT_MODE_FIFO_KHR;
 
+    // Choose suitable extent
     VkExtent2D chosenExtent = surfaceCapabilities.currentExtent;
     if (chosenExtent.width == UINT32_MAX)
     {
@@ -581,9 +539,7 @@ void VulkanDevice::CreateSwapchain()
         .clipped = VK_TRUE,
         .oldSwapchain = VK_NULL_HANDLE
     };
-
-    auto result = vkCreateSwapchainKHR(m_Handle, &swapchainCreateInfo, nullptr, &m_Swapchain.handle);
-    LC_ASSERT(result == VK_SUCCESS);
+    LC_CHECK(vkCreateSwapchainKHR(m_Handle, &swapchainCreateInfo, nullptr, &m_Swapchain.handle));
 
     // Retrieve images from swapchain
     uint32 imageCount;
@@ -592,75 +548,13 @@ void VulkanDevice::CreateSwapchain()
     images.resize(imageCount);
     vkGetSwapchainImagesKHR(m_Handle, m_Swapchain.handle, &imageCount, images.data());
 
-    // Create render pass
-    auto colAttachmentDescription = VkAttachmentDescription{
-        .format = chosenFormat.format,
-        .samples = VK_SAMPLE_COUNT_1_BIT,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-        .stencilStoreOp  = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        .initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-    };
-
-    auto depthAttachmentDescription = VkAttachmentDescription{
-        .format = VK_FORMAT_D32_SFLOAT,
-        .samples = VK_SAMPLE_COUNT_1_BIT,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-        .stencilStoreOp  = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        .initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-        .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-    };
-
-    auto colAttachmentReference = VkAttachmentReference{
-        .attachment = 0,
-        .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-    };
-
-    auto depthAttachmentReference = VkAttachmentReference{
-        .attachment = 1,
-        .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-    };
-
-    auto subpassDesc = VkSubpassDescription{
-        .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-        .colorAttachmentCount = 1,
-        .pColorAttachments = &colAttachmentReference,
-        .pDepthStencilAttachment = &depthAttachmentReference
-    };
-
-    VkAttachmentDescription attachments[] = { colAttachmentDescription, depthAttachmentDescription };
-
-    auto renderPassInfo = VkRenderPassCreateInfo{
-        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-        .attachmentCount = 2,
-        .pAttachments = attachments,
-        .subpassCount = 1,
-        .pSubpasses = &subpassDesc,
-    };
-
-    VkRenderPass renderPass;
-    result = vkCreateRenderPass(m_Handle, &renderPassInfo, nullptr, &renderPass);
-    LC_ASSERT(result == VK_SUCCESS);
-
-    // Create depth texture
-    auto depthTexture = CreateTexture(TextureSettings{
-        .width = chosenExtent.width,
-        .height = chosenExtent.height,
-        .format = TextureFormat::kDepth32F,
-        .usage = TextureUsage::kDepthAttachment
-    });
-
-    // Initialize swapchain textures & framebuffers
+    // Initialize swapchain textures
     m_Swapchain.textures.resize(imageCount);
-    m_Swapchain.framebuffers.resize(imageCount);
+    m_Swapchain.acquiredImage.resize(imageCount);
+    m_Swapchain.imageReady.resize(imageCount);
     for (int i = 0; i < imageCount; ++i)
     {
         auto& tex = m_Swapchain.textures[i];
-        auto& fb = m_Swapchain.framebuffers[i];
 
         tex.width = chosenExtent.width;
         tex.height = chosenExtent.height;
@@ -686,36 +580,21 @@ void VulkanDevice::CreateSwapchain()
                 .layerCount = 1
             }
         };
-        result = vkCreateImageView(m_Handle, &viewCreateInfo, nullptr, &tex.imageView);
-        LC_ASSERT(result == VK_SUCCESS);
+        LC_CHECK(vkCreateImageView(m_Handle, &viewCreateInfo, nullptr, &tex.imageView));
 
-        fb.samples = 1;
-        fb.extent = chosenExtent;
-        fb.renderPass = renderPass;
-        fb.usage = FramebufferUsage::kSwapchainImage;
-        fb.colorTextures = { &tex };
-        fb.depthTexture = depthTexture;
-
-        // Create framebuffer
-        VkImageView fbAttachments[] = { Get(fb.colorTextures.front())->imageView, Get(fb.depthTexture)->imageView };
-
-        auto framebufferInfo = VkFramebufferCreateInfo{
-            .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-            .renderPass = fb.renderPass,
-            .attachmentCount = LC_ARRAY_SIZE(fbAttachments),
-            .pAttachments = fbAttachments,
-            .width = tex.extent.width,
-            .height = tex.extent.height,
-            .layers = 1
+        // Create semaphores
+        auto semaphoreInfo = VkSemaphoreCreateInfo{
+            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
         };
-        result = vkCreateFramebuffer(m_Handle, &framebufferInfo, nullptr, &fb.handle);
-        LC_ASSERT(result == VK_SUCCESS);
+        LC_CHECK(vkCreateSemaphore(m_Handle, &semaphoreInfo, nullptr, &m_Swapchain.acquiredImage[i]));
+        LC_CHECK(vkCreateSemaphore(m_Handle, &semaphoreInfo, nullptr, &m_Swapchain.imageReady[i]));
     }
 }
 
 Pipeline* VulkanDevice::CreatePipeline(const PipelineSettings& settings)
 {
     auto shader = m_ShaderCache->Compile(settings.shaderName);
+    LC_ASSERT(shader);
 
     auto pipeline = settings.type == PipelineType::kGraphics ?
         CreateGraphicsPipeline(settings, shader) :
@@ -727,13 +606,14 @@ Pipeline* VulkanDevice::CreatePipeline(const PipelineSettings& settings)
 std::unique_ptr<VulkanPipeline> VulkanDevice::CreateGraphicsPipeline(
     const PipelineSettings& settings, Shader* shaderPtr)
 {
-    auto pipelinePtr = std::make_unique<VulkanPipeline>(settings);
+    LC_ASSERT(settings.framebuffer);
 
+    auto pipelinePtr = std::make_unique<VulkanPipeline>(settings);
     if (!shaderPtr) return pipelinePtr;
 
     auto& shader = *shaderPtr;
     auto& pipeline = *pipelinePtr;
-    auto& framebuffer = settings.framebuffer ? *Get(settings.framebuffer) : m_Swapchain.framebuffers[0];
+    auto& framebuffer = *Get(settings.framebuffer);
 
     pipeline.type = PipelineType::kGraphics;
     pipeline.shader = shaderPtr;
@@ -912,10 +792,7 @@ std::unique_ptr<VulkanPipeline> VulkanDevice::CreateGraphicsPipeline(
         .renderPass = framebuffer.renderPass,
         .subpass = 0
     };
-
-    auto result = vkCreateGraphicsPipelines(m_Handle, VK_NULL_HANDLE,
-        1, &pipelineCreateInfo, nullptr, &pipeline.handle);
-    LC_ASSERT(result == VK_SUCCESS);
+    LC_CHECK(vkCreateGraphicsPipelines(m_Handle, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &pipeline.handle));
 
     return pipelinePtr;
 }
@@ -946,9 +823,7 @@ std::unique_ptr<VulkanPipeline> VulkanDevice::CreateComputePipeline(
         },
         .layout = shader.pipelineLayout
     };
-
-    auto result = vkCreateComputePipelines(m_Handle, VK_NULL_HANDLE, 1, &computeInfo, nullptr, &pipeline.handle);
-    LC_ASSERT(result == VK_SUCCESS);
+    LC_CHECK(vkCreateComputePipelines(m_Handle, VK_NULL_HANDLE, 1, &computeInfo, nullptr, &pipeline.handle));
 
     return pipelinePtr;
 }
@@ -988,19 +863,17 @@ Buffer* VulkanDevice::CreateBuffer(BufferType type, size_t size)
     buff.device = this;
     buff.bufSize = size;
 
+    auto allocInfo = VmaAllocationCreateInfo{
+        .usage = VMA_MEMORY_USAGE_CPU_TO_GPU
+    };
+
     auto bufferInfo = VkBufferCreateInfo{
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = size,
         .usage = BufferTypeToFlags(type),
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE
     };
-
-    auto allocInfo = VmaAllocationCreateInfo{
-        .usage = VMA_MEMORY_USAGE_CPU_TO_GPU
-    };
-
-    auto result = vmaCreateBuffer(m_Allocator, &bufferInfo, &allocInfo, &buff.handle, &buff.allocation, nullptr);
-    LC_ASSERT(result == VK_SUCCESS);
+    LC_CHECK(vmaCreateBuffer(m_Allocator, &bufferInfo, &allocInfo, &buff.handle, &buff.allocation, nullptr));
 
     return &buff;
 }
@@ -1041,6 +914,14 @@ Texture* VulkanDevice::CreateTexture(const TextureSettings& info)
     tex.device = this;
     tex.width = info.width;
     tex.height = info.height;
+    tex.settings = info;
+
+    if (info.generateMips)
+    {
+        auto levels = (uint32)Floor(Log2((float)Max(tex.width, tex.height))) + 1;
+        tex.levels = levels;
+        tex.settings.levels = levels;
+    }
 
     // Create image
     auto imageInfo = VkImageCreateInfo{
@@ -1053,7 +934,7 @@ Texture* VulkanDevice::CreateTexture(const TextureSettings& info)
             .height = info.height,
             .depth = 1
         },
-        .mipLevels = info.levels,
+        .mipLevels = tex.levels,
         .arrayLayers = arrayLayers,
         .samples = samples,
         .tiling = VK_IMAGE_TILING_OPTIMAL,
@@ -1128,20 +1009,7 @@ Texture* VulkanDevice::CreateTexture(const TextureSettings& info)
     {
         auto startLayout = tex.StartingLayout();
 
-        VkCommandBuffer cb;
-        auto cbAllocInfo = VkCommandBufferAllocateInfo{
-            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-            .commandPool = m_OneShotCmdPool,
-            .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-            .commandBufferCount = 1
-        };
-        vkAllocateCommandBuffers(m_Handle, &cbAllocInfo, &cb);
-
-        auto beginInfo = VkCommandBufferBeginInfo{
-            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-            .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
-        };
-        vkBeginCommandBuffer(cb, &beginInfo);
+        m_OneShotContext->Begin();
 
         auto imgBarrier = VkImageMemoryBarrier{
             .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -1160,7 +1028,7 @@ Texture* VulkanDevice::CreateTexture(const TextureSettings& info)
                 .layerCount = VK_REMAINING_ARRAY_LAYERS
             }
         };
-        vkCmdPipelineBarrier(cb,
+        vkCmdPipelineBarrier(m_OneShotContext->m_CommandBuffer,
             VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
             VK_DEPENDENCY_BY_REGION_BIT,
@@ -1171,19 +1039,8 @@ Texture* VulkanDevice::CreateTexture(const TextureSettings& info)
             1,
             &imgBarrier);
 
-        vkEndCommandBuffer(cb);
-
-        auto submitInfo = VkSubmitInfo{
-            .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-            .commandBufferCount = 1,
-            .pCommandBuffers = &cb
-        };
-        LC_CHECK(vkQueueSubmit(m_GraphicsQueue.handle, 1, &submitInfo, VK_NULL_HANDLE));
-
-        // Free command buffer
-        vkQueueWaitIdle(m_GraphicsQueue.handle);
-        vkFreeCommandBuffers(m_Handle, m_OneShotCmdPool, 1, &cb);
-        vkResetCommandPool(m_Handle, m_OneShotCmdPool, 0);
+        m_OneShotContext->End();
+        Submit(m_OneShotContext);
     }
 
     return &tex;
@@ -1193,7 +1050,6 @@ Framebuffer* VulkanDevice::CreateFramebuffer(const FramebufferSettings& info)
 {
     auto& fb = *m_Framebuffers.emplace_back(std::make_unique<VulkanFramebuffer>());
 
-    fb.usage = info.usage;
     fb.colorTextures = info.colorTextures;
     fb.depthTexture = info.depthTexture;
 
@@ -1328,61 +1184,68 @@ Context* VulkanDevice::CreateContext()
     return &ctx;
 }
 
-const Framebuffer* VulkanDevice::AcquireFramebuffer()
+Texture* VulkanDevice::AcquireSwapchainImage()
 {
     // Acquire image
     vkAcquireNextImageKHR(m_Handle,
         m_Swapchain.handle,
         UINT64_MAX,
-        m_ImageAvailable,
+        m_Swapchain.acquiredImage[GetSwapchainIndex()],
         VK_NULL_HANDLE,
-        &m_NextImageIndex);
+        &m_SwapchainImageIndex);
 
-    return &m_Swapchain.framebuffers[m_NextImageIndex];
+    m_SwapchainImageAcquired = true;
+
+    return &m_Swapchain.textures[m_SwapchainImageIndex];
 }
 
-void VulkanDevice::Submit(Context* generalContext, bool sync)
+void VulkanDevice::Submit(Context* generalContext)
 {
     auto context = Get(generalContext);
-    VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
 
-    auto submitInfo = sync ?
-        VkSubmitInfo{
+    if (m_SwapchainImageAcquired)
+    {
+        VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_TRANSFER_BIT };
+        auto swapchainImageIndex = GetSwapchainIndex();
+
+        auto submitInfo = VkSubmitInfo{
             .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-            .waitSemaphoreCount = sync ? 1u : 0u,
-            .pWaitSemaphores = &m_ImageAvailable,
+            .waitSemaphoreCount = 1,
+            .pWaitSemaphores = &m_Swapchain.acquiredImage[swapchainImageIndex],
             .pWaitDstStageMask = waitStages,
             .commandBufferCount = 1,
             .pCommandBuffers = &context->m_CommandBuffer,
-            .signalSemaphoreCount = sync ? 1u : 0u,
-            .pSignalSemaphores = &m_RenderFinished
-        } :
-        VkSubmitInfo{
+            .signalSemaphoreCount = 1,
+            .pSignalSemaphores = &m_Swapchain.imageReady[swapchainImageIndex]
+        };
+        LC_CHECK(vkQueueSubmit(m_GraphicsQueue.handle, 1, &submitInfo, context->m_ReadyFence));
+        m_SwapchainImageAcquired = false;
+    }
+    else
+    {
+        auto submitInfo = VkSubmitInfo{
             .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
             .commandBufferCount = 1,
-            .pCommandBuffers = &context->m_CommandBuffer
+            .pCommandBuffers = &context->m_CommandBuffer,
         };
-
-    auto result = vkQueueSubmit(m_GraphicsQueue.handle, 1, &submitInfo, VK_NULL_HANDLE);
-    LC_ASSERT(result == VK_SUCCESS);
-
-    // TODO: REMOVE
-    vkQueueWaitIdle(m_GraphicsQueue.handle);
+        LC_CHECK(vkQueueSubmit(m_GraphicsQueue.handle, 1, &submitInfo, context->m_ReadyFence));
+    }
 }
 
-void VulkanDevice::Present()
+bool VulkanDevice::Present()
 {
-    // Present
     auto presentInfo = VkPresentInfoKHR{
         .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
         .waitSemaphoreCount = 1,
-        .pWaitSemaphores = &m_RenderFinished,
+        .pWaitSemaphores = &m_Swapchain.imageReady[GetSwapchainIndex()],
         .swapchainCount = 1,
         .pSwapchains = &m_Swapchain.handle,
-        .pImageIndices = &m_NextImageIndex
+        .pImageIndices = &m_SwapchainImageIndex
     };
-    vkQueuePresentKHR(m_PresentQueue.handle, &presentInfo);
-    vkDeviceWaitIdle(m_Handle);
+    auto presentResult = vkQueuePresentKHR(m_PresentQueue.handle, &presentInfo);
+
+    ++m_FrameIndex;
+    return presentResult == VK_SUCCESS;
 }
 
 VkBool32 VulkanDevice::DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
@@ -1429,6 +1292,31 @@ void VulkanDevice::DestroyFramebuffer(Framebuffer* framebuffer)
 void VulkanDevice::DestroyContext(Context* context)
 {
 
+}
+uint32 VulkanDevice::GetSwapchainIndex() const
+{
+    return m_FrameIndex % m_Swapchain.textures.size();
+}
+
+void VulkanDevice::WaitIdle()
+{
+    vkDeviceWaitIdle(m_Handle);
+}
+
+void VulkanDevice::RebuildSwapchain()
+{
+    DestroySwapchain();
+    CreateSwapchain();
+}
+void VulkanDevice::DestroySwapchain()
+{
+    for (int i = 0; i < m_Swapchain.textures.size(); ++i)
+    {
+        vkDestroyImageView(m_Handle, m_Swapchain.textures[i].imageView, nullptr);
+        vkDestroySemaphore(m_Handle, m_Swapchain.acquiredImage[i], nullptr);
+        vkDestroySemaphore(m_Handle, m_Swapchain.imageReady[i], nullptr);
+    }
+    vkDestroySwapchainKHR(m_Handle, m_Swapchain.handle, nullptr);
 }
 
 }

@@ -55,19 +55,31 @@ target_sources(lucent PRIVATE
         device/vulkan/VulkanTexture.cpp
         device/vulkan/VulkanTexture.hpp
 
+        rendering/AmbientOcclusionPass.cpp
+        rendering/AmbientOcclusionPass.hpp
+        rendering/DebugOverlayPass.cpp
+        rendering/DebugOverlayPass.hpp
         rendering/Geometry.cpp
         rendering/Geometry.hpp
         rendering/GeometryPass.cpp
         rendering/GeometryPass.hpp
-        rendering/SceneRenderer.cpp
-        rendering/SceneRenderer.hpp
+        rendering/LightingPass.cpp
+        rendering/LightingPass.hpp
+        rendering/MomentShadowPass.cpp
+        rendering/MomentShadowPass.hpp
+        rendering/PostProcessPass.cpp
+        rendering/PostProcessPass.hpp
         rendering/Renderer.cpp
         rendering/Renderer.hpp
+        rendering/ScreenSpaceReflectionsPass.cpp
+        rendering/ScreenSpaceReflectionsPass.hpp
         rendering/RenderSettings.hpp
         rendering/RenderSettings.cpp
 
+        scene/Components.cpp
+        scene/Components.hpp
         scene/ComponentPool.hpp
-        scene/EntityPool.hpp
+        scene/EntityIDPool.hpp
         scene/HdrImporter.cpp
         scene/HdrImporter.hpp
         scene/Importer.cpp

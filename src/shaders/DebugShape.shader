@@ -8,12 +8,12 @@ layout(set=0, binding=0) uniform Globals
 
 layout(location=0) out vec4 o_Color;
 
-void vert()
+void Vertex()
 {
     gl_Position = u_MVP * vec4(a_Position, 1.0);
 }
 
-void frag()
+void Fragment()
 {
     o_Color = u_Color;
 }

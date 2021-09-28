@@ -7,7 +7,7 @@ struct EntityID
 {
     bool Empty() const
     {
-        return index == 0;
+        return index == 0u;
     }
 
     uint32 index: 24 {};
@@ -19,10 +19,10 @@ inline bool operator==(EntityID lhs, EntityID rhs)
     return lhs.index == rhs.index && lhs.version == rhs.version;
 }
 
-class EntityPool
+class EntityIDPool
 {
 public:
-    EntityPool()
+    EntityIDPool()
     {
         // Add the null entity
         m_Entities.push_back(EntityID{ 0, 1 });

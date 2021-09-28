@@ -4,8 +4,6 @@
 #include "stb_truetype.h"
 
 #include "core/Utility.hpp"
-#include "device/Context.hpp"
-#include "device/Shader.hpp"
 
 namespace lucent
 {
@@ -20,8 +18,8 @@ struct BakedFont
     stbtt_bakedchar chars[kNumChars];
 };
 
-Font::Font(Device* device, Framebuffer* framebuffer, const std::string& fontFile, float pixelHeight)
-    : m_Device(device), m_PixelHeight(pixelHeight)
+Font::Font(Device* device, const std::string& fontFile, float pixelHeight)
+    : m_PixelHeight(pixelHeight)
 {
     // Read TTF font file
     auto fontText = ReadFile(fontFile, std::ios::binary | std::ios::in);
@@ -42,16 +40,8 @@ Font::Font(Device* device, Framebuffer* framebuffer, const std::string& fontFile
         .height = kBitmapHeight,
         .format = TextureFormat::kR8
     };
-    m_FontTexture = m_Device->CreateTexture(texInfo);
+    m_FontTexture = device->CreateTexture(texInfo);
     m_FontTexture->Upload(bitmap.size(), bitmap.data());
-
-    // Create font pipeline & descriptor set
-    m_FontPipeline = m_Device->CreatePipeline(PipelineSettings{
-            .shaderName = "DebugFont.shader",
-            .framebuffer = framebuffer,
-            .depthTestEnable = false
-        }
-    );
 }
 
 Glyph Font::GetGlyph(char c) const
@@ -79,15 +69,14 @@ Glyph Font::GetGlyph(char c) const
     };
 }
 
-void Font::Bind(Context& context) const
-{
-    context.BindPipeline(m_FontPipeline);
-    context.BindTexture("u_FontTex"_id, m_FontTexture);
-}
-
 Font::~Font()
 {
     delete m_BakedFont;
+}
+
+Texture* Font::GetAtlas() const
+{
+    return m_FontTexture;
 }
 
 }

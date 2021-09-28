@@ -1,33 +1,32 @@
-#include "shared/VertexLayout"
+#include "VertexInput"
 
 layout(location=0) out vec4 o_Moments;
 
 uniform layout(set=0, binding=0) sampler2DMS u_Depth;
 
-void vert()
-{
-    gl_Position = vec4(a_Position, 1.0);
-}
+const uint kSampleCount = 8;
+const float kWeight = 1.0/float(kSampleCount);
 
-vec4 calculateMoments(float depth)
+vec4 CalculateMoments(float depth)
 {
     float d = depth * 2.0 - 1.0;
     float d2 = d * d;
     return vec4(d, d2, d2 * d, d2 * d2);
 }
 
-const uint sampleCount = 8;
+void Vertex()
+{
+    gl_Position = vec4(a_Position, 1.0);
+}
 
-void frag()
+void Fragment()
 {
     vec4 moments = vec4(0);
     ivec2 coord = ivec2(gl_FragCoord.xy);
 
-    const float weight = 1.0/float(sampleCount);
-    for (int i = 0; i < sampleCount; ++i)
+    for (int i = 0; i < kSampleCount; ++i)
     {
-        moments += weight * calculateMoments(texelFetch(u_Depth, coord, i).r);
+        moments += kWeight * CalculateMoments(texelFetch(u_Depth, coord, i).r);
     }
-
     o_Moments = moments;
 }

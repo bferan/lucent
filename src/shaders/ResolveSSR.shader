@@ -1,4 +1,4 @@
-#include "shared/PBR"
+#define PI 3.14159265358979323846
 
 layout(set=0, binding=0) uniform sampler2D u_PrevColor;
 layout(set=0, binding=1) uniform sampler2D u_Rays;
@@ -57,7 +57,7 @@ vec3 screenToView(vec2 coord)
     return vec3(pos, z);
 }
 
-void compute()
+void Compute()
 {
     ivec2 imgCoord = ivec2(gl_GlobalInvocationID.xy);
     vec2 coord = (vec2(imgCoord) + vec2(0.5)) / vec2(imageSize(u_Result).xy);

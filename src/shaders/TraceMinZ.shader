@@ -1,4 +1,4 @@
-#include "shared/PBR"
+#define PI 3.14159265358979323846
 
 layout(set=0, binding=0) uniform sampler2D u_MinZ;
 layout(set=0, binding=2) uniform sampler2D u_HaltonNoise;
@@ -102,7 +102,7 @@ const int kMaxLevel = 10;
 const int kMaxIterations = 128;
 const float kBias = 0.0;
 
-void compute()
+void Compute()
 {
     ivec2 imgCoord = ivec2(gl_GlobalInvocationID.xy);
     vec2 coord = vec2(imgCoord) + vec2(0.5);

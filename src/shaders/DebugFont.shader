@@ -1,14 +1,13 @@
+#include "VertexInput"
 
-#include "shared/VertexLayout"
+layout(location=0) varying vec2 v_UV;
+layout(location=1) varying vec4 v_Color;
 
-layout(location = 0) varying vec2 v_UV;
-layout(location = 1) varying vec4 v_Color;
+layout(location=0) out vec4 o_Color;
 
-layout(location = 0) out vec4 o_Color;
+layout(set=0, binding=0) uniform sampler2D u_FontAtlas;
 
-layout(set = 0, binding = 0) uniform sampler2D u_FontTex;
-
-void vert()
+void Vertex()
 {
     v_UV = a_UV;
     v_Color = a_Color;
@@ -17,8 +16,8 @@ void vert()
     gl_Position = pos;
 }
 
-void frag()
+void Fragment()
 {
-    float value = texture(u_FontTex, v_UV).r;
+    float value = texture(u_FontAtlas, v_UV).r;
     o_Color = value * v_Color;
 }

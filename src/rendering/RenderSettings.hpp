@@ -7,10 +7,10 @@ namespace lucent
 
 struct RenderSettings
 {
-    uint32 viewportWidth;
-    uint32 viewportHeight;
+    uint32 viewportWidth = 1;
+    uint32 viewportHeight = 1;
 
-    Scene& scene;
+    uint32 framesInFlight = 3;
 };
 
 }

@@ -23,13 +23,15 @@ struct DebugPrompt
 class DebugConsole : public LogListener
 {
 public:
-    explicit DebugConsole(Device* device, Framebuffer* framebuffer, int maxColumns = 120);
+    explicit DebugConsole(Device* device, int maxColumns = 120);
 
     void AddEntry(std::string text, Color color = Color::White());
 
     void Update(const InputState& input, float dt);
 
-    void Render(Context& ctx);
+    void SetScreenSize(uint32 width, uint32 height);
+
+    void RenderText(Context& ctx);
 
     bool Active() const
     {
@@ -53,8 +55,6 @@ private:
     int m_MaxEntries = 1000;
     bool m_Active;
     Vector2 m_Origin = { 50.0f, 50.0f };
-
-    std::vector<int> testVec;
 
     std::deque<DebugEntry> m_Entries;
     DebugPrompt m_Prompt;

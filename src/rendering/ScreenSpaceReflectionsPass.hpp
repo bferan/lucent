@@ -1,11 +1,11 @@
 #pragma once
 
+#include "rendering/Renderer.hpp"
+#include "rendering/GeometryPass.hpp"
+
 namespace lucent
 {
 
-class ScreenSpaceReflectionsPass
-{
-
-};
+Texture* AddScreenSpaceReflectionsPass(Renderer& renderer, GBuffer gBuffer, Texture* minZ, Texture* prevColor);
 
 }

@@ -28,17 +28,24 @@ public:
     Framebuffer* CreateFramebuffer(const FramebufferSettings& settings) override;
     void DestroyFramebuffer(Framebuffer* framebuffer) override;
 
-    const Framebuffer* AcquireFramebuffer() override;
-
     Context* CreateContext() override;
-    void Submit(Context* context, bool sync) override;
     void DestroyContext(Context* context) override;
-    void Present() override;
+    void Submit(Context* context) override;
+
+    Texture* AcquireSwapchainImage() override;
+    bool Present() override;
+
+    void WaitIdle() override;
+    void RebuildSwapchain() override;
 
 private:
     void CreateInstance();
     void CreateDevice();
+
     void CreateSwapchain();
+    void DestroySwapchain();
+
+    uint32 GetSwapchainIndex() const;
 
     std::unique_ptr<VulkanPipeline> CreateGraphicsPipeline(const PipelineSettings& settings, Shader* shader);
     std::unique_ptr<VulkanPipeline> CreateComputePipeline(const PipelineSettings& settings, Shader* shader);
@@ -61,8 +68,9 @@ private:
     struct Swapchain
     {
         VkSwapchainKHR handle;
-        std::vector<VulkanFramebuffer> framebuffers;
         std::vector<VulkanTexture> textures;
+        std::vector<VkSemaphore> acquiredImage;
+        std::vector<VkSemaphore> imageReady;
     };
 
 public:
@@ -87,13 +95,12 @@ public:
     std::vector<std::unique_ptr<VulkanFramebuffer>> m_Framebuffers;
     std::vector<std::unique_ptr<VulkanContext>> m_Contexts;
 
-    VkSemaphore m_ImageAvailable{};
-    VkSemaphore m_RenderFinished{};
-    uint32 m_NextImageIndex{};
+    uint32 m_SwapchainImageIndex{};
+    uint64 m_FrameIndex{};
+    bool m_SwapchainImageAcquired = false;
 
     Buffer* m_TransferBuffer;
-    VkCommandPool m_OneShotCmdPool{};
-    Context* m_OneShotContext;
+    VulkanContext* m_OneShotContext;
 
     std::unique_ptr<ShaderCache> m_ShaderCache;
 };

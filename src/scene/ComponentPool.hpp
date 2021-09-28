@@ -1,6 +1,6 @@
 #pragma once
 
-#include "scene/EntityPool.hpp"
+#include "scene/EntityIDPool.hpp"
 
 namespace lucent
 {

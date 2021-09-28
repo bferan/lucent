@@ -4,8 +4,34 @@
 
 #include "device/vulkan/VulkanDevice.hpp"
 
+#include "rendering/GeometryPass.hpp"
+#include "rendering/LightingPass.hpp"
+#include "rendering/ScreenSpaceReflectionsPass.hpp"
+#include "rendering/AmbientOcclusionPass.hpp"
+#include "rendering/MomentShadowPass.hpp"
+#include "rendering/PostProcessPass.hpp"
+#include "rendering/DebugOverlayPass.hpp"
+
 namespace lucent
 {
+
+static void BuildDefaultSceneRenderer(Engine* engine, Renderer& renderer)
+{
+    auto sceneRadiance = CreateSceneRadianceTarget(renderer);
+
+    auto gBuffer = AddGeometryPass(renderer);
+    auto hiZ = AddGenerateHiZPass(renderer, gBuffer.depth);
+    auto shadowMoments = AddMomentShadowPass(renderer);
+    auto gtao = AddGTAOPass(renderer, gBuffer, hiZ);
+    auto ssr = AddScreenSpaceReflectionsPass(renderer, gBuffer, hiZ, sceneRadiance);
+
+    AddLightingPass(renderer, gBuffer, hiZ, sceneRadiance, shadowMoments, gtao, ssr);
+    auto output = AddPostProcessPass(renderer, sceneRadiance);
+
+    AddDebugOverlayPass(renderer, engine->GetConsole(), output);
+
+    renderer.AddPresentPass(output);
+}
 
 Engine::Engine()
 {
@@ -23,7 +49,13 @@ Engine::Engine()
     LC_ASSERT(m_Window != nullptr);
 
     m_Device = std::make_unique<VulkanDevice>(m_Window);
-    m_SceneRenderer = std::make_unique<SceneRenderer>(RenderSettings{}, m_Device.get());
+    m_Console = std::make_unique<DebugConsole>(m_Device.get(), 120);
+
+    RenderSettings settings{ .viewportWidth = 1600, .viewportHeight = 900 };
+    m_SceneRenderer = std::make_unique<Renderer>(m_Device.get(), settings);
+    m_BuildSceneRenderer = BuildDefaultSceneRenderer;
+
+    m_BuildSceneRenderer(this, *m_SceneRenderer);
 }
 
 bool Engine::Update()
@@ -36,14 +68,33 @@ bool Engine::Update()
     float dt = time - m_LastUpdateTime;
 
     UpdateDebug(dt);
-    m_SceneRenderer->Render(*m_ActiveScene);
+    if (!m_SceneRenderer->Render(*m_ActiveScene))
+    {
+        LC_INFO("Rebuilding scene renderer");
+
+        m_Device->WaitIdle();
+        m_Device->RebuildSwapchain();
+
+        int width, height;
+        glfwGetFramebufferSize(m_Window, &width, &height);
+
+        auto settings = m_SceneRenderer->GetSettings();
+        settings.viewportWidth = width;
+        settings.viewportHeight = height;
+
+        m_ActiveScene->mainCamera.Get<Camera>().aspectRatio = (float)width / (float)height;
+
+        m_SceneRenderer->Clear();
+        m_SceneRenderer->SetSettings(settings);
+        m_BuildSceneRenderer(this, *m_SceneRenderer);
+    };
     m_Device->m_Input->Reset();
 
     m_LastUpdateTime = time;
     return true;
 }
 
-Device* Engine::Device()
+Device* Engine::GetDevice()
 {
     return m_Device.get();
 }
@@ -59,7 +110,7 @@ void Engine::UpdateDebug(float dt)
 {
     auto& input = m_Device->m_Input->GetState();
 
-    if (!m_SceneRenderer->m_DebugConsole->Active())
+    if (!m_Console->Active())
     {
         m_ActiveScene->Each<Transform, Camera>([&](auto& transform, auto& camera)
         {
@@ -91,8 +142,16 @@ void Engine::UpdateDebug(float dt)
         });
     }
 
+    if (input.KeyPressed(LC_KEY_R))
+        m_Device->ReloadPipelines();
+
     // Update console
-    m_SceneRenderer->m_DebugConsole->Update(input, dt);
+    m_Console->Update(input, dt);
+}
+
+DebugConsole* Engine::GetConsole()
+{
+    return m_Console.get();
 }
 
 }

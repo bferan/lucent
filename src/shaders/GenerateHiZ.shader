@@ -1,7 +1,7 @@
 layout(set=0, binding=0) uniform sampler2D u_Input;
 layout(set=0, binding=1, r32f) uniform image2D u_Output;
 
-void compute()
+void Compute()
 {
     ivec2 imgCoord = ivec2(gl_GlobalInvocationID.xy);
     vec2 coord = (vec2(imgCoord) + vec2(0.5)) / imageSize(u_Output);

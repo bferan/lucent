@@ -38,14 +38,16 @@ public:
     virtual Framebuffer* CreateFramebuffer(const FramebufferSettings& framebufferSettings) = 0;
     virtual void DestroyFramebuffer(Framebuffer* framebuffer) = 0;
 
-    virtual const Framebuffer* AcquireFramebuffer() = 0;
-
     virtual Context* CreateContext() = 0;
     virtual void DestroyContext(Context* context) = 0;
 
-    virtual void Submit(Context* context, bool sync = true) = 0;
+    virtual void Submit(Context* context) = 0;
 
-    virtual void Present() = 0;
+    virtual Texture* AcquireSwapchainImage() = 0;
+    virtual bool Present() = 0;
+
+    virtual void WaitIdle() = 0;
+    virtual void RebuildSwapchain() = 0;
 
     virtual ~Device() = default;
 

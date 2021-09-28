@@ -1,7 +1,8 @@
 #pragma once
 
 #include "device/Device.hpp"
-#include "rendering/SceneRenderer.hpp"
+#include "rendering/Renderer.hpp"
+#include "debug/DebugConsole.hpp"
 
 struct GLFWwindow;
 
@@ -15,17 +16,25 @@ public:
 
     bool Update();
 
-    Device* Device();
+    Device* GetDevice();
+
+    DebugConsole* GetConsole();
 
     Scene* CreateScene();
+
+    using BuildSceneRendererCallback = std::function<void(Engine*, Renderer&)>;
 
 private:
     void UpdateDebug(float dt);
 
 private:
-    std::unique_ptr<lucent::Device> m_Device;
-    std::unique_ptr<SceneRenderer> m_SceneRenderer;
+    LogStdOut m_OutLog;
+    std::unique_ptr<Device> m_Device;
+    std::unique_ptr<DebugConsole> m_Console;
     GLFWwindow* m_Window;
+
+    std::unique_ptr<Renderer> m_SceneRenderer;
+    BuildSceneRendererCallback m_BuildSceneRenderer;
 
     std::vector<std::unique_ptr<Scene>> m_Scenes;
     Scene* m_ActiveScene{};

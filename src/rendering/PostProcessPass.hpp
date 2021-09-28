@@ -1,11 +1,10 @@
 #pragma once
 
+#include "rendering/Renderer.hpp"
+
 namespace lucent
 {
 
-class PostProcessPass
-{
-
-};
+Texture* AddPostProcessPass(Renderer& renderer, Texture* sceneRadiance);
 
 }

@@ -34,9 +34,9 @@ static VkDescriptorType TypeToDescriptorType(const glslang::TType& type)
 }
 
 // Shader stripping
-constexpr auto kVertexDefinition = "void vert()";
-constexpr auto kFragmentDefinition = "void frag()";
-constexpr auto kComputeDefinition = "void compute()";
+constexpr auto kVertexDefinition = "void Vertex()";
+constexpr auto kFragmentDefinition = "void Fragment()";
+constexpr auto kComputeDefinition = "void Compute()";
 constexpr auto kMainDefinition = "void main()";
 
 static void ReplaceAll(std::string& text, const std::string& src, const std::string& dst)
@@ -305,7 +305,6 @@ void ShaderCache::Release(Shader* shader)
     }
 }
 
-const char* kAnonymousPrefix = "anon@";
 const char* kDefaultPreamble =
     "#extension GL_ARB_separate_shader_objects : enable\n"
     "#extension GL_GOOGLE_include_directive : enable\n";
@@ -433,6 +432,7 @@ bool ShaderCache::PopulateShaderModules(Shader& shader,
         glsl.setEnvClient(client, clientVersion);
         glsl.setEnvTarget(targetLang, targetLangVersion);
         glsl.setPreamble(kDefaultPreamble);
+        glsl.setAutoMapBindings(true);
 
         Includer includer(m_Resolver.get(), shaderStage);
 

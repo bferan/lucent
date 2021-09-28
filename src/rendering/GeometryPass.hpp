@@ -16,8 +16,8 @@ struct GBuffer
     Texture* metalRoughness;
 };
 
-GBuffer AddGeometryPass(Renderer& renderer, const RenderSettings& settings);
+GBuffer AddGeometryPass(Renderer& renderer);
 
-Texture* AddGenerateHiZPass(Renderer& renderer, const RenderSettings& settings, Texture* depthTexture);
+Texture* AddGenerateHiZPass(Renderer& renderer, Texture* depthTexture);
 
 }

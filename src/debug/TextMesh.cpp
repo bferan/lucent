@@ -5,9 +5,6 @@
 namespace lucent
 {
 
-constexpr float kScreenWidth = 1600.0f;
-constexpr float kScreenHeight = 900.0f;
-
 constexpr size_t kVertBufferSize = (1 << 20);
 constexpr size_t kIdxBufferSize = (1 << 20);
 
@@ -34,7 +31,7 @@ float TextMesh::Draw(char c, float screenX, float screenY, Color color)
 {
     const auto& glyph = m_Font.GetGlyph(c);
 
-    const auto invScreen = Vector2(1.0f / kScreenWidth, 1.0f / kScreenHeight);
+    const auto invScreen = Vector2(1.0f / (float)m_ScreenWidth, 1.0f / (float)m_ScreenHeight);
 
     auto origin = Vector2(screenX, screenY);
 
@@ -82,11 +79,16 @@ void TextMesh::Upload()
 
 void TextMesh::Render(Context& context)
 {
-    m_Font.Bind(context);
-
+    context.BindTexture("u_FontAtlas"_id, m_Font.GetAtlas());
     context.BindBuffer(m_IndexBuffer);
     context.BindBuffer(m_VertexBuffer);
     context.Draw(m_Indices.size());
+}
+
+void TextMesh::SetScreenSize(uint32 width, uint32 height)
+{
+    m_ScreenWidth = width;
+    m_ScreenHeight = height;
 }
 
 }

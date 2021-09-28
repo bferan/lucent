@@ -59,9 +59,7 @@ Entity Importer::Import(Scene& scene, const std::string& modelFile)
         for (auto entity : rootEntities)
         {
             // Flip Z-axis to have -Z facing forward
-            auto& transform = entity.Get<Transform>();
-            transform.rotation = flip * transform.rotation;
-            ApplyTransform(entity);
+            entity.SetRotation(flip * entity.GetRotation());
         }
     }
     return rootEntities.empty() ? Entity{} : rootEntities.back();
@@ -82,7 +80,8 @@ static Texture* ImportTexture(Device* device, const gltf::Model& model, const gl
     auto imported = device->CreateTexture(TextureSettings{
         .width = uint32(img.width),
         .height = uint32(img.height),
-        .format = linear ? TextureFormat::kRGBA8 : TextureFormat::kRGBA8_sRGB
+        .format = linear ? TextureFormat::kRGBA8 : TextureFormat::kRGBA8_sRGB,
+        .generateMips = true
     });
     imported->Upload(img.image.size(), img.image.data());
 

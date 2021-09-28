@@ -1,4 +1,4 @@
-#include "shared/VertexLayout"
+#include "VertexInput"
 
 layout(location=0) varying Vertex
 {
@@ -8,28 +8,30 @@ layout(location=0) varying Vertex
     vec3 v_Normal;
 };
 
+// GBuffer targets
 layout(location=0) out vec4 o_BaseColor;
 layout(location=1) out vec3 o_Normal;
 layout(location=2) out vec2 o_MetalRoughness;
 
+// Per-draw uniforms
 layout(set=0, binding=0) uniform Globals
 {
     mat4 u_MVP;
     mat4 u_MV;
 };
 
-layout(set=1, binding=0) uniform sampler2D u_BaseColor;
-layout(set=1, binding=1) uniform sampler2D u_MetalRoughness;
-layout(set=1, binding=2) uniform sampler2D u_Normal;
-
-layout(set=2, binding=0) uniform Material
+// Material properties
+layout(set=1, binding=0) uniform Material
 {
     vec4 u_BaseColorFactor;
     float u_MetallicFactor;
     float u_RoughnessFactor;
 };
+layout(set=1, binding=1) uniform sampler2D u_BaseColor;
+layout(set=1, binding=2) uniform sampler2D u_MetalRoughness;
+layout(set=1, binding=3) uniform sampler2D u_Normal;
 
-void vert()
+void Vertex()
 {
     vec3 bitangent = a_Tangent.w * cross(a_Normal, vec3(a_Tangent));
 
@@ -41,7 +43,7 @@ void vert()
     gl_Position = u_MVP * vec4(a_Position, 1.0);
 }
 
-void frag()
+void Fragment()
 {
     vec4 metallicRoughness = texture(u_MetalRoughness, v_UV);
 
@@ -57,9 +59,9 @@ void frag()
     float metal = metallicRoughness.b * u_MetallicFactor;
     float rough = metallicRoughness.g * u_RoughnessFactor;
 
-    rough = max(rough, 0.3);
+    //rough = max(rough, 0.3);
 
     o_BaseColor = baseColor;
-    o_Normal = N;
+    o_Normal = 0.5 * N + 0.5;
     o_MetalRoughness = vec2(metal, rough);
 }

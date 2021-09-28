@@ -62,10 +62,13 @@ public:
 
     virtual void BlitTexture(
         Texture* src, uint32 srcLayer, uint32 srcLevel,
-        Texture* dst, uint32 dstLayer, uint32 dstLevel,
-        uint32 width, uint32 height) = 0;
+        Texture* dst, uint32 dstLayer, uint32 dstLevel) = 0;
+
+    virtual void GenerateMips(Texture* texture) = 0;
 
     virtual const Pipeline* BoundPipeline() = 0;
+
+    virtual Device* GetDevice() = 0;
 };
 
 template<typename T>
@@ -79,6 +82,5 @@ void Context::Uniform(DescriptorID id, uint32 arrayIndex, const T& value)
 {
     Uniform(BoundPipeline()->shader->Lookup(id), arrayIndex, (const uint8*)&value, sizeof(value));
 }
-
 
 }

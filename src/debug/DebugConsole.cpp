@@ -11,9 +11,9 @@ const auto kPromptIndicator = "> "s;
 constexpr char kPromptCursor = '_';
 constexpr float kMaxScreenY = 800.0f;
 
-DebugConsole::DebugConsole(Device* device, Framebuffer* framebuffer, int maxColumns)
+DebugConsole::DebugConsole(Device* device, int maxColumns)
     : m_Device(device)
-    , m_Font(device, framebuffer, "fonts/JetBrainsMono-Medium.ttf", 26.0f)
+    , m_Font(device, "fonts/JetBrainsMono-Medium.ttf", 26.0f)
     , m_TextLog(device, m_Font)
     , m_TextPrompt(device, m_Font)
     , m_MaxColumns(maxColumns)
@@ -28,8 +28,8 @@ void DebugConsole::GenerateMesh()
     m_TextLog.Clear();
     m_TextPrompt.Clear();
 
-    const float lineHeight = m_Font.PixelHeight();
-    const float entrySpacing = Round(0.25f * m_Font.PixelHeight());
+    const float lineHeight = m_Font.GetPixelHeight();
+    const float entrySpacing = Round(0.25f * m_Font.GetPixelHeight());
 
     float y = m_Origin.y;
     float x = m_Origin.x;
@@ -180,7 +180,7 @@ void DebugConsole::Update(const InputState& input, float dt)
     GenerateMesh();
 }
 
-void DebugConsole::Render(Context& ctx)
+void DebugConsole::RenderText(Context& ctx)
 {
     m_TextLog.Render(ctx);
     m_TextPrompt.Render(ctx);
@@ -196,6 +196,12 @@ void DebugConsole::SetActive(bool active)
 void DebugConsole::OnLog(LogLevel level, const std::string& msg)
 {
     AddEntry(msg);
+}
+
+void DebugConsole::SetScreenSize(uint32 width, uint32 height)
+{
+    m_TextLog.SetScreenSize(width, height);
+    m_TextPrompt.SetScreenSize(width, height);
 }
 
 }

@@ -52,15 +52,18 @@ public:
 
     void CopyTexture(
         Buffer* src, uint32 offset,
-        Texture* dst,uint32 dstLayer, uint32 dstLevel,
+        Texture* dst, uint32 dstLayer, uint32 dstLevel,
         uint32 width, uint32 height) override;
 
     void BlitTexture(
         Texture* src, uint32 srcLayer, uint32 srcLevel,
-        Texture* dst, uint32 dstLayer, uint32 dstLevel,
-        uint32 width, uint32 height) override;
+        Texture* dst, uint32 dstLayer, uint32 dstLevel) override;
+
+    void GenerateMips(Texture* texture) override;
 
     const Pipeline* BoundPipeline() override;
+
+    Device* GetDevice() override;
 
 private:
     struct Binding
@@ -119,14 +122,18 @@ private:
     void ResetScratchBindings();
     void BindBuffer(uint32 set, uint32 binding, const Buffer* buffer, uint32 dynamicOffset);
 
-    void TransitionLayout(const Texture* texture, VkPipelineStageFlags stage, VkAccessFlags access, VkImageLayout layout);
-    void RestoreLayout(const Texture* texture, VkPipelineStageFlags stage, VkAccessFlags access, VkImageLayout layout);
+    void TransitionLayout(const Texture* generalTexture, VkPipelineStageFlags stage, VkAccessFlags access,
+        VkImageLayout layout, uint32 layer = ~0u, uint32 level = ~0u);
+
+    void RestoreLayout(const Texture* texture, VkPipelineStageFlags stage, VkAccessFlags access,
+        VkImageLayout layout, uint32 layer = ~0u, uint32 level = ~0u);
 
 public:
     VulkanDevice& m_Device;
 
     VkCommandPool m_CommandPool{};
     VkCommandBuffer m_CommandBuffer{};
+    VkFence m_ReadyFence{};
 
     VkDescriptorPool m_DescriptorPool{};
     std::unordered_map<BindingArray, VkDescriptorSet, BindingHash> m_DescriptorSets;
@@ -138,7 +145,6 @@ public:
     Array <ScratchBinding, kMaxScratchBindings> m_ScratchBindings{};
 
     // Active state
-    bool m_SwapchainWritten{};
     const VulkanPipeline* m_BoundPipeline{};
     const VulkanFramebuffer* m_BoundFramebuffer{};
     std::array<BoundSet, Shader::kMaxSets> m_BoundSets{};

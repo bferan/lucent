@@ -23,25 +23,28 @@ static VkPipelineBindPoint GetBindPoint(PipelineType type)
 VulkanContext::VulkanContext(VulkanDevice& device)
     : m_Device(device)
 {
+    // Create fence in active state
+    auto fenceInfo = VkFenceCreateInfo{
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+        .flags = VK_FENCE_CREATE_SIGNALED_BIT
+    };
+    LC_CHECK(vkCreateFence(device.m_Handle, &fenceInfo, nullptr, &m_ReadyFence));
+
     // Create command pool
     auto cmdPoolCreateInfo = VkCommandPoolCreateInfo{
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
         .queueFamilyIndex = device.m_GraphicsQueue.familyIndex
     };
-
-    auto result = vkCreateCommandPool(device.m_Handle, &cmdPoolCreateInfo, nullptr, &m_CommandPool);
-    LC_ASSERT(result == VK_SUCCESS);
+    LC_CHECK(vkCreateCommandPool(device.m_Handle, &cmdPoolCreateInfo, nullptr, &m_CommandPool));
 
     auto bufferAllocInfo = VkCommandBufferAllocateInfo{
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
         .commandPool = m_CommandPool,
         .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-        .commandBufferCount = 1u
+        .commandBufferCount = 1
     };
-
-    result = vkAllocateCommandBuffers(device.m_Handle, &bufferAllocInfo, &m_CommandBuffer);
-    LC_ASSERT(result == VK_SUCCESS);
+    LC_CHECK(vkAllocateCommandBuffers(device.m_Handle, &bufferAllocInfo, &m_CommandBuffer));
 
     // Create descriptor pool
     VkDescriptorPoolSize descPoolSizes[] = {
@@ -73,9 +76,7 @@ VulkanContext::VulkanContext(VulkanDevice& device)
         .poolSizeCount = LC_ARRAY_SIZE(descPoolSizes),
         .pPoolSizes = descPoolSizes
     };
-
-    result = vkCreateDescriptorPool(device.m_Handle, &descPoolInfo, nullptr, &m_DescriptorPool);
-    LC_ASSERT(result == VK_SUCCESS);
+    LC_CHECK(vkCreateDescriptorPool(device.m_Handle, &descPoolInfo, nullptr, &m_DescriptorPool));
 }
 
 VulkanContext::~VulkanContext()
@@ -83,11 +84,15 @@ VulkanContext::~VulkanContext()
     vkFreeCommandBuffers(m_Device.m_Handle, m_CommandPool, 1, &m_CommandBuffer);
     vkDestroyCommandPool(m_Device.m_Handle, m_CommandPool, nullptr);
 
+    vkDestroyFence(m_Device.m_Handle, m_ReadyFence, nullptr);
     vkDestroyDescriptorPool(m_Device.m_Handle, m_DescriptorPool, nullptr);
 }
 
 void VulkanContext::Begin()
 {
+    vkWaitForFences(m_Device.m_Handle, 1, &m_ReadyFence, VK_TRUE, UINT64_MAX);
+    vkResetFences(m_Device.m_Handle, 1, &m_ReadyFence);
+
     vkResetCommandPool(m_Device.m_Handle, m_CommandPool, 0);
 
     vkResetDescriptorPool(m_Device.m_Handle, m_DescriptorPool, 0);
@@ -111,9 +116,6 @@ void VulkanContext::End()
 void VulkanContext::BeginRenderPass(const Framebuffer* framebuffer)
 {
     auto& fbuffer = *Get(framebuffer);
-    if (fbuffer.usage == FramebufferUsage::kSwapchainImage)
-        m_SwapchainWritten = true;
-
     m_BoundFramebuffer = &fbuffer;
 
     // Transition attachments
@@ -260,9 +262,9 @@ void VulkanContext::CopyTexture(
     auto dst = Get(dest);
 
     TransitionLayout(src, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, srcLayer, srcLevel);
     TransitionLayout(dst, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, dstLayer, dstLevel);
 
     auto copy = VkImageCopy{
         .srcSubresource = {
@@ -285,9 +287,9 @@ void VulkanContext::CopyTexture(
         dst->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
 
     RestoreLayout(src, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, srcLayer, srcLevel);
     RestoreLayout(dst, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, dstLayer, dstLevel);
 }
 
 void VulkanContext::CopyTexture(
@@ -299,7 +301,7 @@ void VulkanContext::CopyTexture(
     auto dst = Get(dest);
 
     TransitionLayout(src, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, srcLayer, srcLevel);
 
     auto copy = VkBufferImageCopy{
         .bufferOffset = offset,
@@ -317,7 +319,7 @@ void VulkanContext::CopyTexture(
     vkCmdCopyImageToBuffer(m_CommandBuffer, src->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst->handle, 1, &copy);
 
     RestoreLayout(src, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, srcLayer, srcLevel);
 }
 
 void VulkanContext::CopyTexture(
@@ -329,7 +331,7 @@ void VulkanContext::CopyTexture(
     auto dst = Get(dest);
 
     TransitionLayout(dst, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, dstLayer, dstLevel);
 
     auto copy = VkBufferImageCopy{
         .bufferOffset = offset,
@@ -347,21 +349,26 @@ void VulkanContext::CopyTexture(
     vkCmdCopyBufferToImage(m_CommandBuffer, src->handle, dst->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
 
     RestoreLayout(dst, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, dstLayer, dstLevel);
 }
 
 void VulkanContext::BlitTexture(
     Texture* source, uint32 srcLayer, uint32 srcLevel,
-    Texture* dest, uint32 dstLayer, uint32 dstLevel,
-    uint32 width, uint32 height)
+    Texture* dest, uint32 dstLayer, uint32 dstLevel)
 {
     auto src = Get(source);
     auto dst = Get(dest);
 
-    TransitionLayout(src,VK_PIPELINE_STAGE_TRANSFER_BIT,VK_ACCESS_TRANSFER_READ_BIT,
-        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-    TransitionLayout(dst,VK_PIPELINE_STAGE_TRANSFER_BIT,VK_ACCESS_TRANSFER_WRITE_BIT,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    auto srcWidth = Max((int32)src->width >> srcLevel, 1);
+    auto srcHeight = Max((int32)src->height >> srcLevel, 1);
+
+    auto dstWidth = Max((int32)dst->width >> dstLevel, 1);
+    auto dstHeight = Max((int32)dst->height >> dstLevel, 1);
+
+    TransitionLayout(src, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT,
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, srcLayer, srcLevel);
+    TransitionLayout(dst, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, dstLayer, dstLevel);
 
     auto blit = VkImageBlit{
         .srcSubresource = {
@@ -370,22 +377,33 @@ void VulkanContext::BlitTexture(
             .baseArrayLayer = srcLayer,
             .layerCount = 1
         },
-        .srcOffsets = {{}, { (int32)width, (int32)height, 1 }},
+        .srcOffsets = {{}, { srcWidth, srcHeight, 1 }},
         .dstSubresource = {
             .aspectMask = dst->aspect,
             .mipLevel = dstLevel,
             .baseArrayLayer = dstLayer,
             .layerCount = 1
         },
-        .dstOffsets = {{}, { (int32)width, (int32)height, 1 }},
+        .dstOffsets = {{}, { dstWidth, dstHeight, 1 }},
     };
     vkCmdBlitImage(m_CommandBuffer, src->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         dst->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_LINEAR);
 
-    RestoreLayout(src,VK_PIPELINE_STAGE_TRANSFER_BIT,VK_ACCESS_TRANSFER_READ_BIT,
-        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-    RestoreLayout(dst,VK_PIPELINE_STAGE_TRANSFER_BIT,VK_ACCESS_TRANSFER_WRITE_BIT,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    RestoreLayout(src, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT,
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, srcLayer, srcLevel);
+    RestoreLayout(dst, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, dstLayer, dstLevel);
+}
+
+void VulkanContext::GenerateMips(Texture* texture)
+{
+    for(int layer = 0; layer < texture->settings.layers; ++layer)
+    {
+        for (int level = 0; level < texture->settings.levels - 1; ++level)
+        {
+            BlitTexture(texture, layer, level, texture, layer, level + 1);
+        }
+    }
 }
 
 void VulkanContext::BindBuffer(Descriptor* descriptor, const Buffer* generalBuffer)
@@ -666,297 +684,74 @@ const Pipeline* VulkanContext::BoundPipeline()
     return m_BoundPipeline;
 }
 
-void VulkanContext::TransitionLayout(const Texture* texture, VkPipelineStageFlags stage,
-    VkAccessFlags access, VkImageLayout layout)
+void VulkanContext::TransitionLayout(const Texture* generalTexture, VkPipelineStageFlags stage,
+    VkAccessFlags access, VkImageLayout layout, uint32 layer, uint32 level)
 {
-    auto tex = Get(texture);
+    auto texture = Get(generalTexture);
 
-    VkPipelineStageFlags lastStage{};
-    VkAccessFlags lastAccess{};
-    VkImageLayout lastLayout{};
-    tex->SyncLast(lastStage, lastAccess, lastLayout);
+    VkPipelineStageFlags srcStage{};
+    VkAccessFlags srcAccess{};
+    VkImageLayout srcLayout{};
+    texture->SyncSrc(srcStage, srcAccess, srcLayout);
 
     auto barrier = VkImageMemoryBarrier{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .srcAccessMask = lastAccess,
+        .srcAccessMask = srcAccess,
         .dstAccessMask = access,
-        .oldLayout = lastLayout,
+        .oldLayout = srcLayout,
         .newLayout = layout,
         .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
         .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image = tex->image,
+        .image = texture->image,
         .subresourceRange = {
-            .aspectMask = tex->aspect,
-            .baseMipLevel = 0,
-            .levelCount = VK_REMAINING_MIP_LEVELS,
-            .baseArrayLayer = 0,
-            .layerCount = VK_REMAINING_ARRAY_LAYERS
+            .aspectMask = texture->aspect,
+            .baseMipLevel = (level == VK_REMAINING_MIP_LEVELS) ? 0 : level,
+            .levelCount   = (level == VK_REMAINING_MIP_LEVELS) ? VK_REMAINING_MIP_LEVELS : 1,
+            .baseArrayLayer = (layer == VK_REMAINING_ARRAY_LAYERS) ? 0 : layer,
+            .layerCount     = (layer == VK_REMAINING_ARRAY_LAYERS) ? VK_REMAINING_ARRAY_LAYERS : 1
         }
     };
 
-    vkCmdPipelineBarrier(m_CommandBuffer, lastStage, stage, VK_DEPENDENCY_BY_REGION_BIT,
+    vkCmdPipelineBarrier(m_CommandBuffer, srcStage, stage, VK_DEPENDENCY_BY_REGION_BIT,
         0, nullptr, 0, nullptr, 1, &barrier);
 }
 
 void VulkanContext::RestoreLayout(const Texture* texture, VkPipelineStageFlags stage,
-    VkAccessFlags access, VkImageLayout layout)
+    VkAccessFlags access, VkImageLayout layout, uint32 layer, uint32 level)
 {
     auto tex = Get(texture);
 
-    VkPipelineStageFlags nextStage{};
-    VkAccessFlags nextAccess{};
-    VkImageLayout nextLayout{};
-    tex->SyncNext(nextStage, nextAccess, nextLayout);
+    VkPipelineStageFlags dstStage{};
+    VkAccessFlags dstAccess{};
+    VkImageLayout dstLayout{};
+    tex->SyncDst(dstStage, dstAccess, dstLayout);
 
     auto barrier = VkImageMemoryBarrier{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
         .srcAccessMask = access,
-        .dstAccessMask = nextAccess,
+        .dstAccessMask = dstAccess,
         .oldLayout = layout,
-        .newLayout = nextLayout,
+        .newLayout = dstLayout,
         .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
         .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
         .image = tex->image,
         .subresourceRange = {
             .aspectMask = tex->aspect,
-            .baseMipLevel = 0,
-            .levelCount = VK_REMAINING_MIP_LEVELS,
-            .baseArrayLayer = 0,
-            .layerCount = VK_REMAINING_ARRAY_LAYERS
+            .baseMipLevel = (level == VK_REMAINING_MIP_LEVELS) ? 0 : level,
+            .levelCount   = (level == VK_REMAINING_MIP_LEVELS) ? VK_REMAINING_MIP_LEVELS : 1,
+            .baseArrayLayer = (layer == VK_REMAINING_ARRAY_LAYERS) ? 0 : layer,
+            .layerCount     = (layer == VK_REMAINING_ARRAY_LAYERS) ? VK_REMAINING_ARRAY_LAYERS : 1
         }
     };
 
-    vkCmdPipelineBarrier(m_CommandBuffer, stage, nextStage, VK_DEPENDENCY_BY_REGION_BIT,
+    vkCmdPipelineBarrier(m_CommandBuffer, stage, dstStage, VK_DEPENDENCY_BY_REGION_BIT,
         0, nullptr, 0, nullptr, 1, &barrier);
 }
 
-#if 0
-void VulkanContext::AttachmentToImage(Texture* texture)
+Device* VulkanContext::GetDevice()
 {
-    auto imageBarrier = VkImageMemoryBarrier{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-        .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image = texture->image,
-        .subresourceRange = {
-            .aspectMask = texture->aspect,
-            .baseMipLevel = 0,
-            .levelCount = VK_REMAINING_MIP_LEVELS,
-            .baseArrayLayer = 0,
-            .layerCount = VK_REMAINING_ARRAY_LAYERS
-        }
-    };
-
-    vkCmdPipelineBarrier(m_CommandBuffer,
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-        VK_DEPENDENCY_BY_REGION_BIT,
-        0, nullptr,
-        0, nullptr,
-        1, &imageBarrier);
+    return &m_Device;
 }
-
-void VulkanContext::ImageToAttachment(Texture* texture)
-{
-    auto imageBarrier = VkImageMemoryBarrier{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .srcAccessMask = VK_ACCESS_NONE_KHR,
-        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-        .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        .newLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image = texture->image,
-        .subresourceRange = {
-            .aspectMask = texture->aspect,
-            .baseMipLevel = 0,
-            .levelCount = VK_REMAINING_MIP_LEVELS,
-            .baseArrayLayer = 0,
-            .layerCount = VK_REMAINING_ARRAY_LAYERS
-        }
-    };
-
-    vkCmdPipelineBarrier(m_CommandBuffer,
-        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        VK_DEPENDENCY_BY_REGION_BIT,
-        0, nullptr,
-        0, nullptr,
-        1, &imageBarrier);
-}
-
-void VulkanContext::DepthAttachmentToImage(Texture* texture)
-{
-    auto imageBarrier = VkImageMemoryBarrier{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-        .oldLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-        .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image = texture->image,
-        .subresourceRange = {
-            .aspectMask = texture->aspect,
-            .baseMipLevel = 0,
-            .levelCount = VK_REMAINING_MIP_LEVELS,
-            .baseArrayLayer = 0,
-            .layerCount = VK_REMAINING_ARRAY_LAYERS
-        }
-    };
-
-    vkCmdPipelineBarrier(m_CommandBuffer,
-        VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-        VK_DEPENDENCY_BY_REGION_BIT,
-        0, nullptr,
-        0, nullptr,
-        1, &imageBarrier);
-}
-
-void VulkanContext::DepthImageToAttachment(Texture* texture)
-{
-    auto imageBarrier = VkImageMemoryBarrier{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .srcAccessMask = VK_ACCESS_NONE_KHR,
-        .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
-        .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        .newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image = texture->image,
-        .subresourceRange = {
-            .aspectMask = texture->aspect,
-            .baseMipLevel = 0,
-            .levelCount = VK_REMAINING_MIP_LEVELS,
-            .baseArrayLayer = 0,
-            .layerCount = VK_REMAINING_ARRAY_LAYERS
-        }
-    };
-
-    vkCmdPipelineBarrier(m_CommandBuffer,
-        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-        VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-        VK_DEPENDENCY_BY_REGION_BIT,
-        0, nullptr,
-        0, nullptr,
-        1, &imageBarrier);
-}
-
-void VulkanContext::ImageToGeneral(Texture* texture)
-{
-    auto imageBarrier = VkImageMemoryBarrier{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .srcAccessMask = VK_ACCESS_NONE_KHR,
-        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
-        .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        .newLayout = VK_IMAGE_LAYOUT_GENERAL,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image = texture->image,
-        .subresourceRange = {
-            .aspectMask = texture->aspect,
-            .baseMipLevel = 0,
-            .levelCount = VK_REMAINING_MIP_LEVELS,
-            .baseArrayLayer = 0,
-            .layerCount = VK_REMAINING_ARRAY_LAYERS
-        }
-    };
-
-    vkCmdPipelineBarrier(m_CommandBuffer,
-        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-        VK_DEPENDENCY_BY_REGION_BIT,
-        0, nullptr,
-        0, nullptr,
-        1, &imageBarrier);
-}
-
-void VulkanContext::ComputeBarrier(Texture* texture, Buffer* buffer)
-{
-    auto imageBarrier = VkImageMemoryBarrier{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-        .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
-        .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image = texture->image,
-        .subresourceRange = {
-            .aspectMask = texture->aspect,
-            .baseMipLevel = 0,
-            .levelCount = VK_REMAINING_MIP_LEVELS,
-            .baseArrayLayer = 0,
-            .layerCount = VK_REMAINING_ARRAY_LAYERS
-        }
-    };
-
-    vkCmdPipelineBarrier(m_CommandBuffer,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-        VK_DEPENDENCY_BY_REGION_BIT,
-        0, nullptr,
-        0, nullptr,
-        1, &imageBarrier);
-
-    auto bufferBarrier = VkBufferMemoryBarrier{
-        .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
-        .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-        .dstAccessMask = VK_ACCESS_HOST_READ_BIT,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .buffer = buffer->handle,
-        .offset = 0,
-        .size = VK_WHOLE_SIZE
-    };
-
-    vkCmdPipelineBarrier(m_CommandBuffer,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-        VK_PIPELINE_STAGE_HOST_BIT,
-        VK_DEPENDENCY_BY_REGION_BIT,
-        0, nullptr,
-        1, &bufferBarrier,
-        0, nullptr);
-}
-
-void VulkanContext::Transition(Texture* texture,
-    VkPipelineStageFlags srcStage, VkAccessFlags srcAccess,
-    VkPipelineStageFlags dstStage, VkAccessFlags dstAccess,
-    VkImageLayout oldLayout, VkImageLayout newLayout,
-    int level)
-{
-    auto imageBarrier = VkImageMemoryBarrier{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .srcAccessMask = srcAccess,
-        .dstAccessMask = dstAccess,
-        .oldLayout = oldLayout,
-        .newLayout = newLayout,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image = texture->image,
-        .subresourceRange = {
-            .aspectMask = texture->aspect,
-            .baseMipLevel = level >= 0 ? level : 0u,
-            .levelCount = level >= 0 ? 1 : VK_REMAINING_MIP_LEVELS,
-            .baseArrayLayer = 0,
-            .layerCount = VK_REMAINING_ARRAY_LAYERS
-        }
-    };
-
-    vkCmdPipelineBarrier(m_CommandBuffer,
-        srcStage,
-        dstStage,
-        VK_DEPENDENCY_BY_REGION_BIT,
-        0, nullptr,
-        0, nullptr,
-        1, &imageBarrier);
-}
-#endif
 
 bool VulkanContext::Binding::operator==(const Binding& rhs) const
 {

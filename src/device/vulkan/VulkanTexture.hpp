@@ -13,8 +13,8 @@ public:
 
     VkImageLayout StartingLayout() const;
 
-    void SyncLast(VkPipelineStageFlags& stage, VkAccessFlags& access, VkImageLayout& layout) const;
-    void SyncNext(VkPipelineStageFlags& stage, VkAccessFlags& access, VkImageLayout& layout) const;
+    void SyncSrc(VkPipelineStageFlags& stage, VkAccessFlags& access, VkImageLayout& layout) const;
+    void SyncDst(VkPipelineStageFlags& stage, VkAccessFlags& access, VkImageLayout& layout) const;
 
 public:
     VulkanDevice* device;

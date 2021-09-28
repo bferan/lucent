@@ -1,11 +1,12 @@
 #pragma once
 
+#include "rendering/Renderer.hpp"
+#include "rendering/RenderSettings.hpp"
+#include "rendering/GeometryPass.hpp"
+
 namespace lucent
 {
 
-class AmbientOcclusionPass
-{
-
-};
+Texture* AddGTAOPass(Renderer& renderer, GBuffer gBuffer, Texture* hiZ);
 
 }

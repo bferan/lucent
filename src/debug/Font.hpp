@@ -23,27 +23,21 @@ struct Glyph
 class Font
 {
 public:
-    Font(Device* device, Framebuffer* framebuffer, const std::string& fontFile, float pixelHeight);
+    Font(Device* device, const std::string& fontFile, float pixelHeight);
 
     ~Font();
 
+    Texture* GetAtlas() const;
+
     Glyph GetGlyph(char c) const;
 
-    float PixelHeight() const
+    float GetPixelHeight() const
     {
         return m_PixelHeight;
     }
-
-    void Bind(Context& context) const;
-
 private:
     float m_PixelHeight;
-
     BakedFont* m_BakedFont;
-
-    // Render data
-    Device* m_Device;
-    Pipeline* m_FontPipeline;
     Texture* m_FontTexture;
 };
 

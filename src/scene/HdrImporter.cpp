@@ -6,13 +6,6 @@
 #include "device/Context.hpp"
 #include "rendering/Geometry.hpp"
 
-#include "device/vulkan/VulkanCommon.hpp"
-#include "device/vulkan/VulkanDevice.hpp"
-#include "device/vulkan/VulkanContext.hpp"
-#include "device/vulkan/VulkanTexture.hpp"
-
-#include "renderdoc_app.h"
-
 namespace lucent
 {
 
@@ -45,22 +38,22 @@ HdrImporter::HdrImporter(Device* device)
     });
 
     m_RectToCube = m_Device->CreatePipeline(PipelineSettings{
-        .shaderName = "RectToCube.shader",
+        .shaderName = "IBL/RectToCube.shader",
         .framebuffer = m_Offscreen
     });
 
     m_GenIrradiance = m_Device->CreatePipeline(PipelineSettings{
-        .shaderName = "IrradianceCube.shader",
+        .shaderName = "IBL/PrefilterIrradiance.shader",
         .framebuffer = m_Offscreen
     });
 
     m_GenSpecular = m_Device->CreatePipeline(PipelineSettings{
-        .shaderName = "SpecularCube.shader",
+        .shaderName = "IBL/PrefilterRadiance.shader",
         .framebuffer = m_Offscreen
     });
 
     m_GenBRDF = m_Device->CreatePipeline(PipelineSettings{
-        .shaderName = "BRDF.shader",
+        .shaderName = "IBL/BRDF.shader",
         .framebuffer = m_Offscreen
     });
 }
@@ -111,7 +104,7 @@ void HdrImporter::RenderToCube(Pipeline* pipeline, Texture* src, Texture* dst, i
     }
     ctx.End();
 
-    m_Device->Submit(&ctx, false);
+    m_Device->Submit(&ctx);
 }
 
 void HdrImporter::RenderToQuad(Pipeline* pipeline, Texture* dst, uint32 size)
@@ -138,7 +131,7 @@ void HdrImporter::RenderToQuad(Pipeline* pipeline, Texture* dst, uint32 size)
 
     ctx.End();
 
-    m_Device->Submit(m_Context, false);
+    m_Device->Submit(m_Context);
 }
 
 Environment HdrImporter::Import(const std::string& hdrFile)

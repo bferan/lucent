@@ -14,8 +14,12 @@ void VulkanTexture::Upload(size_t size, const void* data)
 
     ctx.Begin();
     ctx.CopyTexture(buffer, 0, this, 0, 0, width, height);
+
+    if (settings.generateMips)
+        ctx.GenerateMips(this);
+
     ctx.End();
-    device->Submit(&ctx, false);
+    device->Submit(&ctx);
 }
 
 VkImageLayout VulkanTexture::StartingLayout() const
@@ -33,7 +37,7 @@ VkImageLayout VulkanTexture::StartingLayout() const
     }
 }
 
-void VulkanTexture::SyncLast(VkPipelineStageFlags& stage, VkAccessFlags& access, VkImageLayout& layout) const
+void VulkanTexture::SyncSrc(VkPipelineStageFlags& stage, VkAccessFlags& access, VkImageLayout& layout) const
 {
     layout = StartingLayout();
 
@@ -75,7 +79,7 @@ void VulkanTexture::SyncLast(VkPipelineStageFlags& stage, VkAccessFlags& access,
     }
     }
 }
-void VulkanTexture::SyncNext(VkPipelineStageFlags& stage, VkAccessFlags& access, VkImageLayout& layout) const
+void VulkanTexture::SyncDst(VkPipelineStageFlags& stage, VkAccessFlags& access, VkImageLayout& layout) const
 {
     layout = StartingLayout();
 

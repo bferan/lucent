@@ -5,8 +5,10 @@
 namespace lucent
 {
 
-GBuffer AddGeometryPass(Renderer& renderer, const RenderSettings& settings)
+GBuffer AddGeometryPass(Renderer& renderer)
 {
+    auto& settings = renderer.GetSettings();
+
     GBuffer gBuffer{};
 
     uint32 width = settings.viewportWidth;
@@ -36,9 +38,11 @@ GBuffer AddGeometryPass(Renderer& renderer, const RenderSettings& settings)
         .framebuffer = framebuffer
     });
 
-    renderer.AddPass("Geometry pass", [=](Context& ctx)
+    renderer.AddPass("Geometry pass", [=](Context& ctx, Scene& scene)
     {
-        auto& scene = settings.scene;
+        auto& camera = scene.mainCamera.Get<Camera>();
+        auto view = camera.GetViewMatrix(scene.mainCamera.GetPosition());
+        auto proj = camera.GetProjectionMatrix();
 
         ctx.BeginRenderPass(framebuffer);
         ctx.Clear();
@@ -51,9 +55,6 @@ GBuffer AddGeometryPass(Renderer& renderer, const RenderSettings& settings)
             {
                 auto& mesh = scene.meshes[idx];
                 auto& material = scene.materials[mesh.materialIdx];
-
-                auto view = Matrix4::Identity();
-                auto proj = Matrix4::Identity();
 
                 auto mv = view * local.model;
                 auto mvp = proj * mv;
@@ -83,7 +84,7 @@ GBuffer AddGeometryPass(Renderer& renderer, const RenderSettings& settings)
     return gBuffer;
 }
 
-Texture* AddGenerateHiZPass(Renderer& renderer, const RenderSettings& settings, Texture* depthTexture)
+Texture* AddGenerateHiZPass(Renderer& renderer, Texture* depthTexture)
 {
     uint32 baseWidth = depthTexture->width;
     uint32 baseHeight = depthTexture->height;
@@ -105,7 +106,7 @@ Texture* AddGenerateHiZPass(Renderer& renderer, const RenderSettings& settings, 
 
     auto buffer = renderer.GetTransferBuffer();
 
-    renderer.AddPass("Generate Hi-Z", [=](Context& ctx)
+    renderer.AddPass("Generate Hi-Z", [=](Context& ctx, Scene& scene)
     {
         // Copy depth texture to level 0 of color mip pyramid
         ctx.CopyTexture(depthTexture, 0, 0, buffer, 0, baseWidth, baseHeight);

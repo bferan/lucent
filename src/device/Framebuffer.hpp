@@ -8,12 +8,6 @@ namespace lucent
 constexpr int kMaxColorAttachments = 8;
 constexpr int kMaxAttachments = kMaxColorAttachments + 1;
 
-enum class FramebufferUsage
-{
-    kSwapchainImage,
-    kDefault
-};
-
 struct FramebufferSettings
 {
     Array<Texture*, kMaxColorAttachments> colorTextures = {};
@@ -23,14 +17,10 @@ struct FramebufferSettings
     Texture* depthTexture = nullptr;
     int depthLayer = -1;
     int depthLevel = -1;
-
-    FramebufferUsage usage = FramebufferUsage::kDefault;
 };
 
 struct Framebuffer
 {
-    FramebufferUsage usage{};
-
     Array<Texture*, kMaxColorAttachments> colorTextures;
     Texture* depthTexture{};
 };
