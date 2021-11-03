@@ -25,6 +25,7 @@ public:
     void AddPresentPass(Texture* presentSrc);
 
     Buffer* GetTransferBuffer();
+    Buffer* GetDebugShapesBuffer();
 
     const RenderSettings& GetSettings();
     void SetSettings(const RenderSettings& settings);
@@ -36,6 +37,7 @@ public:
 private:
     Device* m_Device;
     Buffer* m_TransferBuffer;
+    Buffer* m_DebugShapesBuffer;
 
     RenderSettings m_Settings;
     std::vector<RenderPass> m_RenderPasses;

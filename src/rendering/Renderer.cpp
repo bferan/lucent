@@ -11,6 +11,7 @@ Renderer::Renderer(Device* device, const RenderSettings& settings)
     , m_FrameIndex(0)
 {
     m_TransferBuffer = m_Device->CreateBuffer(BufferType::kStaging, 64 * 1024 * 1024);
+    m_DebugShapesBuffer = m_Device->CreateBuffer(BufferType::kStorage, 64 * 1024);
 
     for (int i = 0; i < settings.framesInFlight; ++i)
     {
@@ -101,6 +102,11 @@ bool Renderer::Render(Scene& scene)
 void Renderer::SetSettings(const RenderSettings& settings)
 {
     m_Settings = settings;
+}
+
+Buffer* Renderer::GetDebugShapesBuffer()
+{
+    return m_DebugShapesBuffer;
 }
 
 }

@@ -1,6 +1,8 @@
 layout(set=0, binding=0) uniform sampler2D u_Input;
 layout(set=0, binding=1, rgba8) uniform image2D u_Output;
 
+layout(local_size_x=8, local_size_y=8) in;
+
 vec3 ToneMap(vec3 x)
 {
     // https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/

@@ -114,7 +114,8 @@ void Compute()
     vec3 pos = screenToView(coord, depth);
     vec3 V = normalize(-pos);
 
-    vec3 N = normalize(texture(u_Normals, coord).xyz);
+    vec3 N = normalize(2.0 * texture(u_Normals, coord).xyz - 1.0);
+
     vec3 T = N.z < 0.999 ? cross(N, vec3(0.0, 0.0, 1.0)) : vec3(1.0, 0.0, 0.0);
     vec3 B = cross(T, N);
 

@@ -86,6 +86,8 @@ GBuffer AddGeometryPass(Renderer& renderer)
 
 Texture* AddGenerateHiZPass(Renderer& renderer, Texture* depthTexture)
 {
+    auto& settings = renderer.GetSettings();
+
     uint32 baseWidth = depthTexture->width;
     uint32 baseHeight = depthTexture->height;
 
@@ -125,7 +127,8 @@ Texture* AddGenerateHiZPass(Renderer& renderer, Texture* depthTexture)
             ctx.BindTexture("u_Input"_id, hiZ, level - 1);
             ctx.BindImage("u_Output"_id, hiZ, level);
 
-            ctx.Dispatch(baseWidth, baseHeight, 1);
+            auto [numX, numY] = settings.GetNumGroups(width, height);
+            ctx.Dispatch(numX, numY, 1);
         }
     });
 

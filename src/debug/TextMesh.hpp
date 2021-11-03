@@ -2,6 +2,7 @@
 
 #include "device/Device.hpp"
 #include "debug/Font.hpp"
+#include "rendering/Geometry.hpp"
 
 namespace lucent
 {

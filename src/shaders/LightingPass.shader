@@ -17,6 +17,7 @@ layout(location=0) out vec4 o_Color;
 layout(set=0, binding=4) uniform Globals
 {
     vec4 u_ScreenToView;
+    mat4 u_ViewInv;
 };
 
 struct DirectionalLight
@@ -200,25 +201,30 @@ void Fragment()
 
     {
         // Environment lighting
-        vec3 R = 2.0 * dot(V, N)*N - V;
-        //R.y = -R.y;// TMP
-        vec3 N_adj = vec3(N.x, -N.y, N.z);// TMP
+        vec3 Vworld =  mat3(u_ViewInv) * V;
+        Vworld.y = -Vworld.y;
+
+        vec3 Nworld = mat3(u_ViewInv) * N;
+        Nworld.y = -Nworld.y;
+
+        vec3 Rworld = 2.0 * dot(Vworld, Nworld)*Nworld - Vworld;
 
         vec2 brdf = texture(u_BRDF, vec2(NdotV, rough)).rg;
-        vec3 envSpecular = textureLod(u_EnvSpecular, R, rough * 5.0).rgb;
+        vec3 envSpecular = textureLod(u_EnvSpecular, Rworld, rough * 5.0).rgb;
         vec3 ssrSpecular = texture(u_ScreenReflections, coord).rgb;
 
-        float fresnel = pow(1.0 - max(dot(N, V), 0.0), 5.0);
+        float fresnel = pow(1.0 - max(dot(Nworld, Vworld), 0.0), 5.0);
         vec3 fsRough = F0 + (max(vec3(1.0 - rough), F0) - F0) * fresnel;
         vec3 F = F0 + (1.0 - F0) * fresnel;
         vec3 kD = 1.0 - fsRough;
 
-        vec3 ambient = kD * albedo * texture(u_EnvIrradiance, N_adj).rgb;
+        vec3 ambient = kD * albedo * texture(u_EnvIrradiance, Nworld).rgb;
         ambient += envSpecular * (F * brdf.x + brdf.y);
 
         float ao = texture(u_ScreenAO, coord).r;
-
         shaded += ao * ambient;
+
+        shaded = vec3(ao);
     }
 
     o_Color = vec4(shaded, 1.0);

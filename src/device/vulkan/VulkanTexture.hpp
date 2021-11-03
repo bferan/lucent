@@ -9,30 +9,29 @@ namespace lucent
 struct VulkanTexture : public Texture
 {
 public:
+    VulkanTexture(VulkanDevice* device, const TextureSettings& settings, VkImage existingImage = VK_NULL_HANDLE);
+    ~VulkanTexture();
+
     void Upload(size_t size, const void* data) override;
 
-    VkImageLayout StartingLayout() const;
+    VkImageLayout GetStartingLayout() const;
 
     void SyncSrc(VkPipelineStageFlags& stage, VkAccessFlags& access, VkImageLayout& layout) const;
     void SyncDst(VkPipelineStageFlags& stage, VkAccessFlags& access, VkImageLayout& layout) const;
 
 public:
     VulkanDevice* device;
-    VkImage image;
-    VkImageView imageView;
-    VmaAllocation alloc;
-
-    VkExtent2D extent;
-    VkFormat format;
-    uint32 samples;
-    VkImageAspectFlags aspect;
-    uint32 levels;
-
-    VkSampler sampler;
-    TextureFormat texFormat;
-    bool initialized;
-
+    VkImage image{};
+    VkImageView imageView{};
     std::vector<VkImageView> mipViews;
+    VkSampler sampler{};
+    VmaAllocation alloc{};
+
+    uint32 levels;
+    VkSampleCountFlagBits samples;
+    VkFormat format;
+    VkExtent2D extent{};
+    VkImageAspectFlags aspect;
 };
 
 }

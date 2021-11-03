@@ -49,6 +49,7 @@ void AddLightingPass(Renderer& renderer,
         auto& camera = scene.mainCamera.Get<Camera>();
         auto view = camera.GetViewMatrix(scene.mainCamera.GetPosition());
         auto proj = camera.GetProjectionMatrix();
+        auto invView = camera.GetInverseViewMatrix(scene.mainCamera.GetPosition());
 
         ctx.BeginRenderPass(framebuffer);
         ctx.Clear();
@@ -93,6 +94,8 @@ void AddLightingPass(Renderer& renderer,
             2.0f * (1.0f / proj(0, 0)),
             2.0f * (1.0f / proj(1, 1)),
             proj(2, 2), proj(2, 3)));
+
+        ctx.Uniform("u_ViewInv"_id, invView);
 
         ctx.BindBuffer(g_Quad.indices);
         ctx.BindBuffer(g_Quad.vertices);

@@ -19,10 +19,14 @@ struct FramebufferSettings
     int depthLevel = -1;
 };
 
-struct Framebuffer
+// Represents a collection of image attachments for rendering
+class Framebuffer
 {
-    Array<Texture*, kMaxColorAttachments> colorTextures;
-    Texture* depthTexture{};
+public:
+    const FramebufferSettings& GetSettings() const { return m_Settings; }
+
+protected:
+    FramebufferSettings m_Settings;
 };
 
 }

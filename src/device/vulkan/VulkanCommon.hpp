@@ -22,6 +22,7 @@ class VulkanFramebuffer;
 class VulkanTexture;
 class VulkanBuffer;
 class VulkanContext;
+class VulkanSwapchain;
 
 // Convenience downcasting
 static VulkanPipeline* Get(Pipeline* pipeline) { return reinterpret_cast<VulkanPipeline*>(pipeline); }

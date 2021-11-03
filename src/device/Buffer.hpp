@@ -3,8 +3,6 @@
 namespace lucent
 {
 
-class Device;
-
 enum class BufferType
 {
     kVertex,
@@ -15,17 +13,19 @@ enum class BufferType
     kStaging
 };
 
-struct Buffer
+class Buffer
 {
-    virtual void Upload(const void* data, size_t size, size_t offset = 0) = 0;
-
+public:
+    virtual void Upload(const void* data, size_t size, size_t offset) = 0;
     virtual void Clear(size_t size, size_t offset) = 0;
 
     virtual void* Map() = 0;
+    virtual void Unmap() = 0;
 
     virtual void Flush(size_t size, size_t offset) = 0;
-
     virtual void Invalidate(size_t size, size_t offset) = 0;
+
+    virtual BufferType GetType() = 0;
 };
 
 }

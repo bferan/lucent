@@ -9,12 +9,17 @@ namespace lucent
 class VulkanFramebuffer : public Framebuffer
 {
 public:
-    VkFramebuffer handle{};
-    VkRenderPass renderPass{};
-    VkExtent2D extent{};
-    uint32 samples{};
+    VulkanFramebuffer(VulkanDevice* device, const FramebufferSettings& settings);
+    ~VulkanFramebuffer();
 
-    Array <VkImageView, kMaxColorAttachments> colorImageViews;
+public:
+    VulkanDevice* device;
+    VkFramebuffer handle;
+    VkRenderPass renderPass;
+    VkExtent2D extent;
+    uint32 samples;
+
+    Array<VkImageView, kMaxColorAttachments> colorImageViews;
     VkImageView depthImageView{};
 };
 

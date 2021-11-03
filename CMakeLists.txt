@@ -21,7 +21,7 @@ target_link_libraries(lucent PUBLIC Vulkan::Vulkan)
 
 # VulkanMemoryAllocator
 add_subdirectory(extern/VulkanMemoryAllocator)
-target_link_libraries(lucent PUBLIC VulkanMemoryAllocator)
+target_link_libraries(lucent PRIVATE VulkanMemoryAllocator)
 target_link_libraries(VulkanMemoryAllocator PRIVATE Vulkan::Vulkan)
 
 # glslang
@@ -38,15 +38,15 @@ target_link_libraries(lucent PRIVATE SPIRV-Tools)
 
 # glfw
 add_subdirectory(extern/glfw)
-target_link_libraries(lucent PUBLIC glfw)
+target_link_libraries(lucent PRIVATE glfw)
 
 # renderdoc
 add_subdirectory(extern/renderdoc)
-target_link_libraries(lucent PUBLIC renderdoc)
+target_link_libraries(lucent PRIVATE renderdoc)
 
 # stb
 add_subdirectory(extern/stb)
-target_link_libraries(lucent PUBLIC stb)
+target_link_libraries(lucent PRIVATE stb)
 
 # tinygltf
 add_subdirectory(extern/tinygltf)

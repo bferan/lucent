@@ -1,6 +1,6 @@
 #pragma once
 
-#include "device/Shader.hpp"
+#include "VulkanShader.hpp"
 
 namespace lucent
 {
@@ -13,11 +13,11 @@ class ShaderCache
 public:
     explicit ShaderCache(VulkanDevice* device);
 
-    Shader* Compile(const std::string& name);
+    VulkanShader* Compile(const std::string& name);
 
-    Shader* Compile(const std::string& name, ShaderInfoLog& log);
+    VulkanShader* Compile(const std::string& name, ShaderInfoLog& log);
 
-    void Release(Shader* shader);
+    void Release(VulkanShader* shader);
 
     // Release all resources from the cache
     void Clear();
@@ -26,7 +26,7 @@ public:
     template<typename T, int N>
     using SlotList = std::array<std::optional<T>, N>;
 
-    using SetList = Array<VkDescriptorSetLayout, Shader::kMaxSets>;
+    using SetList = Array<VkDescriptorSetLayout, VulkanShader::kMaxSets>;
 
     struct SetLayout
     {
@@ -34,12 +34,12 @@ public:
         {
             return bindings == other.bindings;
         }
-        SlotList<VkDescriptorType, Shader::kMaxBindingsPerSet> bindings;
+        SlotList<VkDescriptorType, VulkanShader::kMaxBindingsPerSet> bindings;
     };
 
     struct PipelineLayout
     {
-        SlotList<SetLayout, Shader::kMaxSets> sets;
+        SlotList<SetLayout, VulkanShader::kMaxSets> sets;
     };
 
     struct LayoutHash
@@ -49,10 +49,10 @@ public:
     };
 
 private:
-    bool PopulateShaderModules(Shader& shader, const std::string& name, const std::string& source, ShaderInfoLog& log);
-    bool PopulateShaderLayout(Shader& shader, const PipelineLayout& layout, ShaderInfoLog& log);
+    bool PopulateShaderModules(VulkanShader& shader, const std::string& name, const std::string& source, ShaderInfoLog& log);
+    bool PopulateShaderLayout(VulkanShader& shader, const PipelineLayout& layout, ShaderInfoLog& log);
 
-    void FreeResources(Shader* shader);
+    void FreeResources(VulkanShader* shader);
 
     VkDescriptorSetLayout FindSetLayout(const SetLayout& layout);
 
@@ -60,7 +60,7 @@ private:
     VulkanDevice* m_Device;
     std::vector<uint32> m_SpirvBuffer;
     std::unique_ptr<ShaderResolver> m_Resolver;
-    std::unordered_map<uint64, std::unique_ptr<Shader>> m_Shaders;
+    std::unordered_map<uint64, std::unique_ptr<VulkanShader>> m_Shaders;
 
     std::unordered_map<SetLayout, VkDescriptorSetLayout, LayoutHash> m_SetLayouts;
     std::unordered_map<SetList, VkPipelineLayout, LayoutHash> m_PipelineLayouts;

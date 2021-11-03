@@ -5,7 +5,7 @@
 namespace lucent
 {
 
-// A fixed capacity array with count
+/// A fixed capacity array with count
 template<typename T, size_t N>
 class Array
 {

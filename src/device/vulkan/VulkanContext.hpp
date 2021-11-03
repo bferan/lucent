@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/Pool.hpp"
 #include "device/Context.hpp"
 #include "device/vulkan/VulkanDevice.hpp"
 #include "VulkanCommon.hpp"
@@ -90,13 +91,13 @@ private:
         bool operator==(const Binding& rhs) const;
     };
 
-    using BindingArray = std::array<Binding, Shader::kMaxBindingsPerSet>;
+    using BindingArray = std::array<Binding, VulkanShader::kMaxBindingsPerSet>;
 
     // Represents an actively bound set of descriptors
     struct BoundSet
     {
         BindingArray bindings;
-        Array <uint32, Shader::kMaxDynamicDescriptorsPerSet> dynamicOffsets;
+        Array <uint32, VulkanShader::kMaxDynamicDescriptorsPerSet> dynamicOffsets;
         bool dirty = false;
     };
 
@@ -105,7 +106,7 @@ private:
         size_t operator()(const BindingArray& bindings) const;
     };
 
-    struct ScratchBinding
+    struct ScratchAllocation
     {
         uint32 set;
         uint32 binding;
@@ -116,17 +117,22 @@ private:
     friend class VulkanDevice;
 
 private:
-    void EstablishBindings();
     VkDescriptorSet FindDescriptorSet(const BindingArray& bindings, VkDescriptorSetLayout layout);
-    uint32 GetScratchOffset(uint32 arg, uint32 binding);
-    void ResetScratchBindings();
+    VkDescriptorPool AllocateDescriptorPool() const;
+    void BindDescriptorSets();
+
+    uint32 GetUniformBufferOffset(uint32 arg, uint32 binding);
+    Buffer* AllocateUniformBuffer();
+    void ResetScratchAllocations();
+    void ResetUniformBuffers();
+
     void BindBuffer(uint32 set, uint32 binding, const Buffer* buffer, uint32 dynamicOffset);
 
     void TransitionLayout(const Texture* generalTexture, VkPipelineStageFlags stage, VkAccessFlags access,
-        VkImageLayout layout, uint32 layer = ~0u, uint32 level = ~0u);
+        VkImageLayout layout, uint32 layer = ~0u, uint32 level = ~0u) const;
 
     void RestoreLayout(const Texture* texture, VkPipelineStageFlags stage, VkAccessFlags access,
-        VkImageLayout layout, uint32 layer = ~0u, uint32 level = ~0u);
+        VkImageLayout layout, uint32 layer = ~0u, uint32 level = ~0u) const;
 
 public:
     VulkanDevice& m_Device;
@@ -135,19 +141,21 @@ public:
     VkCommandBuffer m_CommandBuffer{};
     VkFence m_ReadyFence{};
 
-    VkDescriptorPool m_DescriptorPool{};
+    Pool<VkDescriptorPool> m_DescriptorPools;
     std::unordered_map<BindingArray, VkDescriptorSet, BindingHash> m_DescriptorSets;
 
-    // Scratch binding
-    static constexpr auto kMaxScratchBindings = 8;
-    Buffer* m_ScratchUniformBuffer{};
+    // Scratch uniform allocations
+    static constexpr auto kMaxScratchAllocations = 8;
+    static constexpr auto kScratchBufferSize = 65536;
+
+    Pool<Buffer*> m_ScratchUniformBuffers;
     uint32 m_ScratchDrawOffset = 0;
-    Array <ScratchBinding, kMaxScratchBindings> m_ScratchBindings{};
+    Array <ScratchAllocation, kMaxScratchAllocations> m_ScratchAllocations{};
 
     // Active state
     const VulkanPipeline* m_BoundPipeline{};
     const VulkanFramebuffer* m_BoundFramebuffer{};
-    std::array<BoundSet, Shader::kMaxSets> m_BoundSets{};
+    std::array<BoundSet, VulkanShader::kMaxSets> m_BoundSets{};
 };
 
 }

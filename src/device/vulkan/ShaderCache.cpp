@@ -256,7 +256,7 @@ ShaderCache::ShaderCache(VulkanDevice* device)
     , m_Resolver(new DefaultResolver())
 {}
 
-Shader* ShaderCache::Compile(const std::string& name)
+VulkanShader* ShaderCache::Compile(const std::string& name)
 {
     ShaderInfoLog log{};
     auto result = Compile(name, log);
@@ -267,7 +267,7 @@ Shader* ShaderCache::Compile(const std::string& name)
     return result;
 }
 
-Shader* ShaderCache::Compile(const std::string& name, ShaderInfoLog& log)
+VulkanShader* ShaderCache::Compile(const std::string& name, ShaderInfoLog& log)
 {
     auto result = m_Resolver->Resolve(name);
     if (!result.found)
@@ -283,7 +283,7 @@ Shader* ShaderCache::Compile(const std::string& name, ShaderInfoLog& log)
         return m_Shaders[hash].get();
     }
 
-    auto& shader = (m_Shaders[hash] = std::make_unique<Shader>(Shader{}));
+    auto& shader = (m_Shaders[hash] = std::make_unique<VulkanShader>(VulkanShader{}));
     if (!PopulateShaderModules(*shader, result.qualifiedName, result.source, log))
     {
         m_Shaders.erase(hash);
@@ -294,7 +294,7 @@ Shader* ShaderCache::Compile(const std::string& name, ShaderInfoLog& log)
     return shader.get();
 }
 
-void ShaderCache::Release(Shader* shader)
+void ShaderCache::Release(VulkanShader* shader)
 {
     LC_ASSERT(m_Shaders.contains(shader->hash));
 
@@ -311,7 +311,7 @@ const char* kDefaultPreamble =
 
 static bool ScanLinkerSymbols(const TIntermNode& root,
     ShaderCache::PipelineLayout& layout,
-    Shader& shader,
+    VulkanShader& shader,
     ShaderInfoLog& log)
 {
     auto addDescriptor = [&](glslang::TIntermSymbol& symbol)
@@ -322,8 +322,8 @@ static bool ScanLinkerSymbols(const TIntermNode& root,
         auto binding = qualifier.layoutBinding;
 
         // Validate binding
-        if (set < 0 || set >= Shader::kMaxSets ||
-            binding < 0 || binding >= Shader::kMaxBindingsPerSet)
+        if (set < 0 || set >= VulkanShader::kMaxSets ||
+            binding < 0 || binding >= VulkanShader::kMaxBindingsPerSet)
         {
             log.Error("Error while scanning: invalid uniform set/binding in shader");
             return false;
@@ -394,7 +394,7 @@ static bool ScanLinkerSymbols(const TIntermNode& root,
     return true;
 }
 
-bool ShaderCache::PopulateShaderModules(Shader& shader,
+bool ShaderCache::PopulateShaderModules(VulkanShader& shader,
     const std::string& name,
     const std::string& source,
     ShaderInfoLog& log)
@@ -445,7 +445,7 @@ bool ShaderCache::PopulateShaderModules(Shader& shader,
         }
 
         program.addShader(&glsl);
-        shader.stages.emplace_back(Shader::Stage{ .stageBit = bit });
+        shader.stages.emplace_back(VulkanShader::Stage{ .stageBit = bit });
         return true;
     };
 
@@ -545,10 +545,10 @@ bool ShaderCache::PopulateShaderModules(Shader& shader,
     return PopulateShaderLayout(shader, layout, log);
 }
 
-bool ShaderCache::PopulateShaderLayout(Shader& shader, const PipelineLayout& layout, ShaderInfoLog& log)
+bool ShaderCache::PopulateShaderLayout(VulkanShader& shader, const PipelineLayout& layout, ShaderInfoLog& log)
 {
     // Find or create descriptor sets
-    for (int i = 0; i < Shader::kMaxSets; ++i)
+    for (int i = 0; i < VulkanShader::kMaxSets; ++i)
     {
         auto& set = layout.sets[i];
         if (!set) break;
@@ -594,7 +594,7 @@ void ShaderCache::Clear()
     }
 }
 
-void ShaderCache::FreeResources(Shader* shader)
+void ShaderCache::FreeResources(VulkanShader* shader)
 {
     for (auto& stage: shader->stages)
     {
@@ -611,7 +611,7 @@ VkDescriptorSetLayout ShaderCache::FindSetLayout(const SetLayout& layout)
 
     // Create new descriptor set layout
     uint32 numBindings = 0;
-    VkDescriptorSetLayoutBinding bindings[Shader::kMaxBindingsPerSet];
+    VkDescriptorSetLayoutBinding bindings[VulkanShader::kMaxBindingsPerSet];
     for (uint32 binding = 0; binding < layout.bindings.size(); ++binding)
     {
         if (layout.bindings[binding])

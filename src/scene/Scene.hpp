@@ -13,16 +13,16 @@ class Scene;
 class Entity
 {
 public:
-    template<typename T>
-    T& Get();
+    template<typename Component>
+    Component& Get();
 
-    template<typename T>
+    template<typename Component>
     bool Has();
 
-    template<typename T>
-    void Assign(T&& component);
+    template<typename Component>
+    void Assign(Component&& component);
 
-    template<typename T>
+    template<typename Component>
     void Remove();
 
 public:

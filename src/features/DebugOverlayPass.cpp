@@ -19,35 +19,31 @@ void AddDebugOverlayPass(Renderer& renderer, DebugConsole* console, Texture* out
         .shaderName = "DebugFont.shader", .framebuffer = overlayFramebuffer, .depthTestEnable = false
     });
 
-    renderer.AddPass("Debug console", [=](Context& ctx, Scene& scene)
-    {
-        ctx.BeginRenderPass(overlayFramebuffer);
-
-        ctx.BindPipeline(debugTextShader);
-        console->RenderText(ctx);
-
-        ctx.EndRenderPass();
+    auto debugShapeShader = renderer.AddPipeline(PipelineSettings{
+        .shaderName = "DebugShape.shader", .framebuffer = overlayFramebuffer, . depthTestEnable = false
     });
 
-#if 0
-    //   m_DebugShapeBuffer = m_Device->CreateBuffer(BufferType::kStorage, sizeof(DebugShapeBuffer));
-    //  m_DebugShapeBuffer->Clear(sizeof(DebugShapeBuffer), 0);
-    //  m_DebugShapes = static_cast<DebugShapeBuffer*>(m_DebugShapeBuffer->Map());
-
-    auto debugShapePipeline = renderer.AddPipeline(PipelineSettings{
-        .shaderName = "DebugShape.shader",
-    });
+    auto debugShapes = (DebugShapeBuffer*)renderer.GetDebugShapesBuffer()->Map();
 
     renderer.AddPass("Debug overlay", [=](Context& ctx, Scene& scene)
     {
-        ctx.BindPipeline(m_DebugShapePipeline);
-        for (int i = 0; i < m_DebugShapes->numShapes; ++i)
-        {
-            auto& shape = m_DebugShapes->shapes[i];
+        auto& camera = scene.mainCamera.Get<Camera>();
+        auto view = camera.GetViewMatrix(scene.mainCamera.GetPosition());
+        auto proj = camera.GetProjectionMatrix();
 
+        ctx.GetDevice()->WaitIdle();
+
+        ctx.BeginRenderPass(overlayFramebuffer);
+
+        ctx.BindPipeline(debugShapeShader);
+        for (int i = 0; i < debugShapes->numShapes; ++i)
+        {
+            auto& shape = debugShapes->shapes[i];
+
+            //
             auto mvp = proj * view *
-                Matrix4::Translation(shape.srcPos) *
-                Matrix4::Scale(shape.r, shape.r, shape.r);
+                Matrix4::Translation(Vector3(shape.srcPos)) *
+                Matrix4::Scale(shape.radius, shape.radius, shape.radius);
 
             ctx.Uniform("u_MVP"_id, mvp);
             ctx.Uniform("u_Color"_id, shape.color);
@@ -57,9 +53,13 @@ void AddDebugOverlayPass(Renderer& renderer, DebugConsole* console, Texture* out
             ctx.Draw(g_Sphere.numIndices);
         }
 
-        console->Render(ctx);
+        ctx.BindPipeline(debugTextShader);
+        console->RenderText(ctx);
+
+        ctx.EndRenderPass();
+
+        debugShapes->numShapes = 0;
     });
-#endif
 }
 
 }

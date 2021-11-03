@@ -2,7 +2,7 @@
 
 #include "rendering/Renderer.hpp"
 #include "rendering/RenderSettings.hpp"
-#include "rendering/GeometryPass.hpp"
+#include "GeometryPass.hpp"
 
 namespace lucent
 {

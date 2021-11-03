@@ -1,7 +1,7 @@
 #pragma once
 
 #include "device/Device.hpp"
-#include "device/Shader.hpp"
+#include "device/vulkan/VulkanShader.hpp"
 
 namespace lucent
 {
@@ -74,13 +74,13 @@ public:
 template<typename T>
 void Context::Uniform(DescriptorID id, const T& value)
 {
-    Uniform(BoundPipeline()->shader->Lookup(id), (const uint8*)&value, sizeof(value));
+    Uniform(BoundPipeline()->Lookup(id), (const uint8*)&value, sizeof(value));
 }
 
 template<typename T>
 void Context::Uniform(DescriptorID id, uint32 arrayIndex, const T& value)
 {
-    Uniform(BoundPipeline()->shader->Lookup(id), arrayIndex, (const uint8*)&value, sizeof(value));
+    Uniform(BoundPipeline()->Lookup(id), arrayIndex, (const uint8*)&value, sizeof(value));
 }
 
 }

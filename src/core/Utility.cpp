@@ -5,6 +5,7 @@
 
 namespace lucent
 {
+
 std::string ReadFile(const std::string& path, std::ios::openmode mode, bool* success)
 {
     std::ifstream file(path, mode);
@@ -26,4 +27,5 @@ std::string ReadFile(const std::string& path, std::ios::openmode mode, bool* suc
     if (success) *success = true;
     return buf;
 }
+
 }

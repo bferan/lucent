@@ -53,8 +53,6 @@ enum class TextureUsage
     kDepthAttachment
 };
 
-constexpr uint32 kAllLayers = ~0u;
-
 struct TextureSettings
 {
     uint32 width = 1;
@@ -70,16 +68,15 @@ struct TextureSettings
     bool generateMips = false;
 };
 
-struct Texture
+class Texture
 {
+public:
+    const TextureSettings& GetSettings() const { return m_Settings; }
+
     virtual void Upload(size_t size, const void* data) = 0;
 
-    TextureUsage usage;
-    uint32 width;
-    uint32 height;
-    uint32 levels;
-
-    TextureSettings settings;
+protected:
+    TextureSettings m_Settings;
 };
 
 }

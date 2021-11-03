@@ -4,13 +4,14 @@
 
 #include "device/vulkan/VulkanDevice.hpp"
 
-#include "rendering/GeometryPass.hpp"
-#include "rendering/LightingPass.hpp"
-#include "rendering/ScreenSpaceReflectionsPass.hpp"
-#include "rendering/AmbientOcclusionPass.hpp"
-#include "rendering/MomentShadowPass.hpp"
-#include "rendering/PostProcessPass.hpp"
-#include "rendering/DebugOverlayPass.hpp"
+#include "features/GeometryPass.hpp"
+#include "features/LightingPass.hpp"
+#include "features/ScreenSpaceReflectionsPass.hpp"
+#include "features/AmbientOcclusionPass.hpp"
+#include "features/MomentShadowPass.hpp"
+#include "features/PostProcessPass.hpp"
+#include "features/DebugOverlayPass.hpp"
+#include "rendering/Geometry.hpp"
 
 namespace lucent
 {
@@ -23,7 +24,8 @@ static void BuildDefaultSceneRenderer(Engine* engine, Renderer& renderer)
     auto hiZ = AddGenerateHiZPass(renderer, gBuffer.depth);
     auto shadowMoments = AddMomentShadowPass(renderer);
     auto gtao = AddGTAOPass(renderer, gBuffer, hiZ);
-    auto ssr = AddScreenSpaceReflectionsPass(renderer, gBuffer, hiZ, sceneRadiance);
+    //auto ssr = AddScreenSpaceReflectionsPass(renderer, gBuffer, hiZ, sceneRadiance);
+    auto ssr = g_BlackTexture;
 
     AddLightingPass(renderer, gBuffer, hiZ, sceneRadiance, shadowMoments, gtao, ssr);
     auto output = AddPostProcessPass(renderer, sceneRadiance);
@@ -50,6 +52,7 @@ Engine::Engine()
 
     m_Device = std::make_unique<VulkanDevice>(m_Window);
     m_Console = std::make_unique<DebugConsole>(m_Device.get(), 120);
+    m_Input = std::make_unique<Input>(m_Window);
 
     RenderSettings settings{ .viewportWidth = 1600, .viewportHeight = 900 };
     m_SceneRenderer = std::make_unique<Renderer>(m_Device.get(), settings);
@@ -144,6 +147,11 @@ void Engine::UpdateDebug(float dt)
 
     if (input.KeyPressed(LC_KEY_R))
         m_Device->ReloadPipelines();
+
+    if (input.KeyPressed(LC_KEY_B))
+    {
+        LC_INFO("Start breakpoint!");
+    }
 
     // Update console
     m_Console->Update(input, dt);

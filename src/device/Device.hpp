@@ -1,6 +1,6 @@
 #pragma once
 
-#include "device/Shader.hpp"
+#include "device/vulkan/VulkanShader.hpp"
 #include "device/Texture.hpp"
 #include "device/Framebuffer.hpp"
 #include "device/Pipeline.hpp"
@@ -10,15 +10,6 @@
 
 namespace lucent
 {
-
-struct Vertex
-{
-    Vector3 position;
-    Vector3 normal;
-    Vector4 tangent;
-    Vector2 texCoord0;
-    Color color = Color::White();
-};
 
 class Context;
 
@@ -50,9 +41,6 @@ public:
     virtual void RebuildSwapchain() = 0;
 
     virtual ~Device() = default;
-
-public:
-    std::unique_ptr<Input> m_Input;
 };
 
 }

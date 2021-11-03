@@ -3,6 +3,7 @@
 #include "VulkanCommon.hpp"
 #include "device/Device.hpp"
 #include "debug/Input.hpp"
+#include "VulkanSwapchain.hpp"
 
 struct GLFWwindow;
 
@@ -38,40 +39,25 @@ public:
     void WaitIdle() override;
     void RebuildSwapchain() override;
 
+    VkDevice GetHandle() const { return m_Handle; }
+    VmaAllocator GetAllocator() const { return m_Allocator; }
+    const VkPhysicalDeviceLimits& GetLimits() const { return m_DeviceProperties.limits; }
+    VkPhysicalDevice GetPhysicalHandle() const { return m_PhysicalDevice; }
+    VkSurfaceKHR GetSurface() const { return m_Surface; }
+
 private:
+    friend class VulkanContext;
+
     void CreateInstance();
     void CreateDevice();
 
-    void CreateSwapchain();
-    void DestroySwapchain();
-
-    uint32 GetSwapchainIndex() const;
-
-    std::unique_ptr<VulkanPipeline> CreateGraphicsPipeline(const PipelineSettings& settings, Shader* shader);
-    std::unique_ptr<VulkanPipeline> CreateComputePipeline(const PipelineSettings& settings, Shader* shader);
-    void FreePipeline(VulkanPipeline* pipeline);
+    template<typename T, typename C>
+    void RemoveResource(T resource, C& container);
 
     static VkBool32 DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
         VkDebugUtilsMessageTypeFlagsEXT types,
         const VkDebugUtilsMessengerCallbackDataEXT* callbackData,
         void* userData);
-
-    friend class VulkanContext;
-
-private:
-    struct DeviceQueue
-    {
-        VkQueue handle;
-        uint32 familyIndex;
-    };
-
-    struct Swapchain
-    {
-        VkSwapchainKHR handle;
-        std::vector<VulkanTexture> textures;
-        std::vector<VkSemaphore> acquiredImage;
-        std::vector<VkSemaphore> imageReady;
-    };
 
 public:
     GLFWwindow* m_Window;
@@ -81,23 +67,26 @@ public:
     VkSurfaceKHR m_Surface{};
     VkPhysicalDevice m_PhysicalDevice{};
     VkPhysicalDeviceProperties m_DeviceProperties{};
-
     VmaAllocator m_Allocator{};
 
+    struct DeviceQueue
+    {
+        VkQueue handle;
+        uint32 familyIndex;
+    };
     DeviceQueue m_GraphicsQueue{};
     DeviceQueue m_PresentQueue{};
 
-    Swapchain m_Swapchain;
-
     std::vector<std::unique_ptr<VulkanPipeline>> m_Pipelines;
+
     std::vector<std::unique_ptr<VulkanBuffer>> m_Buffers;
     std::vector<std::unique_ptr<VulkanTexture>> m_Textures;
     std::vector<std::unique_ptr<VulkanFramebuffer>> m_Framebuffers;
     std::vector<std::unique_ptr<VulkanContext>> m_Contexts;
 
-    uint32 m_SwapchainImageIndex{};
-    uint64 m_FrameIndex{};
+    std::unique_ptr<VulkanSwapchain> m_Swapchain;
     bool m_SwapchainImageAcquired = false;
+    uint64 m_FrameIndex{};
 
     Buffer* m_TransferBuffer;
     VulkanContext* m_OneShotContext;

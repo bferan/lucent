@@ -1,7 +1,7 @@
 #pragma once
 
-#include "device/Shader.hpp"
 #include "device/Framebuffer.hpp"
+#include "device/Descriptor.hpp"
 
 namespace lucent
 {
@@ -16,17 +16,22 @@ struct PipelineSettings
 {
     std::string shaderName;
     PipelineType type = PipelineType::kGraphics;
-
     Framebuffer* framebuffer = nullptr;
     bool depthTestEnable = true;
     bool depthClampEnable = false;
 };
 
-struct Pipeline
+class Pipeline
 {
-    PipelineType type;
-    PipelineSettings settings;
-    Shader* shader{};
+public:
+    const PipelineSettings& GetSettings() const { return m_Settings; }
+
+    PipelineType GetType() const { return GetSettings().type; };
+
+    virtual Descriptor* Lookup(DescriptorID id) const = 0;
+
+protected:
+    PipelineSettings m_Settings;
 };
 
 }

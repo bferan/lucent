@@ -22,6 +22,10 @@ static VkPipelineBindPoint GetBindPoint(PipelineType type)
 
 VulkanContext::VulkanContext(VulkanDevice& device)
     : m_Device(device)
+    , m_DescriptorPools([this]
+    { return AllocateDescriptorPool(); })
+    , m_ScratchUniformBuffers([this]
+    { return AllocateUniformBuffer(); })
 {
     // Create fence in active state
     auto fenceInfo = VkFenceCreateInfo{
@@ -45,47 +49,17 @@ VulkanContext::VulkanContext(VulkanDevice& device)
         .commandBufferCount = 1
     };
     LC_CHECK(vkAllocateCommandBuffers(device.m_Handle, &bufferAllocInfo, &m_CommandBuffer));
-
-    // Create descriptor pool
-    VkDescriptorPoolSize descPoolSizes[] = {
-        {
-            .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .descriptorCount = 4096
-        },
-        {
-            .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .descriptorCount = 4096
-        },
-        {
-            .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
-            .descriptorCount = 4096,
-        },
-        {
-            .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            .descriptorCount = 4096
-        },
-        {
-            .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            .descriptorCount = 4096
-        }
-    };
-
-    auto descPoolInfo = VkDescriptorPoolCreateInfo{
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-        .maxSets = 4096,
-        .poolSizeCount = LC_ARRAY_SIZE(descPoolSizes),
-        .pPoolSizes = descPoolSizes
-    };
-    LC_CHECK(vkCreateDescriptorPool(device.m_Handle, &descPoolInfo, nullptr, &m_DescriptorPool));
 }
 
 VulkanContext::~VulkanContext()
 {
+    m_ScratchUniformBuffers.ForEach([this](Buffer* buffer) { m_Device.DestroyBuffer(buffer); });
+    m_DescriptorPools.ForEach([this](auto pool) { vkDestroyDescriptorPool(m_Device.GetHandle(), pool, nullptr); });
+
     vkFreeCommandBuffers(m_Device.m_Handle, m_CommandPool, 1, &m_CommandBuffer);
     vkDestroyCommandPool(m_Device.m_Handle, m_CommandPool, nullptr);
 
     vkDestroyFence(m_Device.m_Handle, m_ReadyFence, nullptr);
-    vkDestroyDescriptorPool(m_Device.m_Handle, m_DescriptorPool, nullptr);
 }
 
 void VulkanContext::Begin()
@@ -95,11 +69,13 @@ void VulkanContext::Begin()
 
     vkResetCommandPool(m_Device.m_Handle, m_CommandPool, 0);
 
-    vkResetDescriptorPool(m_Device.m_Handle, m_DescriptorPool, 0);
+    m_DescriptorPools.ForEach([this](auto pool)
+    {
+        vkResetDescriptorPool(m_Device.GetHandle(), pool, 0);
+    });
     m_DescriptorSets.clear();
 
-    m_ScratchBindings.clear();
-    m_ScratchDrawOffset = 0;
+    ResetUniformBuffers();
 
     auto beginInfo = VkCommandBufferBeginInfo{
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -117,16 +93,17 @@ void VulkanContext::BeginRenderPass(const Framebuffer* framebuffer)
 {
     auto& fbuffer = *Get(framebuffer);
     m_BoundFramebuffer = &fbuffer;
+    auto& settings = fbuffer.GetSettings();
 
     // Transition attachments
-    for (auto color: framebuffer->colorTextures)
+    for (auto color: settings.colorTextures)
     {
         TransitionLayout(color, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
             VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
     }
-    if (framebuffer->depthTexture)
+    if (settings.depthTexture)
     {
-        TransitionLayout(framebuffer->depthTexture,
+        TransitionLayout(settings.depthTexture,
             VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
             VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
     }
@@ -148,17 +125,19 @@ void VulkanContext::BeginRenderPass(const Framebuffer* framebuffer)
 void VulkanContext::EndRenderPass()
 {
     auto framebuffer = m_BoundFramebuffer;
+    auto& settings = framebuffer->GetSettings();
+
     vkCmdEndRenderPass(m_CommandBuffer);
 
     // Transition attachments
-    for (auto color: framebuffer->colorTextures)
+    for (auto color: settings.colorTextures)
     {
         RestoreLayout(color, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
             VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
     }
-    if (framebuffer->depthTexture)
+    if (settings.depthTexture)
     {
-        RestoreLayout(framebuffer->depthTexture,
+        RestoreLayout(settings.depthTexture,
             VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
             VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
     }
@@ -167,6 +146,7 @@ void VulkanContext::EndRenderPass()
 void VulkanContext::Clear(Color color, float depth)
 {
     LC_ASSERT(m_BoundFramebuffer);
+    auto& settings = m_BoundFramebuffer->GetSettings();
 
     Array <VkClearAttachment, kMaxAttachments> clears;
 
@@ -176,7 +156,7 @@ void VulkanContext::Clear(Color color, float depth)
         .layerCount = 1
     };
 
-    for (uint32 attachment = 0; attachment < m_BoundFramebuffer->colorTextures.size(); ++attachment)
+    for (uint32 attachment = 0; attachment < settings.colorTextures.size(); ++attachment)
     {
         clears.push_back(VkClearAttachment{
             .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -184,7 +164,7 @@ void VulkanContext::Clear(Color color, float depth)
             .clearValue = VkClearValue{ .color = { color.r, color.g, color.b, color.a }}
         });
     }
-    if (m_BoundFramebuffer->depthTexture)
+    if (settings.depthTexture)
     {
         clears.push_back(VkClearAttachment{
             .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
@@ -209,7 +189,7 @@ void VulkanContext::Viewport(uint32 width, uint32 height)
 void VulkanContext::BindPipeline(const Pipeline* pipeline)
 {
     m_BoundPipeline = Get(pipeline);
-    vkCmdBindPipeline(m_CommandBuffer, GetBindPoint(pipeline->type), m_BoundPipeline->handle);
+    vkCmdBindPipeline(m_CommandBuffer, GetBindPoint(m_BoundPipeline->GetType()), m_BoundPipeline->handle);
 }
 
 void VulkanContext::BindBuffer(const Buffer* buffer)
@@ -239,18 +219,28 @@ void VulkanContext::BindBuffer(const Buffer* buffer)
 
 void VulkanContext::Draw(uint32 indexCount)
 {
-    EstablishBindings();
+    BindDescriptorSets();
     vkCmdDrawIndexed(m_CommandBuffer, indexCount, 1, 0, 0, 0);
-    ResetScratchBindings();
+    ResetScratchAllocations();
 }
 
 void VulkanContext::Dispatch(uint32 x, uint32 y, uint32 z)
 {
-    EstablishBindings();
+    BindDescriptorSets();
     vkCmdDispatch(m_CommandBuffer, x, y, z);
-    ResetScratchBindings();
+    ResetScratchAllocations();
 
-    // TODO: Sync compute writes
+    // TODO: More granular compute sync
+    auto barrier = VkMemoryBarrier{
+        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+        .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT
+    };
+    vkCmdPipelineBarrier(m_CommandBuffer,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        VK_DEPENDENCY_BY_REGION_BIT,
+        1, &barrier, 0, nullptr, 0, nullptr);
 }
 
 void VulkanContext::CopyTexture(
@@ -359,11 +349,11 @@ void VulkanContext::BlitTexture(
     auto src = Get(source);
     auto dst = Get(dest);
 
-    auto srcWidth = Max((int32)src->width >> srcLevel, 1);
-    auto srcHeight = Max((int32)src->height >> srcLevel, 1);
+    auto srcWidth = Max((int32)src->GetSettings().width >> srcLevel, 1);
+    auto srcHeight = Max((int32)src->GetSettings().height >> srcLevel, 1);
 
-    auto dstWidth = Max((int32)dst->width >> dstLevel, 1);
-    auto dstHeight = Max((int32)dst->height >> dstLevel, 1);
+    auto dstWidth = Max((int32)dst->GetSettings().width >> dstLevel, 1);
+    auto dstHeight = Max((int32)dst->GetSettings().height >> dstLevel, 1);
 
     TransitionLayout(src, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT,
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, srcLayer, srcLevel);
@@ -397,9 +387,9 @@ void VulkanContext::BlitTexture(
 
 void VulkanContext::GenerateMips(Texture* texture)
 {
-    for(int layer = 0; layer < texture->settings.layers; ++layer)
+    for (int layer = 0; layer < texture->GetSettings().layers; ++layer)
     {
-        for (int level = 0; level < texture->settings.levels - 1; ++level)
+        for (int level = 0; level < texture->GetSettings().levels - 1; ++level)
         {
             BlitTexture(texture, layer, level, texture, layer, level + 1);
         }
@@ -452,19 +442,19 @@ void VulkanContext::Uniform(Descriptor* descriptor, const uint8* data, size_t si
 {
     LC_ASSERT(descriptor->size == size);
 
-    auto offset = GetScratchOffset(descriptor->set, descriptor->binding);
-    m_ScratchUniformBuffer->Upload(data, size, offset + descriptor->offset);
+    auto offset = GetUniformBufferOffset(descriptor->set, descriptor->binding);
+    m_ScratchUniformBuffers.Get()->Upload(data, size, offset + descriptor->offset);
 }
 
 void VulkanContext::Uniform(Descriptor* descriptor, uint32 arrayIndex, const uint8* data, size_t size)
 {
     LC_ASSERT(descriptor->size == size);
 
-    auto offset = GetScratchOffset(descriptor->set, descriptor->binding);
-    m_ScratchUniformBuffer->Upload(data, size, offset + descriptor->offset + arrayIndex * size);
+    auto offset = GetUniformBufferOffset(descriptor->set, descriptor->binding);
+    m_ScratchUniformBuffers.Get()->Upload(data, size, offset + descriptor->offset + arrayIndex * size);
 }
 
-void VulkanContext::EstablishBindings()
+void VulkanContext::BindDescriptorSets()
 {
     LC_ASSERT(m_BoundPipeline != nullptr);
 
@@ -480,7 +470,7 @@ void VulkanContext::EstablishBindings()
 
             // Bind set
             vkCmdBindDescriptorSets(m_CommandBuffer,
-                GetBindPoint(m_BoundPipeline->type),
+                GetBindPoint(m_BoundPipeline->GetType()),
                 m_BoundPipeline->shader->pipelineLayout,
                 setIndex,
                 1,
@@ -506,18 +496,25 @@ VkDescriptorSet VulkanContext::FindDescriptorSet(const BindingArray& bindings, V
         // Allocate new set
         auto allocInfo = VkDescriptorSetAllocateInfo{
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-            .descriptorPool = m_DescriptorPool,
+            .descriptorPool = m_DescriptorPools.Get(),
             .descriptorSetCount = 1,
             .pSetLayouts = &layout,
         };
 
         VkDescriptorSet set;
-        LC_CHECK(vkAllocateDescriptorSets(m_Device.m_Handle, &allocInfo, &set));
+        auto result = vkAllocateDescriptorSets(m_Device.GetHandle(), &allocInfo, &set);
+
+        if (result == VK_ERROR_OUT_OF_POOL_MEMORY)
+        {
+            allocInfo.descriptorPool = m_DescriptorPools.Allocate();
+            result = vkAllocateDescriptorSets(m_Device.GetHandle(), &allocInfo, &set);
+        }
+        LC_CHECK(result);
 
         // Fill set with bindings
-        Array <VkWriteDescriptorSet, Shader::kMaxBindingsPerSet> writes{};
-        Array <VkDescriptorBufferInfo, Shader::kMaxBindingsPerSet> bufferWrites{};
-        Array <VkDescriptorImageInfo, Shader::kMaxBindingsPerSet> imageWrites{};
+        Array <VkWriteDescriptorSet, VulkanShader::kMaxBindingsPerSet> writes{};
+        Array <VkDescriptorBufferInfo, VulkanShader::kMaxBindingsPerSet> bufferWrites{};
+        Array <VkDescriptorImageInfo, VulkanShader::kMaxBindingsPerSet> imageWrites{};
 
         for (int bindIndex = 0; bindIndex < bindings.size(); ++bindIndex)
         {
@@ -574,7 +571,7 @@ VkDescriptorSet VulkanContext::FindDescriptorSet(const BindingArray& bindings, V
                 imageInfo = &imageWrites.emplace_back(VkDescriptorImageInfo{
                     .sampler = binding.texture->sampler,
                     .imageView = view,
-                    .imageLayout = binding.texture->usage == TextureUsage::kReadWrite ?
+                    .imageLayout = binding.texture->GetSettings().usage == TextureUsage::kReadWrite ?
                         VK_IMAGE_LAYOUT_GENERAL :
                         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
                 });
@@ -616,43 +613,95 @@ VkDescriptorSet VulkanContext::FindDescriptorSet(const BindingArray& bindings, V
     return it->second;
 }
 
-uint32 VulkanContext::GetScratchOffset(uint32 set, uint32 binding)
+VkDescriptorPool VulkanContext::AllocateDescriptorPool() const
 {
-    if (!m_ScratchUniformBuffer)
-    {
-        m_ScratchUniformBuffer = m_Device.CreateBuffer(BufferType::kUniformDynamic, 65536);
-    }
+    VkDescriptorPoolSize descPoolSizes[] = {
+        {
+            .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .descriptorCount = 4096
+        },
+        {
+            .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .descriptorCount = 4096
+        },
+        {
+            .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+            .descriptorCount = 4096,
+        },
+        {
+            .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            .descriptorCount = 4096
+        },
+        {
+            .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            .descriptorCount = 4096
+        }
+    };
 
+    VkDescriptorPool pool;
+
+    auto descPoolInfo = VkDescriptorPoolCreateInfo{
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .maxSets = 4096,
+        .poolSizeCount = LC_ARRAY_SIZE(descPoolSizes),
+        .pPoolSizes = descPoolSizes
+    };
+    LC_CHECK(vkCreateDescriptorPool(m_Device.GetHandle(), &descPoolInfo, nullptr, &pool));
+
+    return pool;
+}
+
+Buffer* VulkanContext::AllocateUniformBuffer()
+{
+    return m_Device.CreateBuffer(BufferType::kUniformDynamic, kScratchBufferSize);
+}
+
+void VulkanContext::ResetUniformBuffers()
+{
+    m_ScratchAllocations.clear();
+    m_ScratchDrawOffset = 0;
+    m_ScratchUniformBuffers.Reset();
+}
+
+uint32 VulkanContext::GetUniformBufferOffset(uint32 set, uint32 binding)
+{
     auto matchBinding = [=](auto& arg)
     {
         return arg.set == set && arg.binding == binding;
     };
+    auto it = std::find_if(m_ScratchAllocations.begin(), m_ScratchAllocations.end(), matchBinding);
 
-    auto it = std::find_if(m_ScratchBindings.begin(), m_ScratchBindings.end(), matchBinding);
-
-    if (it == m_ScratchBindings.end())
+    if (it == m_ScratchAllocations.end())
     {
-        // Create a new scratch binding for this block
+        // Create a new scratch allocation for this block
         LC_ASSERT(m_BoundPipeline);
         auto& blocks = m_BoundPipeline->shader->blocks;
         auto block = std::find_if(blocks.begin(), blocks.end(), matchBinding);
         LC_ASSERT(block != blocks.end());
 
-        auto offset = m_ScratchBindings.empty() ?
+        auto offset = m_ScratchAllocations.empty() ?
             m_ScratchDrawOffset :
-            m_ScratchBindings.back().offset + m_ScratchBindings.back().size;
+            m_ScratchAllocations.back().offset + m_ScratchAllocations.back().size;
 
         // Align offset to required boundary
         auto alignment = m_Device.m_DeviceProperties.limits.minUniformBufferOffsetAlignment;
         offset += (alignment - (offset % alignment)) % alignment;
 
+        // Append new buffer if out of space
+        if (offset + block->size > kScratchBufferSize)
+        {
+            offset = m_ScratchDrawOffset = 0;
+            m_ScratchUniformBuffers.Allocate();
+        }
+
         // Clear new allocation
-        m_ScratchUniformBuffer->Clear(block->size, offset);
+        auto uniformBuffer = m_ScratchUniformBuffers.Get();
+        uniformBuffer->Clear(block->size, offset);
 
         // Bind to uniform block
-        BindBuffer(set, binding, m_ScratchUniformBuffer, offset);
+        BindBuffer(set, binding, uniformBuffer, offset);
 
-        it = &m_ScratchBindings.emplace_back(ScratchBinding{
+        it = &m_ScratchAllocations.emplace_back(ScratchAllocation{
             .set = set,
             .binding = binding,
             .offset = offset,
@@ -662,19 +711,12 @@ uint32 VulkanContext::GetScratchOffset(uint32 set, uint32 binding)
     return it->offset;
 }
 
-void VulkanContext::ResetScratchBindings()
+void VulkanContext::ResetScratchAllocations()
 {
-    if (!m_ScratchBindings.empty())
+    if (!m_ScratchAllocations.empty())
     {
-        m_ScratchDrawOffset = m_ScratchBindings.back().offset + m_ScratchBindings.back().size;
-        m_ScratchBindings.clear();
-
-        // TODO: REMOVE THIS
-        if (m_ScratchDrawOffset > 60000)
-        {
-            m_ScratchUniformBuffer = m_Device.CreateBuffer(BufferType::kUniformDynamic, 65536);
-            m_ScratchDrawOffset = 0;
-        }
+        m_ScratchDrawOffset = m_ScratchAllocations.back().offset + m_ScratchAllocations.back().size;
+        m_ScratchAllocations.clear();
     }
 }
 
@@ -685,7 +727,7 @@ const Pipeline* VulkanContext::BoundPipeline()
 }
 
 void VulkanContext::TransitionLayout(const Texture* generalTexture, VkPipelineStageFlags stage,
-    VkAccessFlags access, VkImageLayout layout, uint32 layer, uint32 level)
+    VkAccessFlags access, VkImageLayout layout, uint32 layer, uint32 level) const
 {
     auto texture = Get(generalTexture);
 
@@ -717,7 +759,7 @@ void VulkanContext::TransitionLayout(const Texture* generalTexture, VkPipelineSt
 }
 
 void VulkanContext::RestoreLayout(const Texture* texture, VkPipelineStageFlags stage,
-    VkAccessFlags access, VkImageLayout layout, uint32 layer, uint32 level)
+    VkAccessFlags access, VkImageLayout layout, uint32 layer, uint32 level) const
 {
     auto tex = Get(texture);
 

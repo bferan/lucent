@@ -25,7 +25,9 @@ Texture* AddPostProcessPass(Renderer& renderer, Texture* sceneRadiance)
         ctx.BindPipeline(computePostProcess);
         ctx.BindTexture("u_Input"_id, sceneRadiance);
         ctx.BindImage("u_Output"_id, output);
-        ctx.Dispatch(settings.viewportWidth, settings.viewportHeight, 1);
+
+        auto [numX, numY] = settings.GetNumGroups(settings.viewportWidth, settings.viewportHeight);
+        ctx.Dispatch(numX, numY, 1);
     });
 
     return output;

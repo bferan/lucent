@@ -31,6 +31,8 @@ private:
     LogStdOut m_OutLog;
     std::unique_ptr<Device> m_Device;
     std::unique_ptr<DebugConsole> m_Console;
+    std::unique_ptr<Input> m_Input;
+
     GLFWwindow* m_Window;
 
     std::unique_ptr<Renderer> m_SceneRenderer;

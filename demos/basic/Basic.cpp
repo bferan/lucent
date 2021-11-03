@@ -1,4 +1,4 @@
-#include "Engine.hpp"
+#include "rendering/Engine.hpp"
 #include "scene/Importer.hpp"
 #include "scene/HdrImporter.hpp"
 
@@ -24,15 +24,6 @@ void InitScene(Engine& engine, Scene& scene)
 
 //    auto plane = importer.Import(scene, "models/Plane.glb");
 //    plane.SetScale(10.0f);
-//
-//    auto& mesh = scene.meshes[plane.Get<MeshInstance>().meshes[0]];
-//    auto& mat = scene.materials[mesh.materialIdx];
-//
-//    mat.baseColorMap = g_WhiteTexture;
-//    mat.metalRough = g_WhiteTexture;
-//    mat.baseColorFactor = Color::White();
-//    mat.roughnessFactor = 0.0;
-//    mat.metallicFactor = 1.0;
 
     auto sponza = importer.Import(scene, "models/Sponza/Sponza.gltf");
     sponza.SetScale(0.015f);

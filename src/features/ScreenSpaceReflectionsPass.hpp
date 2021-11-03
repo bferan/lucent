@@ -1,7 +1,7 @@
 #pragma once
 
 #include "rendering/Renderer.hpp"
-#include "rendering/GeometryPass.hpp"
+#include "features/GeometryPass.hpp"
 
 namespace lucent
 {
