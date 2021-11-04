@@ -3,9 +3,12 @@
 #include "device/vulkan/VulkanFramebuffer.hpp"
 #include "device/vulkan/VulkanDevice.hpp"
 #include "rendering/Geometry.hpp"
+#include "rendering/Mesh.hpp"
 
 namespace lucent
 {
+
+using Vertex = Mesh::Vertex;
 
 VulkanPipeline::VulkanPipeline(VulkanDevice* vulkanDevice, VulkanShader* vulkanShader, const PipelineSettings& info)
     : device(vulkanDevice)

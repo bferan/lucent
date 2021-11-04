@@ -18,6 +18,7 @@ struct ComponentMeta
 template<typename T>
 class ComponentPool;
 
+
 class ComponentPoolBase
 {
 public:

@@ -9,7 +9,11 @@ namespace lucent
 struct VulkanTexture : public Texture
 {
 public:
-    VulkanTexture(VulkanDevice* device, const TextureSettings& settings, VkImage existingImage = VK_NULL_HANDLE);
+    VulkanTexture(VulkanDevice* device,
+        const TextureSettings& settings,
+        VkImage existingImage = VK_NULL_HANDLE,
+        VkFormat existingFormat = VK_FORMAT_UNDEFINED);
+
     ~VulkanTexture();
 
     void Upload(size_t size, const void* data) override;

@@ -149,13 +149,16 @@ static VkFilter TextureFilterToVk(TextureFilter filter)
     }
 }
 
-VulkanTexture::VulkanTexture(VulkanDevice* dev, const TextureSettings& info, VkImage existingImage)
+VulkanTexture::VulkanTexture(VulkanDevice* dev,
+    const TextureSettings& info,
+    VkImage existingImage,
+    VkFormat existingFormat)
     : device(dev)
 {
     m_Settings = info;
     auto deviceHandle = device->GetHandle();
 
-    format = TextureFormatToVkFormat(info.format);
+    format = (existingFormat != VK_FORMAT_UNDEFINED) ? existingFormat : TextureFormatToVkFormat(info.format);
     aspect = TextureFormatToAspect(info.format);
     extent = { .width = info.width, .height = info.height };
 
@@ -267,9 +270,8 @@ VulkanTexture::VulkanTexture(VulkanDevice* dev, const TextureSettings& info, VkI
     LC_CHECK(vkCreateSampler(deviceHandle, &samplerInfo, nullptr, &sampler));
 
     // Transition image to starting layout
+    if (auto startLayout = GetStartingLayout(); startLayout != VK_IMAGE_LAYOUT_UNDEFINED)
     {
-        auto startLayout = GetStartingLayout();
-
         device->m_OneShotContext->Begin();
 
         auto imgBarrier = VkImageMemoryBarrier{

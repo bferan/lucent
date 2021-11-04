@@ -10,6 +10,8 @@ namespace lucent
 VulkanSwapchain::VulkanSwapchain(VulkanDevice* device)
     : m_Device(device)
 {
+    LC_INFO("Creating new swapchain");
+
     VkSurfaceCapabilitiesKHR surfaceCapabilities;
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device->m_PhysicalDevice, device->m_Surface, &surfaceCapabilities);
 
@@ -18,7 +20,10 @@ VulkanSwapchain::VulkanSwapchain(VulkanDevice* device)
     uint32 surfaceFormatCount = 0;
     vkGetPhysicalDeviceSurfaceFormatsKHR(device->m_PhysicalDevice, device->m_Surface, &surfaceFormatCount, nullptr);
     surfaceFormats.resize(surfaceFormatCount);
-    vkGetPhysicalDeviceSurfaceFormatsKHR(device->m_PhysicalDevice, device->m_Surface, &surfaceFormatCount, surfaceFormats.data());
+    vkGetPhysicalDeviceSurfaceFormatsKHR(device->m_PhysicalDevice,
+        device->m_Surface,
+        &surfaceFormatCount,
+        surfaceFormats.data());
 
     VkSurfaceFormatKHR chosenFormat;
     for (auto& format: surfaceFormats)
@@ -94,7 +99,7 @@ VulkanSwapchain::VulkanSwapchain(VulkanDevice* device)
     m_ImageReady.resize(imageCount);
     for (int i = 0; i < imageCount; ++i)
     {
-        m_Textures[i] = std::make_unique<VulkanTexture>(device, textureSettings, images[i]);
+        m_Textures[i] = std::make_unique<VulkanTexture>(device, textureSettings, images[i], chosenFormat.format);
 
         // Create semaphores
         auto semaphoreInfo = VkSemaphoreCreateInfo{
@@ -107,6 +112,8 @@ VulkanSwapchain::VulkanSwapchain(VulkanDevice* device)
 
 VulkanSwapchain::~VulkanSwapchain()
 {
+    LC_INFO("Destroying swapchain");
+
     for (int i = 0; i < m_Textures.size(); ++i)
     {
         m_Textures[i].reset();
@@ -120,23 +127,25 @@ Texture* VulkanSwapchain::AcquireImage(uint32 frame)
 {
     auto index = FrameToImageSyncIndex(frame);
 
-    vkAcquireNextImageKHR(m_Device->GetHandle(),
+    LC_CHECK(vkAcquireNextImageKHR(m_Device->GetHandle(),
         m_Handle,
         UINT64_MAX,
         m_AcquiredImage[index],
         VK_NULL_HANDLE,
-        &m_CurrentImageIndex);
+        &m_CurrentImageIndex));
 
     return m_Textures[m_CurrentImageIndex].get();
 }
 
-void VulkanSwapchain::SyncSubmit(VkSubmitInfo& info)
+void VulkanSwapchain::SyncSubmit(uint32 frame, VkSubmitInfo& info)
 {
+    auto index = FrameToImageSyncIndex(frame);
+
     info.waitSemaphoreCount = 1;
-    info.pWaitSemaphores = &m_AcquiredImage[m_CurrentImageIndex];
+    info.pWaitSemaphores = &m_AcquiredImage[index];
 
     info.signalSemaphoreCount = 1;
-    info.pSignalSemaphores = &m_ImageReady[m_CurrentImageIndex];
+    info.pSignalSemaphores = &m_ImageReady[index];
 }
 
 bool VulkanSwapchain::Present(uint32 frame, VkQueue queue)
@@ -160,8 +169,6 @@ uint32 VulkanSwapchain::FrameToImageSyncIndex(uint32 frame) const
 {
     return frame % m_Textures.size();
 }
-
-
 
 }
 

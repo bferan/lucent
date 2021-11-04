@@ -12,6 +12,8 @@
 #include "features/PostProcessPass.hpp"
 #include "features/DebugOverlayPass.hpp"
 #include "rendering/Geometry.hpp"
+#include "scene/Camera.hpp"
+#include "scene/Transform.hpp"
 
 namespace lucent
 {
@@ -51,8 +53,8 @@ Engine::Engine()
     LC_ASSERT(m_Window != nullptr);
 
     m_Device = std::make_unique<VulkanDevice>(m_Window);
-    m_Console = std::make_unique<DebugConsole>(m_Device.get(), 120);
     m_Input = std::make_unique<Input>(m_Window);
+    m_Console = std::make_unique<DebugConsole>(*this, 120);
 
     RenderSettings settings{ .viewportWidth = 1600, .viewportHeight = 900 };
     m_SceneRenderer = std::make_unique<Renderer>(m_Device.get(), settings);
@@ -91,7 +93,7 @@ bool Engine::Update()
         m_SceneRenderer->SetSettings(settings);
         m_BuildSceneRenderer(this, *m_SceneRenderer);
     };
-    m_Device->m_Input->Reset();
+    m_Input->Reset();
 
     m_LastUpdateTime = time;
     return true;
@@ -111,7 +113,7 @@ Scene* Engine::CreateScene()
 
 void Engine::UpdateDebug(float dt)
 {
-    auto& input = m_Device->m_Input->GetState();
+    auto& input = m_Input->GetState();
 
     if (!m_Console->Active())
     {
@@ -160,6 +162,11 @@ void Engine::UpdateDebug(float dt)
 DebugConsole* Engine::GetConsole()
 {
     return m_Console.get();
+}
+
+Input& Engine::GetInput()
+{
+    return *m_Input;
 }
 
 }

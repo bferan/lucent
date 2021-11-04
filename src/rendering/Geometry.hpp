@@ -6,15 +6,6 @@ namespace lucent
 {
 
 // TODO: REMOVE
-struct Vertex
-{
-    Vector3 position;
-    Vector3 normal;
-    Vector4 tangent;
-    Vector2 texCoord0;
-    Color color = Color::White();
-};
-
 inline struct Cube
 {
     Buffer* vertices;

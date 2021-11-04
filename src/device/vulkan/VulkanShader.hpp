@@ -55,8 +55,6 @@ struct VulkanShader
         VkShaderModule module;
     };
 
-    Descriptor* Lookup(DescriptorID id);
-
     Array <Stage, kMaxStages> stages;
     Array <VkDescriptorSetLayout, kMaxSets> setLayouts;
     Array <Descriptor, kMaxDescriptors> descriptors;

@@ -224,7 +224,7 @@ void Fragment()
         float ao = texture(u_ScreenAO, coord).r;
         shaded += ao * ambient;
 
-        shaded = vec3(ao);
+        //shaded = vec3(ao);
     }
 
     o_Color = vec4(shaded, 1.0);

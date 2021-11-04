@@ -316,7 +316,7 @@ void VulkanDevice::Submit(Context* generalContext)
             .commandBufferCount = 1,
             .pCommandBuffers = &context->m_CommandBuffer,
         };
-        m_Swapchain->SyncSubmit(submitInfo);
+        m_Swapchain->SyncSubmit(m_FrameIndex, submitInfo);
 
         LC_CHECK(vkQueueSubmit(m_GraphicsQueue.handle, 1, &submitInfo, context->m_ReadyFence));
         m_SwapchainImageAcquired = false;
@@ -382,6 +382,7 @@ void VulkanDevice::WaitIdle()
 
 void VulkanDevice::RebuildSwapchain()
 {
+    m_Swapchain.reset();
     m_Swapchain = std::make_unique<VulkanSwapchain>(this);
 }
 

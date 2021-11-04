@@ -13,7 +13,7 @@ public:
     ~VulkanSwapchain();
 
     Texture* AcquireImage(uint32 frame);
-    void SyncSubmit(VkSubmitInfo& info);
+    void SyncSubmit(uint32 frame, VkSubmitInfo& info);
     bool Present(uint32 frame, VkQueue queue);
 
     uint32 FrameToImageSyncIndex(uint32 frame) const;

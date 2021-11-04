@@ -1,4 +1,4 @@
-#include "scene/Components.hpp"
+#include "scene/Camera.hpp"
 
 namespace lucent
 {
@@ -24,15 +24,4 @@ Matrix4 Camera::GetInverseViewMatrix(Vector3 position) const
         Matrix4::RotationX(kPi); // Flip axes
 }
 
-Vector3 Transform::TransformDirection(Vector3 dir)
-{
-    return Vector3(model * Vector4(dir, 0.0));
 }
-
-Vector3 Transform::TransformPosition(Vector3 dir)
-{
-    return Vector3(model * Vector4(dir, 1.0));
-}
-
-}
-

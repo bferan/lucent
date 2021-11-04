@@ -2,7 +2,7 @@
 
 #include "device/Device.hpp"
 #include "debug/Font.hpp"
-#include "rendering/Geometry.hpp"
+#include "rendering/Mesh.hpp"
 
 namespace lucent
 {
@@ -28,7 +28,7 @@ private:
     const Font& m_Font;
     bool m_Dirty;
 
-    std::vector<Vertex> m_Vertices;
+    std::vector<Mesh::Vertex> m_Vertices;
     std::vector<uint32> m_Indices;
 
     Device* m_Device;

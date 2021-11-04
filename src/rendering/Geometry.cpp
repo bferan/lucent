@@ -1,7 +1,11 @@
 #include "Geometry.hpp"
 
+#include "rendering/Mesh.hpp"
+
 namespace lucent
 {
+
+using Vertex = Mesh::Vertex;
 
 void InitGeometry(Device* device)
 {
@@ -52,10 +56,10 @@ void InitGeometry(Device* device)
         });
 
         g_Cube.vertices = device->CreateBuffer(BufferType::kVertex, vertices.size() * sizeof(Vertex));
-        g_Cube.vertices->Upload(vertices.data(), vertices.size() * sizeof(Vertex));
+        g_Cube.vertices->Upload(vertices.data(), vertices.size() * sizeof(Vertex), 0);
 
         g_Cube.indices = device->CreateBuffer(BufferType::kIndex, indices.size() * sizeof(uint32));
-        g_Cube.indices->Upload(indices.data(), indices.size() * sizeof(uint32));
+        g_Cube.indices->Upload(indices.data(), indices.size() * sizeof(uint32), 0);
         g_Cube.numIndices = indices.size();
     }
 
@@ -74,10 +78,10 @@ void InitGeometry(Device* device)
         indices.assign({ 0, 1, 2, 2, 3, 0 });
 
         g_Quad.vertices = device->CreateBuffer(BufferType::kVertex, vertices.size() * sizeof(Vertex));
-        g_Quad.vertices->Upload(vertices.data(), vertices.size() * sizeof(Vertex));
+        g_Quad.vertices->Upload(vertices.data(), vertices.size() * sizeof(Vertex), 0);
 
         g_Quad.indices = device->CreateBuffer(BufferType::kIndex, indices.size() * sizeof(uint32));
-        g_Quad.indices->Upload(indices.data(), indices.size() * sizeof(uint32));
+        g_Quad.indices->Upload(indices.data(), indices.size() * sizeof(uint32), 0);
         g_Quad.numIndices = indices.size();
     }
 
@@ -125,10 +129,10 @@ void InitGeometry(Device* device)
         }
 
         g_Sphere.vertices = device->CreateBuffer(BufferType::kVertex, vertices.size() * sizeof(Vertex));
-        g_Sphere.vertices->Upload(vertices.data(), vertices.size() * sizeof(Vertex));
+        g_Sphere.vertices->Upload(vertices.data(), vertices.size() * sizeof(Vertex), 0);
 
         g_Sphere.indices = device->CreateBuffer(BufferType::kIndex, indices.size() * sizeof(uint32));
-        g_Sphere.indices->Upload(indices.data(), indices.size() * sizeof(uint32));
+        g_Sphere.indices->Upload(indices.data(), indices.size() * sizeof(uint32), 0);
         g_Sphere.numIndices = indices.size();
     }
 }

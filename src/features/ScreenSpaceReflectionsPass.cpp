@@ -1,6 +1,7 @@
 #include "ScreenSpaceReflectionsPass.hpp"
 
 #include "device/Context.hpp"
+#include "scene/Camera.hpp"
 
 namespace lucent
 {

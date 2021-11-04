@@ -6,6 +6,9 @@
 #include "weldmesh.h"
 
 #include "rendering/Geometry.hpp"
+#include "rendering/PbrMaterial.hpp"
+#include "scene/ModelInstance.hpp"
+#include "scene/Transform.hpp"
 
 namespace gltf = tinygltf;
 
@@ -49,14 +52,14 @@ Entity Importer::Import(Scene& scene, const std::string& modelFile)
     {
         auto& nodeIndices = model.scenes[model.defaultScene].nodes;
         rootEntities.reserve(nodeIndices.size());
-        for (auto nodeIndex : nodeIndices)
+        for (auto nodeIndex: nodeIndices)
         {
             auto& node = model.nodes[nodeIndex];
             rootEntities.push_back(ImportEntities(scene, model, node, Entity{}));
         }
 
         const Quaternion flip = Quaternion::AxisAngle(Vector3::Up(), kPi);
-        for (auto entity : rootEntities)
+        for (auto entity: rootEntities)
         {
             // Flip Z-axis to have -Z facing forward
             entity.SetRotation(flip * entity.GetRotation());
@@ -108,27 +111,26 @@ static Texture* ImportTexture(Device* device, const gltf::Model& model, const gl
 
 void Importer::ImportMaterials(Scene& scene, const gltf::Model& model)
 {
-    for (auto& data : model.materials)
+    for (auto& data: model.materials)
     {
-        Material material{};
+        auto material = std::make_unique<PbrMaterial>();
 
         auto& pbr = data.pbrMetallicRoughness;
 
         // Create textures
-        material.baseColorMap = ImportTexture(m_Device, model, pbr.baseColorTexture, g_BlackTexture, false);
-        material.metalRough = ImportTexture(m_Device, model, pbr.metallicRoughnessTexture, g_GreenTexture);
-        material.normalMap = ImportTexture(m_Device, model, data.normalTexture, g_NormalTexture);
-        material.aoMap = ImportTexture(m_Device, model, data.occlusionTexture, g_WhiteTexture);
-        material.emissive = ImportTexture(m_Device, model, data.emissiveTexture, g_BlackTexture, false);
+        material->baseColorMap = ImportTexture(m_Device, model, pbr.baseColorTexture, g_BlackTexture, false);
+        material->metalRough = ImportTexture(m_Device, model, pbr.metallicRoughnessTexture, g_GreenTexture);
+        material->normalMap = ImportTexture(m_Device, model, data.normalTexture, g_NormalTexture);
+        material->aoMap = ImportTexture(m_Device, model, data.occlusionTexture, g_WhiteTexture);
+        material->emissive = ImportTexture(m_Device, model, data.emissiveTexture, g_BlackTexture, false);
 
         // Material parameters
         auto& col = pbr.baseColorFactor;
-        material.baseColorFactor = Color((float)col[0], (float)col[1], (float)col[2], (float)col[3]);
-        material.metallicFactor = (float)pbr.metallicFactor;
-        material.roughnessFactor = (float)pbr.roughnessFactor;
+        material->baseColorFactor = Color((float)col[0], (float)col[1], (float)col[2], (float)col[3]);
+        material->metallicFactor = (float)pbr.metallicFactor;
+        material->roughnessFactor = (float)pbr.roughnessFactor;
 
-        m_MaterialIndices.push_back(scene.materials.size());
-        scene.materials.emplace_back(material);
+        m_ImportedMaterials.push_back(scene.AddMaterial(std::move(material)));
     }
 }
 
@@ -179,20 +181,20 @@ public:
 };
 
 // http://www.mikktspace.com/
-static void CalculateTangents(std::vector<Vertex>& vertices, std::vector<uint32>& indices)
+static void CalculateTangents(std::vector<Mesh::Vertex>& vertices, std::vector<uint32>& indices)
 {
-    std::vector<Vertex> unindexed(indices.size());
+    std::vector<Mesh::Vertex> unindexed(indices.size());
 
-    std::vector<Vertex> newVertices(indices.size());
+    std::vector<Mesh::Vertex> newVertices(indices.size());
     std::vector<uint32> newIndices(indices.size());
 
     struct TangentData
     {
-        std::vector<Vertex>& vertices;
+        std::vector<Mesh::Vertex>& vertices;
         std::vector<uint32>& indices;
-        std::vector<Vertex>& unindexed;
+        std::vector<Mesh::Vertex>& unindexed;
 
-        Vertex& GetVertex(int face, int vert)
+        Mesh::Vertex& GetVertex(int face, int vert)
         {
             auto idx = indices[3 * face + vert];
             return vertices[idx];
@@ -253,7 +255,7 @@ static void CalculateTangents(std::vector<Vertex>& vertices, std::vector<uint32>
     LC_ASSERT(result);
 
     auto vertexCount = WeldMesh((int*)newIndices.data(), (float*)newVertices.data(),
-        (const float*)unindexed.data(), (int)unindexed.size(), sizeof(Vertex) / sizeof(float));
+        (const float*)unindexed.data(), (int)unindexed.size(), sizeof(Mesh::Vertex) / sizeof(float));
 
     newVertices.resize(vertexCount);
 
@@ -261,18 +263,15 @@ static void CalculateTangents(std::vector<Vertex>& vertices, std::vector<uint32>
     indices = std::move(newIndices);
 }
 
-void Importer::ImportMeshes(Scene& scene, const gltf::Model& model)
+void Importer::ImportMeshes(Scene& scene, const gltf::Model& gltfModel)
 {
-    std::vector<Vertex> vertices;
-    std::vector<uint32> indices;
-
-    for (auto& data : model.meshes)
+    Mesh mesh;
+    for (auto& data: gltfModel.meshes)
     {
-        MeshInstance instance;
-        for (auto& primitive : data.primitives)
+        auto model = std::make_unique<Model>();
+        for (auto& primitive: data.primitives)
         {
-            vertices.clear();
-            indices.clear();
+            mesh.Clear();
 
             auto getAttribute = [&](const char* attr)
             {
@@ -280,16 +279,19 @@ void Importer::ImportMeshes(Scene& scene, const gltf::Model& model)
                 return it == primitive.attributes.end() ? -1 : it->second;
             };
 
-            Accessor positions(model, getAttribute("POSITION"));
-            Accessor normals(model, getAttribute("NORMAL"));
-            Accessor tangents(model, getAttribute("TANGENT"));
-            Accessor texCoords(model, getAttribute("TEXCOORD_0"));
-            Accessor colors(model, getAttribute("COLOR_0"));
+            Accessor positions(gltfModel, getAttribute("POSITION"));
+            Accessor normals(gltfModel, getAttribute("NORMAL"));
+            Accessor tangents(gltfModel, getAttribute("TANGENT"));
+            Accessor texCoords(gltfModel, getAttribute("TEXCOORD_0"));
+            Accessor colors(gltfModel, getAttribute("COLOR_0"));
 
-            vertices.reserve(positions.total);
+            Accessor indexes(gltfModel, primitive.indices);
+
+            mesh.Reserve(positions.total, indexes.total);
+
             for (int v = 0; v < positions.total; ++v)
             {
-                vertices.emplace_back(Vertex{
+                mesh.AddVertex(Mesh::Vertex{
                     .position = positions.Next<Vector3>(),
                     .normal = normals.Next<Vector3>(),
                     .tangent = tangents.Next<Vector4>(),
@@ -297,57 +299,24 @@ void Importer::ImportMeshes(Scene& scene, const gltf::Model& model)
                     .color = colors.Next<Color>()
                 });
             }
-
-            Accessor indexes(model, primitive.indices);
-            indices.reserve(indexes.total);
             for (int i = 0; i < indexes.total; ++i)
             {
-                indices.push_back(indexes.Next<uint32>());
+                mesh.AddIndex(indexes.Next<uint32>());
             }
 
             // Calculate tangent space if missing tangents
             if (tangents.total == 0)
             {
-                CalculateTangents(vertices, indices);
+                CalculateTangents(mesh.vertices, mesh.indices);
             }
 
-            Mesh mesh{ .numIndices = static_cast<uint32>(indices.size()) };
+            auto material = (primitive.material >= 0) ?
+                m_ImportedMaterials[primitive.material] :
+                scene.GetDefaultMaterial();
 
-            VkDeviceSize vertSize = vertices.size() * sizeof(Vertex);
-            VkDeviceSize indexSize = indices.size() * sizeof(uint32);
-
-            mesh.vertexBuffer = m_Device->CreateBuffer(BufferType::kVertex, vertSize);
-            mesh.indexBuffer = m_Device->CreateBuffer(BufferType::kIndex, indexSize);
-
-            mesh.vertexBuffer->Upload(vertices.data(), vertSize);
-            mesh.indexBuffer->Upload(indices.data(), indexSize);
-
-            if (primitive.material >= 0)
-            {
-                mesh.materialIdx = m_MaterialIndices[primitive.material];
-            }
-            else
-            {
-                // Create default material
-                Material material{};
-                material.baseColorMap = g_WhiteTexture;
-                material.metalRough = g_GreenTexture;
-                material.normalMap = g_NormalTexture;
-                material.aoMap = g_WhiteTexture;
-                material.emissive = g_BlackTexture;
-
-                material.baseColorFactor = Color::Gray();
-                material.metallicFactor = 0.0f;
-                material.roughnessFactor = 1.0f;
-
-                mesh.materialIdx = scene.materials.size();
-                scene.materials.emplace_back(material);
-            }
-
-            instance.meshes.push_back(scene.meshes.size());
-            scene.meshes.push_back(mesh);
+            model->AddMesh(StaticMesh(m_Device, mesh), material);
         }
-        m_MeshInstances.push_back(std::move(instance));
+        m_ImportedMeshes.push_back(scene.AddModel(std::move(model)));
     }
 }
 
@@ -391,7 +360,7 @@ Entity Importer::ImportEntities(Scene& scene, const gltf::Model& model, const gl
 
     if (node.mesh >= 0)
     {
-        entity.Assign(m_MeshInstances[node.mesh]);
+        entity.Assign(ModelInstance{ .model = m_ImportedMeshes[node.mesh] });
     }
 
     if (!node.children.empty())
@@ -399,7 +368,7 @@ Entity Importer::ImportEntities(Scene& scene, const gltf::Model& model, const gl
         Parent parentComponent;
         parentComponent.children.reserve(node.children.size());
 
-        for (auto& i : node.children)
+        for (auto& i: node.children)
         {
             auto& child = model.nodes[i];
             parentComponent.children.push_back(ImportEntities(scene, model, child, entity).id);
@@ -412,9 +381,9 @@ Entity Importer::ImportEntities(Scene& scene, const gltf::Model& model, const gl
 
 void Importer::Clear()
 {
+    m_ImportedMeshes.clear();
+    m_ImportedMaterials.clear();
     m_ModelFile = {};
-    m_MeshInstances.clear();
-    m_MaterialIndices.clear();
 }
 
 }

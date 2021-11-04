@@ -71,8 +71,8 @@ void TextMesh::Upload()
 {
     if (!m_Dirty) return;
 
-    m_VertexBuffer->Upload(m_Vertices.data(), m_Vertices.size() * sizeof(Vertex));
-    m_IndexBuffer->Upload(m_Indices.data(), m_Indices.size() * sizeof(uint32));
+    m_VertexBuffer->Upload(m_Vertices.data(), m_Vertices.size() * sizeof(Mesh::Vertex), 0);
+    m_IndexBuffer->Upload(m_Indices.data(), m_Indices.size() * sizeof(uint32), 0);
 
     m_Dirty = false;
 }

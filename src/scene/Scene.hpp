@@ -1,105 +1,54 @@
 #pragma once
 
+#include "rendering/Model.hpp"
+#include "rendering/Material.hpp"
+#include "scene/Entity.hpp"
 #include "scene/EntityIDPool.hpp"
 #include "scene/ComponentPool.hpp"
-#include "scene/Components.hpp"
+#include "scene/Lighting.hpp"
 #include "device/Device.hpp"
 
 namespace lucent
 {
 
-class Scene;
-
-class Entity
+class Scene
 {
 public:
-    template<typename Component>
-    Component& Get();
-
-    template<typename Component>
-    bool Has();
-
-    template<typename Component>
-    void Assign(Component&& component);
-
-    template<typename Component>
-    void Remove();
-
-public:
-    // Convenience accessors:
-    void SetPosition(Vector3 position);
-    Vector3 GetPosition(); // TODO: Make const
-
-    void SetRotation(Quaternion rotation);
-    Quaternion GetRotation();
-
-    void SetScale(float scale);
-    float GetScale();
-
-    void SetTransform(Vector3 position, Quaternion rotation, float scale);
-
-public:
-    EntityID id;
-    Scene* scene{};
-};
-
-struct Scene
-{
-public:
-    Scene();
-
     Entity CreateEntity();
     void Destroy(Entity entity);
 
     Entity Find(EntityID id);
 
+    //! Iterate over all entities with given components
     template<typename... Cs, typename F>
     void Each(F&& func);
 
+    //! Add a model to the scene (scene takes ownership)
+    Model* AddModel(std::unique_ptr<Model> model);
+
+    //! Add a material to the scene (scene takes ownership)
+    Material* AddMaterial(std::unique_ptr<Material> material);
+
+    Material* GetDefaultMaterial() const;
+
 public:
-    std::vector<Mesh> meshes;
-    std::vector<Material> materials;
-
-    Environment environment;
-
     Entity mainCamera;
     Entity mainDirectionalLight;
+    Environment environment;
 
 private:
     friend class Entity;
 
-    EntityIDPool m_Entities;
-    std::vector<std::unique_ptr<ComponentPoolBase>> m_ComponentPoolsByIndex;
-
     template<typename T>
     ComponentPool<std::decay_t<T>>& GetPool();
 
+private:
+    EntityIDPool m_Entities;
+    std::vector<std::unique_ptr<ComponentPoolBase>> m_ComponentPoolsByIndex;
+
+    std::vector<std::unique_ptr<Model>> m_Models;
+    std::vector<std::unique_ptr<Material>> m_Materials;
 };
-
-/* Entity implementation */
-template<typename T>
-T& Entity::Get()
-{
-    return scene->template GetPool<T>()[id];
-}
-
-template<typename T>
-void Entity::Assign(T&& component)
-{
-    scene->GetPool<T>().Assign(id, std::forward<T>(component));
-}
-
-template<typename T>
-void Entity::Remove()
-{
-    scene->GetPool<T>().Remove(id);
-}
-
-template<typename T>
-bool Entity::Has()
-{
-    return scene->GetPool<T>().Contains(id);
-}
 
 /* Scene implementation */
 template<typename T>
@@ -152,5 +101,37 @@ void Scene::Each(F&& func)
         }
     }
 }
+
+/* Entity implementation */
+template<typename T>
+T& Entity::Get()
+{
+    return scene->template GetPool<T>()[id];
+}
+
+template<typename T>
+const T& Entity::Get() const
+{
+    return scene->template GetPool<T>()[id];
+}
+
+template<typename T>
+void Entity::Assign(T&& component)
+{
+    scene->GetPool<T>().Assign(id, std::forward<T>(component));
+}
+
+template<typename T>
+void Entity::Remove()
+{
+    scene->GetPool<T>().Remove(id);
+}
+
+template<typename T>
+bool Entity::Has() const
+{
+    return scene->GetPool<T>().Contains(id);
+}
+
 
 }

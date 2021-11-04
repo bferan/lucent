@@ -1,6 +1,7 @@
 #include "AmbientOcclusionPass.hpp"
 
 #include "device/Context.hpp"
+#include "scene/Camera.hpp"
 
 namespace lucent
 {
@@ -51,18 +52,18 @@ Texture* AddGTAOPass(Renderer& renderer, GBuffer gBuffer, Texture* hiZ)
         ctx.Uniform("u_ViewToScreenZ"_id, 0.5f * proj(1, 1));
 
         /******* DEBUG ********/
-        auto& input = ctx.GetDevice()->m_Input->GetState();
-
-        struct MousePos
-        {
-            uint32 x;
-            uint32 y;
-        };
-        auto mousePos = MousePos{ (uint32)Round(input.cursorPos.x) / 2, (uint32)Round(input.cursorPos.y) / 2 };
-
-        ctx.BindBuffer("DebugShapes"_id, debugShapesBuffer);
-        ctx.Uniform("u_DebugCursorPos"_id, mousePos);
-        ctx.Uniform("u_ViewToWorld"_id, invView);
+//        auto& input = ctx.GetDevice()->m_Input->GetState();
+//
+//        struct MousePos
+//        {
+//            uint32 x;
+//            uint32 y;
+//        };
+//        auto mousePos = MousePos{ (uint32)Round(input.cursorPos.x) / 2, (uint32)Round(input.cursorPos.y) / 2 };
+//
+//        ctx.BindBuffer("DebugShapes"_id, debugShapesBuffer);
+//        ctx.Uniform("u_DebugCursorPos"_id, mousePos);
+//        ctx.Uniform("u_ViewToWorld"_id, invView);
 
         /**********************/
         auto[numX, numY] = settings.GetNumGroups(width, height);

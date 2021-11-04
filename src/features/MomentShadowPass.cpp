@@ -2,6 +2,10 @@
 
 #include "device/Context.hpp"
 #include "rendering/Geometry.hpp"
+#include "scene/Transform.hpp"
+#include "scene/Lighting.hpp"
+#include "scene/Camera.hpp"
+#include "scene/ModelInstance.hpp"
 
 namespace lucent
 {
@@ -180,11 +184,11 @@ Texture* AddMomentShadowPass(Renderer& renderer)
 
             auto& cascade = cascades[i];
             ctx.BindPipeline(depthOnly);
-            scene.Each<MeshInstance, Transform>([&](MeshInstance& instance, Transform& local)
+            scene.Each<ModelInstance, Transform>([&](ModelInstance& instance, Transform& local)
             {
-                for (auto idx: instance.meshes)
+                for (auto& primitive : *instance.model)
                 {
-                    auto& mesh = scene.meshes[idx];
+                    auto& mesh = primitive.mesh;
                     auto mvp = cascade.proj * local.model;
                     ctx.Uniform("u_MVP"_id, mvp);
 

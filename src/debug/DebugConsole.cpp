@@ -1,5 +1,7 @@
 #include "DebugConsole.hpp"
 
+#include "rendering/Engine.hpp"
+
 using namespace std::literals;
 
 namespace lucent
@@ -11,11 +13,12 @@ const auto kPromptIndicator = "> "s;
 constexpr char kPromptCursor = '_';
 constexpr float kMaxScreenY = 800.0f;
 
-DebugConsole::DebugConsole(Device* device, int maxColumns)
-    : m_Device(device)
-    , m_Font(device, "fonts/JetBrainsMono-Medium.ttf", 26.0f)
-    , m_TextLog(device, m_Font)
-    , m_TextPrompt(device, m_Font)
+DebugConsole::DebugConsole(Engine& engine, int maxColumns)
+    : m_Engine(engine)
+    , m_Device(engine.GetDevice())
+    , m_Font(m_Device, "fonts/JetBrainsMono-Medium.ttf", 26.0f)
+    , m_TextLog(m_Device, m_Font)
+    , m_TextPrompt(m_Device, m_Font)
     , m_MaxColumns(maxColumns)
     , m_Active(false)
 {
@@ -190,7 +193,7 @@ void DebugConsole::SetActive(bool active)
 {
     m_Active = active;
     m_Prompt.text.clear();
-    m_Device->m_Input->SetCursorVisible(active);
+    m_Engine.GetInput().SetCursorVisible(active);
 }
 
 void DebugConsole::OnLog(LogLevel level, const std::string& msg)

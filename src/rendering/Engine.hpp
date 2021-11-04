@@ -22,6 +22,8 @@ public:
 
     Scene* CreateScene();
 
+    Input& GetInput();
+
     using BuildSceneRendererCallback = std::function<void(Engine*, Renderer&)>;
 
 private:

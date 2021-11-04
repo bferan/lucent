@@ -1,4 +1,4 @@
-#include "Debug"
+//#include "Debug"
 
 #define PI 3.14159265359
 
@@ -46,12 +46,12 @@ void Compute()
 
     vec3 N = normalize(2.0 * texture(u_Normals, coord).xyz - 1.0);
 
-        if (gl_GlobalInvocationID.xy == u_DebugCursorPos)
-        {
-            DebugDrawSphere((u_ViewToWorld * vec4(pos, 1.0)).xyz, 0.05, vec4(0.0, 1.0, 0.0, 1.0));
-            DebugDrawSphere((u_ViewToWorld * vec4(pos + N, 1.0)).xyz, 0.05, vec4(0.0, 1.0, 0.0, 1.0));
-            DebugDrawSphere((u_ViewToWorld * vec4(pos + 2.0 * N, 1.0)).xyz, 0.05, vec4(0.0, 1.0, 0.0, 1.0));
-        }
+//        if (gl_GlobalInvocationID.xy == u_DebugCursorPos)
+//        {
+//            DebugDrawSphere((u_ViewToWorld * vec4(pos, 1.0)).xyz, 0.05, vec4(0.0, 1.0, 0.0, 1.0));
+//            DebugDrawSphere((u_ViewToWorld * vec4(pos + N, 1.0)).xyz, 0.05, vec4(0.0, 1.0, 0.0, 1.0));
+//            DebugDrawSphere((u_ViewToWorld * vec4(pos + 2.0 * N, 1.0)).xyz, 0.05, vec4(0.0, 1.0, 0.0, 1.0));
+//        }
 
     const int numSlices = 3;
     const int numSamples = 7;
@@ -93,14 +93,14 @@ void Compute()
             float cosR = dot(horizonR/lengthR, V);
             float cosL = dot(horizonL/lengthL, V);
 
-                        if (gl_GlobalInvocationID.xy == u_DebugCursorPos)
-                        {
-                            vec4 posR = u_ViewToWorld * vec4(samplePosR, 1.0);
-                            vec4 posL = u_ViewToWorld * vec4(samplePosL, 1.0);
-
-                            DebugDrawSphere(posR.xyz, 0.05, vec4(lengthR, 0.0, 0.0, 1.0));
-                            DebugDrawSphere(posL.xyz, 0.05, vec4(lengthL, 0.0, 0.0, 1.0));
-                        }
+//                        if (gl_GlobalInvocationID.xy == u_DebugCursorPos)
+//                        {
+//                            vec4 posR = u_ViewToWorld * vec4(samplePosR, 1.0);
+//                            vec4 posL = u_ViewToWorld * vec4(samplePosL, 1.0);
+//
+//                            DebugDrawSphere(posR.xyz, 0.05, vec4(lengthR, 0.0, 0.0, 1.0));
+//                            DebugDrawSphere(posL.xyz, 0.05, vec4(lengthL, 0.0, 0.0, 1.0));
+//                        }
 
             cosR = mix(cosR, -1.0, max(lengthR - 0.5, 0.0));
             cosL = mix(cosL, -1.0, max(lengthL - 0.5, 0.0));

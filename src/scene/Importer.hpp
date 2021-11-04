@@ -25,11 +25,11 @@ public:
 
 private:
     void ImportMaterials(Scene& scene, const tinygltf::Model& model);
-    void ImportMeshes(Scene& scene, const tinygltf::Model& model);
+    void ImportMeshes(Scene& scene, const tinygltf::Model& gltfModel);
     Entity ImportEntities(Scene& scene, const tinygltf::Model& model, const tinygltf::Node& node, Entity parent);
 
-    std::vector<MeshInstance> m_MeshInstances;
-    std::vector<uint32> m_MaterialIndices;
+    std::vector<Model*> m_ImportedMeshes;
+    std::vector<Material*> m_ImportedMaterials;
     std::string_view m_ModelFile;
 
     Device* m_Device;

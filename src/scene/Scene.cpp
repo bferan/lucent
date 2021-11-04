@@ -3,77 +3,6 @@
 namespace lucent
 {
 
-/* Entity implementation */
-static void ApplyTransform(Entity entity)
-{
-    auto& transform = entity.Get<Transform>();
-
-    transform.model = Matrix4::Translation(transform.position) *
-        Matrix4::Rotation(transform.rotation) *
-        Matrix4::Scale(transform.scale, transform.scale, transform.scale);
-
-    if (!transform.parent.Empty())
-    {
-        auto& parent = entity.scene->Find(transform.parent).Get<Transform>();
-        transform.model = parent.model * transform.model;
-    }
-
-    if (entity.Has<Parent>())
-    {
-        for (auto id : entity.Get<Parent>().children)
-        {
-            ApplyTransform(entity.scene->Find(id));
-        }
-    }
-}
-
-void Entity::SetPosition(Vector3 position)
-{
-    Get<Transform>().position = position;
-    ApplyTransform(*this);
-}
-
-Vector3 Entity::GetPosition()
-{
-    return Get<Transform>().position;
-}
-
-void Entity::SetRotation(Quaternion rotation)
-{
-    Get<Transform>().rotation = rotation;
-    ApplyTransform(*this);
-}
-
-Quaternion Entity::GetRotation()
-{
-    return Get<Transform>().rotation;
-}
-
-void Entity::SetScale(float scale)
-{
-    Get<Transform>().scale = scale;
-    ApplyTransform(*this);
-}
-
-float Entity::GetScale()
-{
-    return Get<Transform>().scale;
-}
-
-void Entity::SetTransform(Vector3 position, Quaternion rotation, float scale)
-{
-    auto& transform = Get<Transform>();
-    transform.position = position;
-    transform.rotation = rotation;
-    transform.scale = scale;
-    ApplyTransform(*this);
-}
-
-/* Scene implementation */
-Scene::Scene()
-{
-}
-
 Entity Scene::CreateEntity()
 {
     return Entity{ m_Entities.Create(), this };
@@ -93,5 +22,36 @@ Entity Scene::Find(EntityID id)
 {
     return Entity{ id, this };
 }
+
+Model* Scene::AddModel(std::unique_ptr<Model> model)
+{
+    return m_Models.emplace_back(std::move(model)).get();
+}
+
+Material* Scene::AddMaterial(std::unique_ptr<Material> material)
+{
+    return m_Materials.emplace_back(std::move(material)).get();
+}
+
+Material* Scene::GetDefaultMaterial() const
+{
+    return nullptr;
+}
+
+//// Create default material
+//Material material{};
+//material.baseColorMap = g_WhiteTexture;
+//material.metalRough = g_GreenTexture;
+//material.normalMap = g_NormalTexture;
+//material.aoMap = g_WhiteTexture;
+//material.emissive = g_BlackTexture;
+//
+//material.baseColorFactor = Color::Gray();
+//material.metallicFactor = 0.0f;
+//material.roughnessFactor = 1.0f;
+//
+//mesh.materialIdx = scene.materials.size();
+//scene.materials.emplace_back(material);
+
 
 }

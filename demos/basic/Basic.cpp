@@ -1,6 +1,10 @@
 #include "rendering/Engine.hpp"
 #include "scene/Importer.hpp"
 #include "scene/HdrImporter.hpp"
+#include "scene/ModelInstance.hpp"
+#include "rendering/PbrMaterial.hpp"
+#include "scene/Transform.hpp"
+#include "scene/Camera.hpp"
 
 using namespace lucent;
 
@@ -11,13 +15,11 @@ void InitScene(Engine& engine, Scene& scene)
     // Axes
     auto boxX = importer.Import(scene, "models/BoxTextured.glb");
     boxX.SetPosition({ 5.0f, 0.5f, 0.0f });
-
-    scene.materials[0].baseColorFactor = Color::Red();
+    //dynamic_cast<PbrMaterial*>(boxX.Get<ModelInstance>().material)->baseColorFactor = Color::Red();
 
     auto boxZ = importer.Import(scene, "models/BoxTextured.glb");
     boxZ.SetPosition({ 0.0f, 0.5, 5.0f });
-
-    scene.materials[1].baseColorFactor = Color::Blue();
+    //dynamic_cast<PbrMaterial*>(boxZ.Get<ModelInstance>().material)->baseColorFactor = Color::Blue();
 
     auto helmet = importer.Import(scene, "models/DamagedHelmet.glb");
     helmet.SetPosition(helmet.GetPosition() + Vector3::Up());

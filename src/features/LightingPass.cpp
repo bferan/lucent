@@ -2,6 +2,9 @@
 
 #include "rendering/Geometry.hpp"
 #include "device/Context.hpp"
+#include "scene/Lighting.hpp"
+#include "scene/Camera.hpp"
+#include "scene/Transform.hpp"
 
 namespace lucent
 {

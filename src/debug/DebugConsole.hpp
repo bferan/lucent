@@ -6,6 +6,7 @@
 
 namespace lucent
 {
+class Engine;
 
 struct DebugEntry
 {
@@ -23,7 +24,7 @@ struct DebugPrompt
 class DebugConsole : public LogListener
 {
 public:
-    explicit DebugConsole(Device* device, int maxColumns = 120);
+    explicit DebugConsole(Engine& engine, int maxColumns = 120);
 
     void AddEntry(std::string text, Color color = Color::White());
 
@@ -45,6 +46,7 @@ public:
     void GenerateMesh();
 
 private:
+    Engine& m_Engine;
     Device* m_Device;
 
     Font m_Font;

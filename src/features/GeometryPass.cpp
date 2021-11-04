@@ -1,6 +1,10 @@
 #include "GeometryPass.hpp"
 
 #include "device/Context.hpp"
+#include "rendering/Material.hpp"
+#include "scene/Camera.hpp"
+#include "scene/ModelInstance.hpp"
+#include "scene/Transform.hpp"
 
 namespace lucent
 {
@@ -49,12 +53,12 @@ GBuffer AddGeometryPass(Renderer& renderer)
 
         ctx.BindPipeline(renderGeometry);
 
-        scene.Each<MeshInstance, Transform>([&](MeshInstance& instance, Transform& local)
+        scene.Each<ModelInstance, Transform>([&](ModelInstance& instance, Transform& local)
         {
-            for (auto idx: instance.meshes)
+            for (auto& primitive: *instance.model)
             {
-                auto& mesh = scene.meshes[idx];
-                auto& material = scene.materials[mesh.materialIdx];
+                auto& mesh = primitive.mesh;
+                auto material = instance.material ? instance.material : primitive.material;
 
                 auto mv = view * local.model;
                 auto mvp = proj * mv;
@@ -64,13 +68,7 @@ GBuffer AddGeometryPass(Renderer& renderer)
                 ctx.Uniform("u_MV"_id, mv);
 
                 // Bind material data
-                ctx.BindTexture("u_BaseColor"_id, material.baseColorMap);
-                ctx.BindTexture("u_MetalRoughness"_id, material.metalRough);
-                ctx.BindTexture("u_Normal"_id, material.normalMap);
-
-                ctx.Uniform("u_BaseColorFactor"_id, material.baseColorFactor);
-                ctx.Uniform("u_MetallicFactor"_id, material.metallicFactor);
-                ctx.Uniform("u_RoughnessFactor"_id, material.roughnessFactor);
+                material->BindUniforms(ctx);
 
                 ctx.BindBuffer(mesh.vertexBuffer);
                 ctx.BindBuffer(mesh.indexBuffer);
@@ -88,8 +86,7 @@ Texture* AddGenerateHiZPass(Renderer& renderer, Texture* depthTexture)
 {
     auto& settings = renderer.GetSettings();
 
-    uint32 baseWidth = depthTexture->width;
-    uint32 baseHeight = depthTexture->height;
+    auto [baseWidth, baseHeight] = depthTexture->GetSize();
 
     auto levels = (uint32)Floor(Log2((float)Max(baseWidth, baseHeight))) + 1;
 
@@ -119,7 +116,7 @@ Texture* AddGenerateHiZPass(Renderer& renderer, Texture* depthTexture)
         uint32 width = baseWidth;
         uint32 height = baseHeight;
 
-        for (int level = 1; level < hiZ->levels; ++level)
+        for (int level = 1; level < hiZ->GetSettings().levels; ++level)
         {
             width = Max(width / 2u, 1u);
             height = Max(height / 2u, 1u);

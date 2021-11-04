@@ -48,6 +48,7 @@ target_sources(lucent PRIVATE
         device/vulkan/VulkanDevice.cpp
         device/vulkan/VulkanFramebuffer.cpp
         device/vulkan/VulkanFramebuffer.hpp
+        device/vulkan/VulkanPipeline.cpp
         device/vulkan/VulkanPipeline.hpp
         device/vulkan/VulkanShader.cpp
         device/vulkan/VulkanShader.hpp
@@ -71,27 +72,40 @@ target_sources(lucent PRIVATE
         features/ScreenSpaceReflectionsPass.cpp
         features/ScreenSpaceReflectionsPass.hpp
 
-        rendering/Geometry.cpp
-        rendering/Geometry.hpp
-        rendering/Renderer.cpp
-        rendering/Renderer.hpp
         rendering/Engine.cpp
         rendering/Engine.hpp
-        rendering/RenderSettings.hpp
+        rendering/Geometry.cpp
+        rendering/Geometry.hpp
+        rendering/Material.hpp
+        rendering/Mesh.cpp
+        rendering/Mesh.hpp
+        rendering/Model.cpp
+        rendering/Model.hpp
+        rendering/PbrMaterial.cpp
+        rendering/PbrMaterial.hpp
+        rendering/Renderer.cpp
+        rendering/Renderer.hpp
         rendering/RenderSettings.cpp
+        rendering/RenderSettings.hpp
+        rendering/StaticMesh.cpp
+        rendering/StaticMesh.hpp
         rendering/View.cpp
         rendering/View.hpp
 
-        scene/Components.cpp
-        scene/Components.hpp
+        scene/Camera.cpp
+        scene/Camera.hpp
         scene/ComponentPool.hpp
+        scene/Entity.hpp
+        scene/Entity.cpp
         scene/EntityIDPool.hpp
         scene/HdrImporter.cpp
         scene/HdrImporter.hpp
         scene/Importer.cpp
         scene/Importer.hpp
-        scene/Lights.hpp
+        scene/Lighting.hpp
+        scene/ModelInstance.hpp
         scene/Scene.hpp
         scene/Scene.cpp
-        scene/Entity.hpp
+        scene/Transform.cpp
+        scene/Transform.hpp
         )
