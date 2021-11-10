@@ -1,15 +1,28 @@
+#include "Core.shader"
+
 layout(set=0, binding=0) uniform sampler2D u_Input;
 layout(set=0, binding=1, r32f) uniform image2D u_Output;
 
 layout(local_size_x=8, local_size_y=8) in;
 
+layout(set=0, binding=2) uniform Parameters
+{
+    ivec2 u_Offset;
+};
+
 void Compute()
 {
-    ivec2 imgCoord = ivec2(gl_GlobalInvocationID.xy);
-    vec2 coord = (vec2(imgCoord) + vec2(0.5)) / imageSize(u_Output);
+    // Perform min filtering on input texture
+    ivec2 dstCoord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 srcCoord = dstCoord * ivec2(2);
 
-    vec4 depths = textureGather(u_Input, coord);
+    vec4 depths;
+    depths.x = texelFetch(u_Input, srcCoord, 0).r;
+    depths.y = texelFetch(u_Input, srcCoord + ivec2(u_Offset.x, 0), 0).r;
+    depths.z = texelFetch(u_Input, srcCoord + ivec2(0, u_Offset.y), 0).r;
+    depths.w = texelFetch(u_Input, srcCoord + u_Offset, 0).r;
+
     float z = min(min(depths.x, depths.y), min(depths.z, depths.w));
 
-    imageStore(u_Output, imgCoord, vec4(z, vec3(0.0)));
+    imageStore(u_Output, dstCoord, vec4(z, vec3(0.0)));
 }

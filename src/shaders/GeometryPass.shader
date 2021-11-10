@@ -1,4 +1,5 @@
-#include "VertexInput"
+#include "VertexInput.shader"
+#include "View.shader"
 
 layout(location=0) varying Vertex
 {
@@ -12,24 +13,27 @@ layout(location=0) varying Vertex
 layout(location=0) out vec4 o_BaseColor;
 layout(location=1) out vec3 o_Normal;
 layout(location=2) out vec2 o_MetalRoughness;
+layout(location=3) out vec4 o_Emissive;
 
 // Per-draw uniforms
-layout(set=0, binding=0) uniform Globals
+layout(set=1, binding=0) uniform Globals
 {
     mat4 u_MVP;
     mat4 u_MV;
 };
 
 // Material properties
-layout(set=1, binding=0) uniform Material
+layout(set=2, binding=0) uniform Material
 {
     vec4 u_BaseColorFactor;
     float u_MetallicFactor;
     float u_RoughnessFactor;
+    float u_EmissiveFactor;
 };
-layout(set=1, binding=1) uniform sampler2D u_BaseColor;
-layout(set=1, binding=2) uniform sampler2D u_MetalRoughness;
-layout(set=1, binding=3) uniform sampler2D u_Normal;
+layout(set=2, binding=1) uniform sampler2D u_BaseColor;
+layout(set=2, binding=2) uniform sampler2D u_MetalRoughness;
+layout(set=2, binding=3) uniform sampler2D u_Normal;
+layout(set=2, binding=4) uniform sampler2D u_Emissive;
 
 void Vertex()
 {
@@ -59,9 +63,10 @@ void Fragment()
     float metal = metallicRoughness.b * u_MetallicFactor;
     float rough = metallicRoughness.g * u_RoughnessFactor;
 
-    //rough = max(rough, 0.3);
+    vec4 emissive = texture(u_Emissive, v_UV) * u_EmissiveFactor;
 
     o_BaseColor = baseColor;
     o_Normal = 0.5 * N + 0.5;
     o_MetalRoughness = vec2(metal, rough);
+    o_Emissive = emissive;
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "device/Pipeline.hpp"
 #include "VulkanShader.hpp"
 
 namespace lucent
@@ -13,9 +14,9 @@ class ShaderCache
 public:
     explicit ShaderCache(VulkanDevice* device);
 
-    VulkanShader* Compile(const std::string& name);
+    VulkanShader* Compile(const PipelineSettings& pipeline);
 
-    VulkanShader* Compile(const std::string& name, ShaderInfoLog& log);
+    VulkanShader* Compile(const PipelineSettings& pipeline, ShaderInfoLog& log);
 
     void Release(VulkanShader* shader);
 
@@ -49,7 +50,12 @@ public:
     };
 
 private:
-    bool PopulateShaderModules(VulkanShader& shader, const std::string& name, const std::string& source, ShaderInfoLog& log);
+    bool PopulateShaderModules(VulkanShader& shader,
+        const std::string& name,
+        const std::string& source,
+        const std::vector<std::string_view>& defines,
+        ShaderInfoLog& log);
+
     bool PopulateShaderLayout(VulkanShader& shader, const PipelineLayout& layout, ShaderInfoLog& log);
 
     void FreeResources(VulkanShader* shader);

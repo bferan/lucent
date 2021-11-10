@@ -1,27 +1,27 @@
 #include "MomentShadowPass.hpp"
 
-#include "device/Context.hpp"
 #include "rendering/Geometry.hpp"
 #include "scene/Transform.hpp"
-#include "scene/Lighting.hpp"
 #include "scene/Camera.hpp"
 #include "scene/ModelInstance.hpp"
 
 namespace lucent
 {
 
-static void CalculateCascades(Scene& scene)
+static void CalculateCascades(View& view)
 {
-    auto& viewOrigin = scene.mainCamera.Get<Transform>();
-    auto& view = scene.mainCamera.Get<Camera>();
+    auto& scene = view.GetScene();
+
+    auto& cameraOrigin = scene.mainCamera.Get<Transform>();
+    auto& camera = scene.mainCamera.Get<Camera>();
 
     auto& lightOrigin = scene.mainDirectionalLight.Get<Transform>();
     auto& light = scene.mainDirectionalLight.Get<DirectionalLight>();
 
     auto camToWorld =
-        Matrix4::Translation(viewOrigin.position) *
-            Matrix4::RotationY(view.yaw) *
-            Matrix4::RotationX(view.pitch) *
+        Matrix4::Translation(cameraOrigin.position) *
+            Matrix4::RotationY(camera.yaw) *
+            Matrix4::RotationX(camera.pitch) *
             Matrix4::RotationX(kPi); // Flip axes
 
     auto worldToLight =
@@ -34,16 +34,16 @@ static void CalculateCascades(Scene& scene)
 
     auto camToLight = worldToLight * camToWorld;
 
-    auto focalLength = 1.0f / Tan(view.verticalFov / 2.0f);
+    auto focalLength = 1.0f / Tan(camera.verticalFov / 2.0f);
 
     for (auto& cascade: light.cascades)
     {
         // Determine cascade bounds based on max possible diameter of cascade frustum (ceil to int)
-        auto bottomRight = Vector3(view.aspectRatio, 1.0f, focalLength);
-        auto topLeft = Vector3(-view.aspectRatio, -1.0f, focalLength);
+        auto bottomRight = Vector3(camera.aspectRatio, 1.0f, focalLength);
+        auto topLeft = Vector3(-camera.aspectRatio, -1.0f, focalLength);
 
-        auto back = (view.near + cascade.start) / focalLength;
-        auto front = (view.near + cascade.end) / focalLength;
+        auto back = (camera.near + cascade.start) / focalLength;
+        auto front = (camera.near + cascade.end) / focalLength;
 
         auto backBottomRight = back * bottomRight;
         auto frontBottomRight = front * bottomRight;
@@ -62,11 +62,11 @@ static void CalculateCascades(Scene& scene)
 
         for (auto dist: { cascade.start, cascade.end })
         {
-            for (auto x: { -view.aspectRatio, view.aspectRatio })
+            for (auto x: { -camera.aspectRatio, camera.aspectRatio })
             {
                 for (auto y: { -1.0f, 1.0f })
                 {
-                    auto camPos = ((view.near + dist) / focalLength) * Vector3(x, y, focalLength);
+                    auto camPos = ((camera.near + dist) / focalLength) * Vector3(x, y, focalLength);
                     auto lightPos = Vector3(camToLight * Vector4(camPos, 1.0f));
 
                     minPos = Min(minPos, lightPos);
@@ -103,13 +103,11 @@ static void CalculateCascades(Scene& scene)
         // Compute plane at front of this cascade
         auto camNormal = Vector3(0.0, 0.0, 1.0);
         auto camPos = Vector3::Zero();
-        camPos += (view.near + cascade.start) * camNormal;
+        camPos += (camera.near + cascade.start) * camNormal;
 
         auto camD = camNormal.Dot(camPos);
         cascade.frontPlane = Vector4(camNormal, -camD);
     }
-
-    // TODO: Adjust cascade index so that all cascades in a quad use the same cascade?
 }
 
 Texture* AddMomentShadowPass(Renderer& renderer)
@@ -171,10 +169,10 @@ Texture* AddMomentShadowPass(Renderer& renderer)
         .framebuffer = momentMapLayers.back()
     });
 
-    renderer.AddPass("Shadow map render depth MS", [=](Context& ctx, Scene& scene)
+    renderer.AddPass("Shadow map render depth MS", [=](Context& ctx, View& view)
     {
-        CalculateCascades(scene);
-        auto& cascades = scene.mainDirectionalLight.Get<DirectionalLight>().cascades;
+        CalculateCascades(view);
+        auto& cascades = view.GetScene().mainDirectionalLight.Get<DirectionalLight>().cascades;
 
         // Render depth to the moment MS depth textures
         for (int i = 0; i < numCascades; ++i)
@@ -184,7 +182,7 @@ Texture* AddMomentShadowPass(Renderer& renderer)
 
             auto& cascade = cascades[i];
             ctx.BindPipeline(depthOnly);
-            scene.Each<ModelInstance, Transform>([&](ModelInstance& instance, Transform& local)
+            view.GetScene().Each<ModelInstance, Transform>([&](ModelInstance& instance, Transform& local)
             {
                 for (auto& primitive : *instance.model)
                 {
@@ -201,7 +199,7 @@ Texture* AddMomentShadowPass(Renderer& renderer)
         }
     });
 
-    renderer.AddPass("Shadow map resolve depth", [=](Context& ctx, Scene& scene)
+    renderer.AddPass("Shadow map resolve depth", [=](Context& ctx, View& view)
     {
         // Calculate moments from depth values using custom resolve
         for (int i = 0; i < numCascades; ++i)

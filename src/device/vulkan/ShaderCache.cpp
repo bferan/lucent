@@ -256,35 +256,38 @@ ShaderCache::ShaderCache(VulkanDevice* device)
     , m_Resolver(new DefaultResolver())
 {}
 
-VulkanShader* ShaderCache::Compile(const std::string& name)
+VulkanShader* ShaderCache::Compile(const PipelineSettings& settings)
 {
     ShaderInfoLog log{};
-    auto result = Compile(name, log);
+    auto result = Compile(settings, log);
     if (!result)
     {
-        LC_ERROR("Error compiling shader {}:\n{}", name, log.error);
+        LC_ERROR("Error compiling shader {}:\n{}", settings.shaderName, log.error);
     }
     return result;
 }
 
-VulkanShader* ShaderCache::Compile(const std::string& name, ShaderInfoLog& log)
+VulkanShader* ShaderCache::Compile(const PipelineSettings& settings, ShaderInfoLog& log)
 {
-    auto result = m_Resolver->Resolve(name);
+    auto result = m_Resolver->Resolve(settings.shaderName);
     if (!result.found)
     {
         log.Error("Unable to resolve shader with name:");
-        log.Error(name);
+        log.Error(settings.shaderName);
         return nullptr;
     }
 
     auto hash = Hash<uint64>(result.source);
+    for (auto define: settings.shaderDefines)
+        hash ^= Hash<uint64>(define);
+
     if (m_Shaders.contains(hash))
     {
         return m_Shaders[hash].get();
     }
 
     auto& shader = (m_Shaders[hash] = std::make_unique<VulkanShader>(VulkanShader{}));
-    if (!PopulateShaderModules(*shader, result.qualifiedName, result.source, log))
+    if (!PopulateShaderModules(*shader, result.qualifiedName, result.source, settings.shaderDefines, log))
     {
         m_Shaders.erase(hash);
         return nullptr;
@@ -397,6 +400,7 @@ static bool ScanLinkerSymbols(const TIntermNode& root,
 bool ShaderCache::PopulateShaderModules(VulkanShader& shader,
     const std::string& name,
     const std::string& source,
+    const std::vector<std::string_view>& defines,
     ShaderInfoLog& log)
 {
     const int defaultVersion = 450;
@@ -409,6 +413,15 @@ bool ShaderCache::PopulateShaderModules(VulkanShader& shader,
     shader = {};
     std::vector<std::unique_ptr<glslang::TShader>> shaders;
     glslang::TProgram program;
+
+    // Construct common preamble string
+    auto preamble = std::string(kDefaultPreamble);
+    for (auto& define: defines)
+    {
+        preamble += "#define ";
+        preamble += define;
+        preamble += "\n";
+    }
 
     auto addShader = [&](std::string_view text,
         EShLanguage lang,
@@ -431,7 +444,7 @@ bool ShaderCache::PopulateShaderModules(VulkanShader& shader,
         glsl.setEnvInput(inputLang, lang, client, defaultVersion);
         glsl.setEnvClient(client, clientVersion);
         glsl.setEnvTarget(targetLang, targetLangVersion);
-        glsl.setPreamble(kDefaultPreamble);
+        glsl.setPreamble(preamble.c_str());
         glsl.setAutoMapBindings(true);
 
         Includer includer(m_Resolver.get(), shaderStage);

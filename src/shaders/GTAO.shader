@@ -1,28 +1,13 @@
-//#include "Debug"
+#include "Core.shader"
+#include "View.shader"
 
-#define PI 3.14159265359
-
-layout(local_size_x=8, local_size_y=8) in;
-
-layout(set=0, binding=0) uniform sampler2D u_Depth;
-layout(set=0, binding=1) uniform sampler2D u_Normals;
-layout(set=0, binding=2, r32f) uniform image2D u_AO;
-layout(set=0, binding=3) uniform Globals
+layout(set=1, binding=0) uniform sampler2D u_Depth;
+layout(set=1, binding=1) uniform sampler2D u_Normals;
+layout(set=1, binding=2, r32f) uniform image2D u_AO;
+layout(set=1, binding=3) uniform Globals
 {
-    vec4 u_ScreenToView;
-    float u_AspectRatio;
     float u_ViewToScreenZ;
 };
-
-// Get view space position from screen coordinate
-vec3 ScreenToView(vec2 coord)
-{
-    float depth = textureLod(u_Depth, coord, 0.0).r;
-    float z = u_ScreenToView.w / (depth - u_ScreenToView.z);
-    vec2 pos = u_ScreenToView.xy * (coord - vec2(0.5)) * vec2(z);
-
-    return vec3(pos, z);
-}
 
 float DirectionSpatialNoise(int x, int y)
 {
@@ -34,6 +19,13 @@ float OffsetSpatialNoise(int x, int y)
     return (1.0/4.0) * ((y - x) & 0x3);
 }
 
+layout(local_size_x=8, local_size_y=8) in;
+
+float GetDepth(vec2 coord)
+{
+    return  textureLod(u_Depth, coord, 0.0).r;
+}
+
 void Compute()
 {
     ivec2 imgCoord = ivec2(gl_GlobalInvocationID.xy);
@@ -41,17 +33,10 @@ void Compute()
     vec2 imgSize = vec2(imageSize(u_AO).xy);
     coord /= imgSize;
 
-    vec3 pos = ScreenToView(coord);
+    vec3 pos = ScreenToView(coord, GetDepth(coord));
     vec3 V = normalize(-pos);
 
     vec3 N = normalize(2.0 * texture(u_Normals, coord).xyz - 1.0);
-
-//        if (gl_GlobalInvocationID.xy == u_DebugCursorPos)
-//        {
-//            DebugDrawSphere((u_ViewToWorld * vec4(pos, 1.0)).xyz, 0.05, vec4(0.0, 1.0, 0.0, 1.0));
-//            DebugDrawSphere((u_ViewToWorld * vec4(pos + N, 1.0)).xyz, 0.05, vec4(0.0, 1.0, 0.0, 1.0));
-//            DebugDrawSphere((u_ViewToWorld * vec4(pos + 2.0 * N, 1.0)).xyz, 0.05, vec4(0.0, 1.0, 0.0, 1.0));
-//        }
 
     const int numSlices = 3;
     const int numSamples = 7;
@@ -81,8 +66,11 @@ void Compute()
         {
             vec2 coordOffset = s * maxRadius * sliceDir.xy;
 
-            vec3 samplePosR = ScreenToView(coord + coordOffset);
-            vec3 samplePosL = ScreenToView(coord - coordOffset);
+            vec2 coordR = coord + coordOffset;
+            vec2 coordL = coord - coordOffset;
+
+            vec3 samplePosR = ScreenToView(coordR, GetDepth(coordR));
+            vec3 samplePosL = ScreenToView(coordL, GetDepth(coordL));
 
             vec3 horizonR = samplePosR - pos;
             vec3 horizonL = samplePosL - pos;
@@ -92,15 +80,6 @@ void Compute()
 
             float cosR = dot(horizonR/lengthR, V);
             float cosL = dot(horizonL/lengthL, V);
-
-//                        if (gl_GlobalInvocationID.xy == u_DebugCursorPos)
-//                        {
-//                            vec4 posR = u_ViewToWorld * vec4(samplePosR, 1.0);
-//                            vec4 posL = u_ViewToWorld * vec4(samplePosL, 1.0);
-//
-//                            DebugDrawSphere(posR.xyz, 0.05, vec4(lengthR, 0.0, 0.0, 1.0));
-//                            DebugDrawSphere(posL.xyz, 0.05, vec4(lengthL, 0.0, 0.0, 1.0));
-//                        }
 
             cosR = mix(cosR, -1.0, max(lengthR - 0.5, 0.0));
             cosL = mix(cosL, -1.0, max(lengthL - 0.5, 0.0));

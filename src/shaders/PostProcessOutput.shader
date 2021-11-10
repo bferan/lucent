@@ -1,7 +1,6 @@
 layout(set=0, binding=0) uniform sampler2D u_Input;
-layout(set=0, binding=1, rgba8) uniform image2D u_Output;
-
-layout(local_size_x=8, local_size_y=8) in;
+layout(set=0, binding=1) uniform sampler2D u_Bloom;
+layout(set=0, binding=2, rgba8) uniform image2D u_Output;
 
 vec3 ToneMap(vec3 x)
 {
@@ -23,13 +22,18 @@ vec3 Vignette(vec3 value, vec2 uv)
     return vig * value;
 }
 
+layout(local_size_x=8, local_size_y=8) in;
+
 void Compute()
 {
     ivec2 imgCoord = ivec2(gl_GlobalInvocationID.xy);
     vec2 coord = (vec2(imgCoord) + vec2(0.5)) / imageSize(u_Output).xy;
 
     vec3 value = texture(u_Input, coord).rgb;
-    //value = ToneMap(value);
+    vec3 bloom = texture(u_Bloom, coord).rgb;
+    value = mix(value, bloom, 0.35);
+
+    value = ToneMap(value);
     value = Vignette(value, coord);
 
     imageStore(u_Output, imgCoord, vec4(value, 1.0));

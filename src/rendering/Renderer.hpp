@@ -2,12 +2,13 @@
 
 #include "device/Device.hpp"
 #include "rendering/RenderSettings.hpp"
+#include "rendering/View.hpp"
 #include "scene/Scene.hpp"
 
 namespace lucent
 {
 
-using RenderPass = std::function<void(Context&, Scene&)>;
+using RenderPass = std::function<void(Context&, View&)>;
 
 class Renderer
 {
@@ -47,6 +48,8 @@ private:
     std::vector<Context*> m_ContextsPerFrame;
     Texture* m_PresentSrc;
     uint32_t m_FrameIndex;
+
+    View m_View;
 };
 
 }

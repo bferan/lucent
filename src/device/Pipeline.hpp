@@ -15,9 +15,11 @@ enum class PipelineType
 struct PipelineSettings
 {
     std::string shaderName;
+    std::vector<std::string_view> shaderDefines;
     PipelineType type = PipelineType::kGraphics;
     Framebuffer* framebuffer = nullptr;
     bool depthTestEnable = true;
+    bool depthWriteEnable = true;
     bool depthClampEnable = false;
 };
 

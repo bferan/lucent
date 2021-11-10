@@ -1,14 +1,17 @@
-
-layout(local_size_x=8, local_size_y=8) in;
+#include "Core.shader"
 
 layout(set=0, binding=0) uniform sampler2D u_AORaw;
 layout(set=0, binding=1, r32f) uniform image2D u_AODenoised;
+
+layout(local_size_x=8, local_size_y=8) in;
 
 void Compute()
 {
     ivec2 imgCoord = ivec2(gl_GlobalInvocationID.xy);
     vec2 invSize = 1.0 / vec2(imageSize(u_AODenoised).xy);
 
+    // Perform a manually unrolled box blur
+    // TODO: Use bilateral filtering
     vec2 coord0 = vec2(imgCoord) * invSize;
     vec2 coord1 = vec2(imgCoord + ivec2(0, 2)) * invSize;
     vec2 coord2 = vec2(imgCoord + ivec2(2, 0)) * invSize;
@@ -42,8 +45,6 @@ void Compute()
     value += v3.w;
 
     value /= 16.0;
-
-    //value = v0.x;
 
     imageStore(u_AODenoised, imgCoord, vec4(value, 0.0, 0.0, 1.0));
 }

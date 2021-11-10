@@ -38,22 +38,22 @@ HdrImporter::HdrImporter(Device* device)
     });
 
     m_RectToCube = m_Device->CreatePipeline(PipelineSettings{
-        .shaderName = "IBL/RectToCube.shader",
+        .shaderName = "RectToCube.shader",
         .framebuffer = m_Offscreen
     });
 
     m_GenIrradiance = m_Device->CreatePipeline(PipelineSettings{
-        .shaderName = "IBL/PrefilterIrradiance.shader",
+        .shaderName = "PrefilterIrradiance.shader",
         .framebuffer = m_Offscreen
     });
 
     m_GenSpecular = m_Device->CreatePipeline(PipelineSettings{
-        .shaderName = "IBL/PrefilterRadiance.shader",
+        .shaderName = "PrefilterRadiance.shader",
         .framebuffer = m_Offscreen
     });
 
     m_GenBRDF = m_Device->CreatePipeline(PipelineSettings{
-        .shaderName = "IBL/BRDF.shader",
+        .shaderName = "BRDF.shader",
         .framebuffer = m_Offscreen
     });
 }

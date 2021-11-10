@@ -31,51 +31,50 @@ GBuffer AddGeometryPass(Renderer& renderer)
         .width = width, .height = height, .format = TextureFormat::kDepth32F,
         .usage = TextureUsage::kDepthAttachment
     });
+    gBuffer.emissive = renderer.AddRenderTarget(TextureSettings{
+        .width = width, .height = height, .format = TextureFormat::kRGBA32F
+    });
 
-    auto framebuffer = renderer.AddFramebuffer(FramebufferSettings{
-        .colorTextures = { gBuffer.baseColor, gBuffer.normals, gBuffer.metalRoughness },
+    auto gFramebuffer = renderer.AddFramebuffer(FramebufferSettings{
+        .colorTextures = { gBuffer.baseColor, gBuffer.normals, gBuffer.metalRoughness, gBuffer.emissive },
         .depthTexture = gBuffer.depth
     });
 
     auto renderGeometry = renderer.AddPipeline(PipelineSettings{
         .shaderName = "GeometryPass.shader",
-        .framebuffer = framebuffer
+        .framebuffer = gFramebuffer
     });
 
-    renderer.AddPass("Geometry pass", [=](Context& ctx, Scene& scene)
+    renderer.AddPass("Geometry pass", [=](Context& ctx, View& view)
     {
-        auto& camera = scene.mainCamera.Get<Camera>();
-        auto view = camera.GetViewMatrix(scene.mainCamera.GetPosition());
-        auto proj = camera.GetProjectionMatrix();
-
-        ctx.BeginRenderPass(framebuffer);
+        ctx.BeginRenderPass(gFramebuffer);
         ctx.Clear();
 
         ctx.BindPipeline(renderGeometry);
+        view.BindUniforms(ctx);
 
-        scene.Each<ModelInstance, Transform>([&](ModelInstance& instance, Transform& local)
+        view.GetScene().Each<ModelInstance, Transform>([&](ModelInstance& instance, Transform& local)
         {
             for (auto& primitive: *instance.model)
             {
                 auto& mesh = primitive.mesh;
                 auto material = instance.material ? instance.material : primitive.material;
 
-                auto mv = view * local.model;
-                auto mvp = proj * mv;
-
-                // Bind globals
-                ctx.Uniform("u_MVP"_id, mvp);
-                ctx.Uniform("u_MV"_id, mv);
+                auto mv = view.GetViewMatrix() * local.model;
+                auto mvp = view.GetProjectionMatrix() * mv;
 
                 // Bind material data
                 material->BindUniforms(ctx);
+
+                // Bind per-draw data
+                ctx.Uniform("u_MVP"_id, mvp);
+                ctx.Uniform("u_MV"_id, mv);
 
                 ctx.BindBuffer(mesh.vertexBuffer);
                 ctx.BindBuffer(mesh.indexBuffer);
                 ctx.Draw(mesh.numIndices);
             }
         });
-
         ctx.EndRenderPass();
     });
 
@@ -86,7 +85,7 @@ Texture* AddGenerateHiZPass(Renderer& renderer, Texture* depthTexture)
 {
     auto& settings = renderer.GetSettings();
 
-    auto [baseWidth, baseHeight] = depthTexture->GetSize();
+    auto[baseWidth, baseHeight] = depthTexture->GetSize();
 
     auto levels = (uint32)Floor(Log2((float)Max(baseWidth, baseHeight))) + 1;
 
@@ -105,7 +104,7 @@ Texture* AddGenerateHiZPass(Renderer& renderer, Texture* depthTexture)
 
     auto buffer = renderer.GetTransferBuffer();
 
-    renderer.AddPass("Generate Hi-Z", [=](Context& ctx, Scene& scene)
+    renderer.AddPass("Generate Hi-Z", [=](Context& ctx, View& view)
     {
         // Copy depth texture to level 0 of color mip pyramid
         ctx.CopyTexture(depthTexture, 0, 0, buffer, 0, baseWidth, baseHeight);
@@ -121,16 +120,20 @@ Texture* AddGenerateHiZPass(Renderer& renderer, Texture* depthTexture)
             width = Max(width / 2u, 1u);
             height = Max(height / 2u, 1u);
 
+            auto offset = std::pair<int, int>(
+                width % 2 ? 2 : 1,
+                height % 2 ? 2 : 1);
+
             ctx.BindTexture("u_Input"_id, hiZ, level - 1);
             ctx.BindImage("u_Output"_id, hiZ, level);
+            ctx.Uniform("u_Offset"_id, offset);
 
-            auto [numX, numY] = settings.GetNumGroups(width, height);
+            auto[numX, numY] = settings.GetNumGroups(width, height);
             ctx.Dispatch(numX, numY, 1);
         }
     });
 
     return hiZ;
 }
-
 
 }

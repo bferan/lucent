@@ -71,9 +71,19 @@ struct TextureSettings
 class Texture
 {
 public:
-    const TextureSettings& GetSettings() const { return m_Settings; }
+    const TextureSettings& GetSettings() const
+    { return m_Settings; }
 
-    std::pair<uint32, uint32> GetSize() const { return {m_Settings.width, m_Settings.height}; }
+    std::pair<uint32, uint32> GetSize() const
+    { return { m_Settings.width, m_Settings.height }; }
+
+    std::pair<uint32, uint32> GetMipSize(uint32 level) const
+    {
+        auto[x, y] = GetSize();
+        x = Max(x >> level, 1u);
+        y = Max(y >> level, 1u);
+        return { x, y };
+    }
 
     virtual void Upload(size_t size, const void* data) = 0;
 

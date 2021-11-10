@@ -20,6 +20,7 @@ public:
     Color baseColorFactor = { 1.0f, 1.0f, 1.0f, 1.0f };
     float metallicFactor = 1.0f;
     float roughnessFactor = 1.0f;
+    float emissiveFactor = 1.0f;
 
     Texture* baseColorMap;
     Texture* metalRough;

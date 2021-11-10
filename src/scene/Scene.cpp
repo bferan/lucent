@@ -1,4 +1,6 @@
 #include "Scene.hpp"
+#include "rendering/PbrMaterial.hpp"
+#include "rendering/Geometry.hpp"
 
 namespace lucent
 {
@@ -10,7 +12,7 @@ Entity Scene::CreateEntity()
 
 void Scene::Destroy(Entity entity)
 {
-    for (auto& pool : m_ComponentPoolsByIndex)
+    for (auto& pool: m_ComponentPoolsByIndex)
     {
         if (pool && pool->Contains(entity.id))
             pool->Remove(entity.id);
@@ -33,25 +35,20 @@ Material* Scene::AddMaterial(std::unique_ptr<Material> material)
     return m_Materials.emplace_back(std::move(material)).get();
 }
 
-Material* Scene::GetDefaultMaterial() const
+Material* Scene::GetDefaultMaterial()
 {
-    return nullptr;
+    auto pbr = std::make_unique<PbrMaterial>();
+    pbr->baseColorFactor = Color::Gray();
+    pbr->metallicFactor = 0.0f;
+    pbr->roughnessFactor = 1.0f;
+
+    pbr->baseColorMap = g_WhiteTexture;
+    pbr->metalRough = g_GreenTexture;
+    pbr->normalMap = g_NormalTexture;
+    pbr->aoMap = g_WhiteTexture;
+    pbr->emissive = g_BlackTexture;
+
+    return AddMaterial(std::move(pbr));
 }
-
-//// Create default material
-//Material material{};
-//material.baseColorMap = g_WhiteTexture;
-//material.metalRough = g_GreenTexture;
-//material.normalMap = g_NormalTexture;
-//material.aoMap = g_WhiteTexture;
-//material.emissive = g_BlackTexture;
-//
-//material.baseColorFactor = Color::Gray();
-//material.metallicFactor = 0.0f;
-//material.roughnessFactor = 1.0f;
-//
-//mesh.materialIdx = scene.materials.size();
-//scene.materials.emplace_back(material);
-
 
 }

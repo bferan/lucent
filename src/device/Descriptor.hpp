@@ -1,5 +1,7 @@
 #pragma once
 
+#include "core/Hash.hpp"
+
 namespace lucent
 {
 

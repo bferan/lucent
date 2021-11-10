@@ -41,6 +41,7 @@ StaticMesh::~StaticMesh()
 {
     if (device)
     {
+        device->WaitIdle();
         device->DestroyBuffer(vertexBuffer);
         device->DestroyBuffer(indexBuffer);
     }

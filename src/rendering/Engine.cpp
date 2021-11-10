@@ -26,8 +26,7 @@ static void BuildDefaultSceneRenderer(Engine* engine, Renderer& renderer)
     auto hiZ = AddGenerateHiZPass(renderer, gBuffer.depth);
     auto shadowMoments = AddMomentShadowPass(renderer);
     auto gtao = AddGTAOPass(renderer, gBuffer, hiZ);
-    //auto ssr = AddScreenSpaceReflectionsPass(renderer, gBuffer, hiZ, sceneRadiance);
-    auto ssr = g_BlackTexture;
+    auto ssr = AddScreenSpaceReflectionsPass(renderer, gBuffer, hiZ, sceneRadiance);
 
     AddLightingPass(renderer, gBuffer, hiZ, sceneRadiance, shadowMoments, gtao, ssr);
     auto output = AddPostProcessPass(renderer, sceneRadiance);

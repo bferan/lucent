@@ -1,8 +1,6 @@
 #include "DebugOverlayPass.hpp"
 
-#include "device/Context.hpp"
 #include "rendering/Geometry.hpp"
-#include "scene/Camera.hpp"
 
 namespace lucent
 {
@@ -17,21 +15,19 @@ void AddDebugOverlayPass(Renderer& renderer, DebugConsole* console, Texture* out
     });
 
     auto debugTextShader = renderer.AddPipeline(PipelineSettings{
-        .shaderName = "DebugFont.shader", .framebuffer = overlayFramebuffer, .depthTestEnable = false
+        .shaderName = "DebugFont.shader", .framebuffer = overlayFramebuffer,
+        .depthTestEnable = false, .depthWriteEnable = false
     });
 
     auto debugShapeShader = renderer.AddPipeline(PipelineSettings{
-        .shaderName = "DebugShape.shader", .framebuffer = overlayFramebuffer, . depthTestEnable = false
+        .shaderName = "DebugShape.shader", .framebuffer = overlayFramebuffer,
+        . depthTestEnable = false, .depthWriteEnable = false
     });
 
     auto debugShapes = (DebugShapeBuffer*)renderer.GetDebugShapesBuffer()->Map();
 
-    renderer.AddPass("Debug overlay", [=](Context& ctx, Scene& scene)
+    renderer.AddPass("Debug overlay", [=](Context& ctx, View& view)
     {
-        auto& camera = scene.mainCamera.Get<Camera>();
-        auto view = camera.GetViewMatrix(scene.mainCamera.GetPosition());
-        auto proj = camera.GetProjectionMatrix();
-
         ctx.GetDevice()->WaitIdle();
 
         ctx.BeginRenderPass(overlayFramebuffer);
@@ -41,8 +37,7 @@ void AddDebugOverlayPass(Renderer& renderer, DebugConsole* console, Texture* out
         {
             auto& shape = debugShapes->shapes[i];
 
-            //
-            auto mvp = proj * view *
+            auto mvp = view.GetViewProjectionMatrix() *
                 Matrix4::Translation(Vector3(shape.srcPos)) *
                 Matrix4::Scale(shape.radius, shape.radius, shape.radius);
 

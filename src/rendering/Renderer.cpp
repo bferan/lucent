@@ -78,24 +78,25 @@ bool Renderer::Render(Scene& scene)
     auto& ctx = *m_ContextsPerFrame[m_FrameIndex % m_Settings.framesInFlight];
     auto device = ctx.GetDevice();
 
-    auto target = device->AcquireSwapchainImage();
+    // Configure view
+    m_View.SetScene(&scene);
 
+    // Begin rendering
+    auto target = device->AcquireSwapchainImage();
     ctx.Begin();
 
     for (auto& pass: m_RenderPasses)
     {
-        pass(ctx, scene);
+        pass(ctx, m_View);
     }
 
     ctx.BlitTexture(m_PresentSrc, 0, 0, target, 0, 0);
-
     ctx.End();
 
     m_Device->Submit(&ctx);
     auto success = m_Device->Present();
 
     ++m_FrameIndex;
-
     return success;
 }
 

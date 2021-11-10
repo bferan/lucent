@@ -228,7 +228,7 @@ void VulkanDevice::CreateDevice()
 
 Pipeline* VulkanDevice::CreatePipeline(const PipelineSettings& settings)
 {
-    auto shader = m_ShaderCache->Compile(settings.shaderName);
+    auto shader = m_ShaderCache->Compile(settings);
     LC_ASSERT(shader);
 
     return m_Pipelines.emplace_back(std::make_unique<VulkanPipeline>(this, shader, settings)).get();
@@ -244,7 +244,7 @@ void VulkanDevice::ReloadPipelines()
     vkDeviceWaitIdle(m_Handle);
     for (auto& pipeline: m_Pipelines)
     {
-        auto updatedShader = m_ShaderCache->Compile(pipeline->GetSettings().shaderName);
+        auto updatedShader = m_ShaderCache->Compile(pipeline->GetSettings());
         if (updatedShader)
         {
             if (pipeline->shader != updatedShader)

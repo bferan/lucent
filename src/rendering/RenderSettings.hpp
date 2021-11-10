@@ -10,7 +10,7 @@ struct RenderSettings
     uint32 viewportWidth = 1;
     uint32 viewportHeight = 1;
 
-    uint32 framesInFlight = 1;
+    uint32 framesInFlight = 3;
 
     uint32 defaultGroupSizeX = 8;
     uint32 defaultGroupSizeY = 8;

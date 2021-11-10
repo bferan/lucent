@@ -1,25 +1,18 @@
+#include "Core.shader"
+#include "View.shader"
 #include "VertexInput.shader"
 
-#define PI 3.14159265358979323846
-
-layout(location=0)
-
-// GBuffer
-layout(set=0, binding=0) uniform sampler2D u_BaseColor;
-layout(set=0, binding=1) uniform sampler2D u_Normal;
-layout(set=0, binding=2) uniform sampler2D u_MetalRough;
-layout(set=0, binding=3) uniform sampler2D u_Depth;
-
 layout(location=0) varying vec2 v_TexCoord;
-
 layout(location=0) out vec4 o_Color;
 
-layout(set=0, binding=4) uniform Globals
-{
-    vec4 u_ScreenToView;
-    mat4 u_ViewInv;
-};
+// GBuffer
+layout(set=1, binding=0) uniform sampler2D u_BaseColor;
+layout(set=1, binding=1) uniform sampler2D u_Normal;
+layout(set=1, binding=2) uniform sampler2D u_MetalRough;
+layout(set=1, binding=3) uniform sampler2D u_Depth;
+layout(set=1, binding=4) uniform sampler2D u_Emissive;
 
+// Analytical lights
 struct DirectionalLight
 {
     vec4 color;
@@ -30,32 +23,31 @@ struct DirectionalLight
     vec3 offset[3];
 };
 
-// Analytical lights
-layout(set=1, binding=0) uniform Lights
+struct PointLight
+{
+    vec4 color;
+    vec3 position;
+};
+
+layout(set=2, binding=0) uniform Lights
 {
     DirectionalLight u_DirectionalLight;
+
 };
 
 // Environment IBL
-layout(set=1, binding=1) uniform samplerCube u_EnvIrradiance;
-layout(set=1, binding=2) uniform samplerCube u_EnvSpecular;
-layout(set=1, binding=3) uniform sampler2D u_BRDF;
+layout(set=2, binding=1) uniform samplerCube u_EnvIrradiance;
+layout(set=2, binding=2) uniform samplerCube u_EnvSpecular;
+layout(set=2, binding=3) uniform sampler2D u_BRDF;
 
-layout(set=1, binding=4) uniform sampler2DArray u_ShadowMap;
-layout(set=1, binding=5) uniform sampler2D u_ScreenAO;
-layout(set=1, binding=6) uniform sampler2D u_ScreenReflections;
-
-vec3 ScreenToView(vec2 coord)
-{
-    float depth = textureLod(u_Depth, coord, 0.0).r;
-    float z = u_ScreenToView.w / (depth - u_ScreenToView.z);
-    vec2 pos = u_ScreenToView.xy * (coord - vec2(0.5)) * vec2(z);
-
-    return vec3(pos, z);
-}
+layout(set=2, binding=4) uniform sampler2DArray u_ShadowMap;
+layout(set=2, binding=5) uniform sampler2D u_ScreenAO;
+layout(set=2, binding=6) uniform sampler2D u_ScreenReflections;
 
 float GGX_G2_fSpec(float NdotL, float NdotV, float a2)
 {
+    a2 = max(a2, 0.0001);
+
     float i = max(NdotL, 0.0);
     float o = max(NdotV, 0.0);
 
@@ -73,7 +65,7 @@ const vec4 kMomentBiasTarget = vec4(0.0, 0.375, 0.0, 0.375);
 const float kMomentBiasWeight = 0.0000003;
 const float kIntensityScale = 1.02;
 
-float Shadow(vec3 coord, float depth)
+float CalculateMomentShadow(vec3 coord, float depth)
 {
     float z = depth * 2.0 - 1.0;
     z -= kDepthBias;
@@ -130,7 +122,7 @@ void Vertex()
 void Fragment()
 {
     vec2 coord = gl_FragCoord.xy / vec2(textureSize(u_BaseColor, 0).xy);
-    vec3 pos = ScreenToView(coord);
+    vec3 pos = ScreenToView(coord, textureLod(u_Depth, coord, 0).r);
     vec3 N = 2.0 * texture(u_Normal, coord).rgb - 1.0;
     vec3 V = normalize(-pos);
     float NdotV = dot(N, V);
@@ -190,8 +182,8 @@ void Fragment()
         vec3 blend = clamp(planes, 0.0, 1.0);
         float weight = beyond2 ? blend.y - blend.z : 1.0 - blend.x;
 
-        float shadow1 = Shadow(vec3(0.5 * coord1.xy + vec2(0.5), layer1), coord1.z);
-        float shadow2 = Shadow(vec3(0.5 * coord2.xy + vec2(0.5), layer2), coord2.z);
+        float shadow1 = CalculateMomentShadow(vec3(0.5 * coord1.xy + vec2(0.5), layer1), coord1.z);
+        float shadow2 = CalculateMomentShadow(vec3(0.5 * coord2.xy + vec2(0.5), layer2), coord2.z);
 
         float shadow = mix(shadow2, shadow1, weight);
         contrib *= shadow;
@@ -201,17 +193,20 @@ void Fragment()
 
     {
         // Environment lighting
-        vec3 Vworld =  mat3(u_ViewInv) * V;
+        vec3 Vworld =  mat3(u_ViewToWorld) * V;
         Vworld.y = -Vworld.y;
 
-        vec3 Nworld = mat3(u_ViewInv) * N;
+        vec3 Nworld = mat3(u_ViewToWorld) * N;
         Nworld.y = -Nworld.y;
 
         vec3 Rworld = 2.0 * dot(Vworld, Nworld)*Nworld - Vworld;
 
         vec2 brdf = texture(u_BRDF, vec2(NdotV, rough)).rg;
         vec3 envSpecular = textureLod(u_EnvSpecular, Rworld, rough * 5.0).rgb;
-        vec3 ssrSpecular = texture(u_ScreenReflections, coord).rgb;
+        vec4 ssrSpecular = texture(u_ScreenReflections, coord).rgba;
+
+        float ssrMix = clamp(ssrSpecular.a, 0.0, 1.0);
+        vec3 specular = mix(envSpecular, ssrSpecular.rgb, ssrMix);
 
         float fresnel = pow(1.0 - max(dot(Nworld, Vworld), 0.0), 5.0);
         vec3 fsRough = F0 + (max(vec3(1.0 - rough), F0) - F0) * fresnel;
@@ -219,13 +214,14 @@ void Fragment()
         vec3 kD = 1.0 - fsRough;
 
         vec3 ambient = kD * albedo * texture(u_EnvIrradiance, Nworld).rgb;
-        ambient += envSpecular * (F * brdf.x + brdf.y);
+        ambient += specular * (F * brdf.x + brdf.y);
 
         float ao = texture(u_ScreenAO, coord).r;
         shaded += ao * ambient;
-
-        //shaded = vec3(ao);
     }
+
+    // Emissive
+    shaded += texture(u_Emissive, coord).rgb;
 
     o_Color = vec4(shaded, 1.0);
 }

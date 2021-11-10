@@ -29,7 +29,7 @@ public:
     //! Add a material to the scene (scene takes ownership)
     Material* AddMaterial(std::unique_ptr<Material> material);
 
-    Material* GetDefaultMaterial() const;
+    Material* GetDefaultMaterial();
 
 public:
     Entity mainCamera;

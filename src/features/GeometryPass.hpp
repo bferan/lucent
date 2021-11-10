@@ -14,6 +14,7 @@ struct GBuffer
     Texture* depth;
     Texture* normals;
     Texture* metalRoughness;
+    Texture* emissive;
 };
 
 GBuffer AddGeometryPass(Renderer& renderer);

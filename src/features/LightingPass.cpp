@@ -1,9 +1,6 @@
 #include "LightingPass.hpp"
 
 #include "rendering/Geometry.hpp"
-#include "device/Context.hpp"
-#include "scene/Lighting.hpp"
-#include "scene/Camera.hpp"
 #include "scene/Transform.hpp"
 
 namespace lucent
@@ -39,34 +36,39 @@ void AddLightingPass(Renderer& renderer,
     Texture* screenReflections)
 {
     auto framebuffer = renderer.AddFramebuffer(FramebufferSettings{
-        .colorTextures = { sceneRadiance }
+        .colorTextures = { sceneRadiance },
+        .depthTexture = gBuffer.depth
     });
 
     auto lightingPipeline = renderer.AddPipeline(PipelineSettings{
         .shaderName = "LightingPass.shader",
-        .framebuffer = framebuffer
+        .framebuffer = framebuffer,
+        .depthTestEnable = false,
+        .depthWriteEnable = false
     });
 
-    renderer.AddPass("Lighting", [=](Context& ctx, Scene& scene)
-    {
-        auto& camera = scene.mainCamera.Get<Camera>();
-        auto view = camera.GetViewMatrix(scene.mainCamera.GetPosition());
-        auto proj = camera.GetProjectionMatrix();
-        auto invView = camera.GetInverseViewMatrix(scene.mainCamera.GetPosition());
+    auto skyboxPipeline = renderer.AddPipeline(PipelineSettings{
+        .shaderName = "Skybox.shader",
+        .framebuffer = framebuffer,
+        .depthWriteEnable = false
+    });
 
+    renderer.AddPass("Lighting", [=](Context& ctx, View& view)
+    {
         ctx.BeginRenderPass(framebuffer);
-        ctx.Clear();
 
         ctx.BindPipeline(lightingPipeline);
+        view.BindUniforms(ctx);
 
         // Bind directional light parameters
-        auto light = scene.mainDirectionalLight;
+        auto light = view.GetScene().mainDirectionalLight;
         auto& dirLight = light.Get<DirectionalLight>();
 
         DirectionalLightParams params{};
         params.color = dirLight.color;
-        params.direction = view * Vector4(light.Get<Transform>().TransformDirection(Vector3::Forward()), 0.0);
-        params.proj = dirLight.cascades[0].proj * camera.GetInverseViewMatrix(scene.mainCamera.GetPosition());
+        params.direction =
+            view.GetViewMatrix() * Vector4(light.Get<Transform>().TransformDirection(Vector3::Forward()), 0.0);
+        params.proj = dirLight.cascades[0].proj * view.GetInverseViewMatrix();
         for (int i = 1; i < DirectionalLight::kNumCascades; ++i)
         {
             auto& cascade = dirLight.cascades[i];
@@ -81,7 +83,7 @@ void AddLightingPass(Renderer& renderer,
         ctx.BindTexture("u_ShadowMap"_id, momentShadows);
 
         // Bind environment IBL parameters
-        auto& env = scene.environment;
+        auto& env = view.GetScene().environment;
         ctx.BindTexture("u_EnvIrradiance"_id, env.irradianceMap);
         ctx.BindTexture("u_EnvSpecular"_id, env.specularMap);
         ctx.BindTexture("u_BRDF"_id, env.BRDF);
@@ -92,13 +94,7 @@ void AddLightingPass(Renderer& renderer,
         ctx.BindTexture("u_Normal"_id, gBuffer.normals);
         ctx.BindTexture("u_MetalRough"_id, gBuffer.metalRoughness);
         ctx.BindTexture("u_Depth"_id, depth);
-
-        ctx.Uniform("u_ScreenToView"_id, Vector4(
-            2.0f * (1.0f / proj(0, 0)),
-            2.0f * (1.0f / proj(1, 1)),
-            proj(2, 2), proj(2, 3)));
-
-        ctx.Uniform("u_ViewInv"_id, invView);
+        ctx.BindTexture("u_Emissive"_id, gBuffer.emissive);
 
         ctx.BindBuffer(g_Quad.indices);
         ctx.BindBuffer(g_Quad.vertices);
@@ -106,6 +102,23 @@ void AddLightingPass(Renderer& renderer,
 
         ctx.EndRenderPass();
     });
+
+    renderer.AddPass("Skybox", [=](Context& ctx, View& view)
+    {
+        ctx.BeginRenderPass(framebuffer);
+
+        ctx.BindPipeline(skyboxPipeline);
+        view.BindUniforms(ctx);
+
+        ctx.BindTexture("u_Skybox"_id, view.GetScene().environment.cubeMap);
+
+        ctx.BindBuffer(g_Cube.indices);
+        ctx.BindBuffer(g_Cube.vertices);
+        ctx.Draw(g_Cube.numIndices);
+
+        ctx.EndRenderPass();
+    });
+
 }
 
 }
