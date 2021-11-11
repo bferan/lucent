@@ -32,6 +32,10 @@ techniques atop an extensible hardware layer which will accommodate additional b
 
 ## Screenshots
 
+![Bust](https://raw.githubusercontent.com/bferan/bferan.github.io/master/assets/img/LucentBustThumb.png)
+![Hall](https://raw.githubusercontent.com/bferan/bferan.github.io/master/assets/img/LucentCorridorThumb.png)
+![Robot](https://raw.githubusercontent.com/bferan/bferan.github.io/master/assets/img/LucentRobotThumb.png)
+
 ## Examples
 
 #### High-level usage
