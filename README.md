@@ -1,7 +1,6 @@
 
 <p align="center">
-<img width="400" src="https://user-images.githubusercontent.
-com/25774113/140317991-d574013e-2761-4c99-a546-5272fb8645d3.png" alt="Vue logo">
+<img width="400" src="https://user-images.githubusercontent.com/25774113/140318368-10ecdd0a-0ea6-4a96-b3b5-aa7a540c84b5.png" alt="Lucent logo">
 </p>
 
 <p align="center">
