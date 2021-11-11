@@ -164,7 +164,7 @@ Texture* AddMomentShadowPass(Renderer& renderer)
     });
 
     auto resolveDepth = renderer.AddPipeline(PipelineSettings{
-        .shaderName = "ResolveMoments.shader",
+        .shaderName = "MomentShadowResolve.shader",
         .framebuffer = momentMapLayers.back()
     });
 

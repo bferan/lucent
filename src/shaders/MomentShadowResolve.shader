@@ -5,7 +5,7 @@ layout(location=0) out vec4 o_Moments;
 uniform layout(set=0, binding=0) sampler2DMS u_Depth;
 
 const uint kSampleCount = 8;
-const float kWeight = 1.0/float(kSampleCount);
+const float kWeight = 1.0 / float(kSampleCount);
 
 vec4 CalculateMoments(float depth)
 {
@@ -19,6 +19,7 @@ void Vertex()
     gl_Position = vec4(a_Position, 1.0);
 }
 
+// Resolves a vector of depth moments from a multisample depth buffer
 void Fragment()
 {
     vec4 moments = vec4(0);

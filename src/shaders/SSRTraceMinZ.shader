@@ -5,6 +5,14 @@ layout(set=1, binding=0) uniform sampler2D u_MinZ;
 layout(set=1, binding=1) uniform sampler2D u_Normals;
 layout(set=1, binding=3, rgba32f) uniform image2D u_Result;
 
+const float kCrossingBias = 0.00001;
+const int kStopLevel = 0;
+const int kMaxLevel = 10;
+const int kMaxIterations = 128;
+
+const float kLinearDepthThreshold = 0.1;
+const vec3 kScreenLimit = vec3(0.9999);
+
 vec3 IntersectBounds(vec3 pos, vec3 dir, int level, vec2 cellOffset, vec2 cellBias, out float distance)
 {
     vec2 numCells = vec2(textureSize(u_MinZ, level));
@@ -14,6 +22,7 @@ vec3 IntersectBounds(vec3 pos, vec3 dir, int level, vec2 cellOffset, vec2 cellBi
     vec2 boundaryDist = (cell - pos.xy) / dir.xy;
     distance = min(boundaryDist.x, boundaryDist.y);
 
+    // Advance ray pos into next cell, and add a small bias to ensure it's not placed on the border
     pos += distance * dir;
     pos.xy += (boundaryDist.x < boundaryDist.y) ? vec2(cellBias.x, 0.0) : vec2(0.0, cellBias.y);
 
@@ -28,11 +37,43 @@ vec3 SnapToCell(vec3 pos, int level)
     return vec3(cell.xy, pos.z);
 }
 
-const float kCrossingBias = 0.00001;
-const int kStopLevel = 0;
-const int kMaxLevel = 10;
-const int kMaxIterations = 128;
-const float kBias = 0.0;
+vec2 TraceRay(vec3 screenPos, vec3 screenDir, vec2 cellOffset, vec2 cellBias)
+{
+    // Trace ray through the depth pyramid
+    int level = 0;
+    int iterations = 0;
+    float boundaryDist = 0.0;
+    float depthDist = 0.0;
+    float depthPlane = 0.0;
+    float startDepth = screenPos.z;
+
+    screenPos = SnapToCell(screenPos, level);
+    screenPos = IntersectBounds(screenPos, screenDir, level, cellOffset, cellBias, boundaryDist);
+
+    while (level >= kStopLevel && iterations < kMaxIterations)
+    {
+        vec3 boundaryPos = IntersectBounds(screenPos, screenDir, level, cellOffset, cellBias, boundaryDist);
+
+        depthPlane = textureLod(u_MinZ, screenPos.xy, level).r;
+        depthDist = (depthPlane - screenPos.z) / screenDir.z;
+
+        if (screenPos.z < depthPlane && (boundaryDist < depthDist || screenDir.z < 0))
+        {
+            screenPos = boundaryPos;
+            level = min(level + 2, kMaxLevel);
+        }
+        level--;
+        iterations++;
+    }
+    float linearDiff = GetLinearDepth(screenPos.z) - GetLinearDepth(depthPlane);
+
+    vec2 result = screenPos.xy;
+    if (startDepth == 1.0 || any(greaterThanEqual(abs(screenPos), kScreenLimit)) || linearDiff > kLinearDepthThreshold)
+    {
+        result = vec2(0.0);
+    }
+    return result;
+}
 
 layout(local_size_x=8, local_size_y=8) in;
 
@@ -61,38 +102,7 @@ void Compute()
     vec2 cellOffset = vec2((screenDir.x > 0.0) ? 1.0 : 0.0, (screenDir.y > 0.0) ? 1.0 : 0.0);
     vec2 cellBias = kCrossingBias * vec2(vec2(-1.0) + 2.0 * cellOffset);
 
-    // Trace ray through the depth pyramid
-    int level = 0;
-    int iterations = 0;
-    float boundaryDist = 0.0;
-    float depthDist = 0.0;
-    float depthPlane = 0.0;
+    vec2 result = TraceRay(screenPos, screenDir, cellOffset, cellBias);
 
-    screenPos = SnapToCell(screenPos, level);
-    screenPos = IntersectBounds(screenPos, screenDir, level, cellOffset, cellBias, boundaryDist);
-
-    while (level >= kStopLevel && iterations < kMaxIterations)
-    {
-        vec3 boundaryPos = IntersectBounds(screenPos, screenDir, level, cellOffset, cellBias, boundaryDist);
-
-        depthPlane = textureLod(u_MinZ, screenPos.xy, level).r;
-        depthDist = (depthPlane - screenPos.z) / screenDir.z;
-
-        if (screenPos.z < depthPlane && (boundaryDist < depthDist || screenDir.z < 0))
-        {
-            screenPos = boundaryPos;
-            level = min(level + 2, kMaxLevel);
-        }
-        level--;
-        iterations++;
-    }
-
-    float linearDiff = GetLinearDepth(screenPos.z) - GetLinearDepth(depthPlane);
-
-    vec4 result = vec4(screenPos.xy, 0.0, 0.0);
-    if (nonlinearDepth == 1.0 || any(greaterThanEqual(abs(screenPos), 0.9999.rrr)) || linearDiff > 0.1)
-    {
-        result = vec4(0.0);
-    }
-    imageStore(u_Result, imgCoord, result);
+    imageStore(u_Result, imgCoord, vec4(result, 0.0, 1.0));
 }

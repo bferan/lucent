@@ -49,6 +49,7 @@ Texture* AddPostProcessPass(Renderer& renderer, Texture* sceneRadiance)
 
     auto computeOutput = renderer.AddPipeline(PipelineSettings{
         .shaderName = "PostProcessOutput.shader",
+        .shaderDefines = { "PP_BLOOM", "PP_TONEMAP", "PP_VIGNETTE" },
         .type = PipelineType::kCompute
     });
 
@@ -79,7 +80,7 @@ Texture* AddPostProcessPass(Renderer& renderer, Texture* sceneRadiance)
             ctx.BindImage("u_Output"_id, bloomUpsampleMips, srcMip - 1);
 
             ctx.Uniform("u_FilterRadius"_id, 0.05f);
-            ctx.Uniform("u_Strength"_id, 0.5f);
+            ctx.Uniform("u_Strength"_id, 0.35f);
 
             auto[width, height] = bloomUpsampleMips->GetMipSize(srcMip - 1);
             auto[groupsX, groupsY] = settings.ComputeGroupCount(width, height);
@@ -97,6 +98,11 @@ Texture* AddPostProcessPass(Renderer& renderer, Texture* sceneRadiance)
         ctx.BindTexture("u_Input"_id, sceneRadiance);
         ctx.BindTexture("u_Bloom"_id, bloomUpsampleMips, 0);
         ctx.BindImage("u_Output"_id, output);
+
+        ctx.Uniform("u_BloomStrength"_id, 0.35f);
+
+        ctx.Uniform("u_VignetteIntensity"_id, 15.0f);
+        ctx.Uniform("u_VignetteExtent"_id, 0.25f);
 
         auto[numX, numY] = settings.ComputeGroupCount(settings.viewportWidth, settings.viewportHeight);
         ctx.Dispatch(numX, numY, 1);

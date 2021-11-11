@@ -1,4 +1,4 @@
-#include "VertexInput"
+#include "VertexInput.shader"
 
 layout(location=0) varying vec2 v_UV;
 layout(location=1) varying vec4 v_Color;

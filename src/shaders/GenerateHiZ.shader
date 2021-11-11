@@ -10,12 +10,13 @@ layout(set=0, binding=2) uniform Parameters
     ivec2 u_Offset;
 };
 
+// Perform min filtering on input texture
 void Compute()
 {
-    // Perform min filtering on input texture
     ivec2 dstCoord = ivec2(gl_GlobalInvocationID.xy);
     ivec2 srcCoord = dstCoord * ivec2(2);
 
+    // Offset to sample positions enables better filtering of NPOT textures
     vec4 depths;
     depths.x = texelFetch(u_Input, srcCoord, 0).r;
     depths.y = texelFetch(u_Input, srcCoord + ivec2(u_Offset.x, 0), 0).r;

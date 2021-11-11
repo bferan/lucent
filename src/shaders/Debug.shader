@@ -1,6 +1,4 @@
-/* ---------- Debug -------- */
 const uint kMaxDebugShapes = 1024;
-
 const uint kDebugSphere = 0;
 const uint kDebugRay = 1;
 
@@ -25,6 +23,7 @@ layout(set=1, binding=1) uniform DebugGlobals
     mat4 u_ViewToWorld;
 };
 
+// Draw a sphere at world-space coordinates
 void DebugDrawSphere(vec3 pos, float r, vec4 color)
 {
     uint entry = atomicAdd(d_NumShapes, 1u);
@@ -40,6 +39,7 @@ void DebugDrawSphere(vec3 pos, float r, vec4 color)
     }
 }
 
+// Draw a ray between world space positions
 void DebugDrawRay(vec3 srcPos, vec3 dstPos, vec4 color)
 {
     uint entry = atomicAdd(d_NumShapes, 1u);
@@ -54,4 +54,3 @@ void DebugDrawRay(vec3 srcPos, vec3 dstPos, vec4 color)
         d_Shapes[entry] = shape;
     }
 }
-/* ------------------------- */

@@ -27,9 +27,8 @@ techniques atop an extensible hardware layer which will accommodate additional b
 - [x] Cascaded, moment-based shadow mapping
 - [x] Screen-space reflections
 - [x] Screen-space ground truth ambient occlusion (GTAO)
-- [x] Postprocessing: HDR tonemapping, vignette
+- [x] Postprocessing: HDR tonemapping, vignette and bloom
 - [ ] Temporal antialiasing (WIP)
-- [ ] Additional postprocessing effects (bloom, film grain...) (WIP)
 
 ## Screenshots
 
