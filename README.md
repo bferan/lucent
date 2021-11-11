@@ -34,6 +34,14 @@ techniques atop an extensible hardware layer which can accommodate additional ba
 ![Hall](https://raw.githubusercontent.com/bferan/bferan.github.io/master/assets/img/LucentCorridorThumb.png)
 ![Robot](https://raw.githubusercontent.com/bferan/bferan.github.io/master/assets/img/LucentRobotThumb.png)
 
+Model Credits:
+
+"Marble Bust 01" & "Classic Console 01" (CC0 https://polyhaven.com/) </br>
+"Spaceship Corridor" (https://skfb.ly/6GHqT) by the_table </br>
+"Robo_OBJ_pose4" (https://skfb.ly/m4ifca) by Artem Shupa-Dubrova </br>
+
+<br/>
+
 ## Examples
 
 #### High-level usage
