@@ -70,9 +70,9 @@ void AddLightingPass(Renderer& renderer,
 
         DirectionalLightParams params{};
         params.color = dirLight.color;
-        params.direction =
-            view.GetViewMatrix() * Vector4(light.Get<Transform>().TransformDirection(Vector3::Forward()), 0.0);
-        params.proj = dirLight.cascades[0].proj * view.GetInverseViewMatrix();
+        params.direction = view.GetViewMatrix() * Vector4(light.Get<Transform>()
+            .TransformDirection(Vector3::Forward()), 0.0);
+        params.proj = dirLight.cascades[0].projection * view.GetInverseViewMatrix();
         for (int i = 1; i < DirectionalLight::kNumCascades; ++i)
         {
             auto& cascade = dirLight.cascades[i];

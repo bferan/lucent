@@ -3,6 +3,7 @@
 namespace lucent
 {
 
+//! Wraps dynamic mesh data which can be uploaded and baked into a StaticMesh
 class Mesh
 {
 public:
@@ -24,10 +25,14 @@ public:
     }
 
     void AddVertex(Vertex vertex)
-    { vertices.push_back(vertex); };
+    {
+        vertices.push_back(vertex);
+    };
 
     void AddIndex(uint32 index)
-    { indices.push_back(index); }
+    {
+        indices.push_back(index);
+    }
 
 public:
     std::vector<Vertex> vertices;

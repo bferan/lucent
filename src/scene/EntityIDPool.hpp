@@ -16,9 +16,10 @@ struct EntityID
 
 inline bool operator==(EntityID lhs, EntityID rhs)
 {
-    return lhs.index == rhs.index && lhs.version == rhs.version;
+    return (uint32)lhs.index == rhs.index && (uint32)lhs.version == rhs.version;
 }
 
+//! Generates and recycles entity identifiers
 class EntityIDPool
 {
 public:

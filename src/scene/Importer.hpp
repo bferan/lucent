@@ -14,6 +14,8 @@ namespace lucent
 
 class Device;
 
+//! Imports entities, models and textures from a file
+//! Currently supports gLTF binary and JSON formats
 class Importer
 {
 public:

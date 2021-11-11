@@ -14,19 +14,23 @@ namespace lucent
 class Scene
 {
 public:
+    //! Allocate a new entity with no components
     Entity CreateEntity();
+
+    //! Recycle an entity and destroy all its components
     void Destroy(Entity entity);
 
+    //! Retrieve entity from identifier
     Entity Find(EntityID id);
 
     //! Iterate over all entities with given components
     template<typename... Cs, typename F>
     void Each(F&& func);
 
-    //! Add a model to the scene (scene takes ownership)
+    //! Add a model to the scene (takes ownership)
     Model* AddModel(std::unique_ptr<Model> model);
 
-    //! Add a material to the scene (scene takes ownership)
+    //! Add a material to the scene (takes ownership)
     Material* AddMaterial(std::unique_ptr<Material> material);
 
     Material* GetDefaultMaterial();
@@ -132,6 +136,5 @@ bool Entity::Has() const
 {
     return scene->GetPool<T>().Contains(id);
 }
-
 
 }

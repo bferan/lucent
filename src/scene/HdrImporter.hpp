@@ -7,6 +7,7 @@
 namespace lucent
 {
 
+//! Processes HDRi images for use as environment lighting
 class HdrImporter
 {
 public:

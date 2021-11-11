@@ -5,7 +5,7 @@ namespace lucent
 
 Matrix4 Camera::GetProjectionMatrix() const
 {
-    return Matrix4::Perspective(verticalFov, aspectRatio, near, far);
+    return Matrix4::Perspective(verticalFov, aspectRatio, nearPlane, farPlane);
 }
 
 Matrix4 Camera::GetViewMatrix(Vector3 position) const

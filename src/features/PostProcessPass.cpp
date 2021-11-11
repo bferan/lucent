@@ -5,19 +5,13 @@
 namespace lucent
 {
 
-Texture* AddPostProcessPass(Renderer& renderer, Texture* sceneRadiance)
+static Texture* AddBloomPass(Renderer& renderer, Texture* sceneRadiance)
 {
     auto& settings = renderer.GetSettings();
 
-    auto output = renderer.AddRenderTarget(TextureSettings{
-        .width = settings.viewportWidth,
-        .height = settings.viewportHeight,
-        .format = TextureFormat::kRGBA8,
-        .usage = TextureUsage::kReadWrite
-    });
-
-    constexpr uint32 kSkipMips = 2u;
-    auto bloomMips = (uint32)Floor(Log2((float)Max(settings.viewportWidth, settings.viewportHeight))) - kSkipMips;
+    // Skip 1, 2 and 4 pixel wide bloom mips
+    constexpr uint32 kSkipMips = 3u;
+    auto bloomMips = (uint32)Floor(Log2((float)Max(settings.viewportWidth, settings.viewportHeight))) + 1 - kSkipMips;
     bloomMips = Max(bloomMips, 1u);
 
     auto bloomMipSettings = TextureSettings{
@@ -44,12 +38,6 @@ Texture* AddPostProcessPass(Renderer& renderer, Texture* sceneRadiance)
     auto bloomUpsample = renderer.AddPipeline(PipelineSettings{
         .shaderName = "Bloom.shader",
         .shaderDefines = { "BLOOM_UPSAMPLE" },
-        .type = PipelineType::kCompute
-    });
-
-    auto computeOutput = renderer.AddPipeline(PipelineSettings{
-        .shaderName = "PostProcessOutput.shader",
-        .shaderDefines = { "PP_BLOOM", "PP_TONEMAP", "PP_VIGNETTE" },
         .type = PipelineType::kCompute
     });
 
@@ -89,20 +77,45 @@ Texture* AddPostProcessPass(Renderer& renderer, Texture* sceneRadiance)
             // Rest of inputs are from upsample chain
             input = bloomUpsampleMips;
         }
+    });
+    return bloomUpsampleMips;
+}
 
+Texture* AddPostProcessPass(Renderer& renderer, Texture* sceneRadiance)
+{
+    auto& settings = renderer.GetSettings();
+
+    // TODO: Expose as settings
+    const float kBloomStrength = 0.35f;
+    const float kVignetteIntensity = 15.0f;
+    const float kVignetteExtent = 0.25f;
+
+    auto bloomOutput = AddBloomPass(renderer, sceneRadiance);
+
+    auto output = renderer.AddRenderTarget(TextureSettings{
+        .width = settings.viewportWidth,
+        .height = settings.viewportHeight,
+        .format = TextureFormat::kRGBA8,
+        .usage = TextureUsage::kReadWrite
+    });
+
+    auto computeOutput = renderer.AddPipeline(PipelineSettings{
+        .shaderName = "PostProcessOutput.shader",
+        .shaderDefines = { "PP_BLOOM", "PP_TONEMAP", "PP_VIGNETTE" },
+        .type = PipelineType::kCompute
     });
 
     renderer.AddPass("Post-process Output", [=, &settings](Context& ctx, View& view)
     {
         ctx.BindPipeline(computeOutput);
         ctx.BindTexture("u_Input"_id, sceneRadiance);
-        ctx.BindTexture("u_Bloom"_id, bloomUpsampleMips, 0);
+        ctx.BindTexture("u_Bloom"_id, bloomOutput, 0);
         ctx.BindImage("u_Output"_id, output);
 
-        ctx.Uniform("u_BloomStrength"_id, 0.35f);
+        ctx.Uniform("u_BloomStrength"_id, kBloomStrength);
 
-        ctx.Uniform("u_VignetteIntensity"_id, 15.0f);
-        ctx.Uniform("u_VignetteExtent"_id, 0.25f);
+        ctx.Uniform("u_VignetteIntensity"_id, kVignetteIntensity);
+        ctx.Uniform("u_VignetteExtent"_id, kVignetteExtent);
 
         auto[numX, numY] = settings.ComputeGroupCount(settings.viewportWidth, settings.viewportHeight);
         ctx.Dispatch(numX, numY, 1);

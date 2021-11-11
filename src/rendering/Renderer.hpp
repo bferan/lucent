@@ -10,6 +10,9 @@ namespace lucent
 
 using RenderPass = std::function<void(Context&, View&)>;
 
+//! Manages a set of render passes and render targets
+//! Allows for render passes to be expressed as stateless functions which
+//! add data and functors to be executed later.
 class Renderer
 {
 public:

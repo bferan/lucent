@@ -2,9 +2,9 @@
 
 layout(set=0, binding=1) uniform samplerCube u_EnvCube;
 
-vec3 Radiance(vec3 dir)
+vec3 Radiance(vec3 direction)
 {
-    vec3 color = texture(u_EnvCube, dir).rgb;
+    vec3 color = texture(u_EnvCube, direction).rgb;
     color = clamp(color, vec3(0.0), kMaxRadiance);
     return color;
 }

@@ -17,19 +17,13 @@ static void CalculateCascades(View& view)
     auto& lightOrigin = scene.mainDirectionalLight.Get<Transform>();
     auto& light = scene.mainDirectionalLight.Get<DirectionalLight>();
 
-    auto camToWorld =
-        Matrix4::Translation(cameraOrigin.position) *
-            Matrix4::RotationY(camera.yaw) *
-            Matrix4::RotationX(camera.pitch) *
-            Matrix4::RotationX(kPi); // Flip axes
+    auto camToWorld = view.GetInverseViewMatrix();
 
-    auto worldToLight =
-        Matrix4::RotationX(kPi) * // Flip axes
-            Matrix4::Rotation(lightOrigin.rotation.Inverse());
+    auto worldToLight = Matrix4::RotationX(kPi) * // Flip axes
+        Matrix4::Rotation(lightOrigin.rotation.Inverse());
 
-    auto lightToWorld =
-        Matrix4::Rotation(lightOrigin.rotation) *
-            Matrix4::RotationX(kPi); // Flip axes
+    auto lightToWorld = Matrix4::Rotation(lightOrigin.rotation) *
+        Matrix4::RotationX(kPi); // Flip axes
 
     auto camToLight = worldToLight * camToWorld;
 
@@ -41,8 +35,8 @@ static void CalculateCascades(View& view)
         auto bottomRight = Vector3(camera.aspectRatio, 1.0f, focalLength);
         auto topLeft = Vector3(-camera.aspectRatio, -1.0f, focalLength);
 
-        auto back = (camera.near + cascade.start) / focalLength;
-        auto front = (camera.near + cascade.end) / focalLength;
+        auto back = (camera.nearPlane + cascade.start) / focalLength;
+        auto front = (camera.nearPlane + cascade.end) / focalLength;
 
         auto backBottomRight = back * bottomRight;
         auto frontBottomRight = front * bottomRight;
@@ -65,7 +59,7 @@ static void CalculateCascades(View& view)
             {
                 for (auto y: { -1.0f, 1.0f })
                 {
-                    auto camPos = ((camera.near + dist) / focalLength) * Vector3(x, y, focalLength);
+                    auto camPos = ((camera.nearPlane + dist) / focalLength) * Vector3(x, y, focalLength);
                     auto lightPos = Vector3(camToLight * Vector4(camPos, 1.0f));
 
                     minPos = Min(minPos, lightPos);
@@ -77,23 +71,23 @@ static void CalculateCascades(View& view)
         auto alignedX = Floor((0.5f * (minPos.x + maxPos.x)) / texelSize) * texelSize;
         auto alignedY = Floor((0.5f * (minPos.y + maxPos.y)) / texelSize) * texelSize;
 
-        cascade.pos = Vector3(lightToWorld * Vector4(alignedX, alignedY, minPos.z, 1.0));
+        cascade.position = Vector3(lightToWorld * Vector4(alignedX, alignedY, minPos.z, 1.0));
         cascade.width = diameter;
         cascade.depth = maxPos.z - minPos.z;
 
-        cascade.proj = Matrix4::Orthographic(cascade.width, cascade.width, cascade.depth) *
+        cascade.projection = Matrix4::Orthographic(cascade.width, cascade.width, cascade.depth) *
             Matrix4::RotationX(kPi) *
             Matrix4::Rotation(lightOrigin.rotation.Inverse()) *
-            Matrix4::Translation(-cascade.pos);
+            Matrix4::Translation(-cascade.position);
 
         // Compute offset and scale to convert cascade-0 coords into this cascade's coord space
-        auto dPos = light.cascades[0].pos - cascade.pos;
+        auto deltaPosition = light.cascades[0].position - cascade.position;
 
-        auto rot = Matrix4::Rotation(lightOrigin.rotation.Inverse());
-        dPos = Vector3(rot * Vector4(dPos, 1.0f));
-        dPos *= Vector3(2.0f / cascade.width, -2.0f / cascade.width, -1.0f / cascade.depth);
+        auto rotation = Matrix4::Rotation(lightOrigin.rotation.Inverse());
+        deltaPosition = Vector3(rotation * Vector4(deltaPosition, 1.0f));
+        deltaPosition *= Vector3(2.0f / cascade.width, -2.0f / cascade.width, -1.0f / cascade.depth);
 
-        cascade.offset = dPos;
+        cascade.offset = deltaPosition;
 
         auto dWidth = light.cascades[0].width / cascade.width;
         auto dDepth = light.cascades[0].depth / cascade.depth;
@@ -102,7 +96,7 @@ static void CalculateCascades(View& view)
         // Compute plane at front of this cascade
         auto camNormal = Vector3(0.0, 0.0, 1.0);
         auto camPos = Vector3::Zero();
-        camPos += (camera.near + cascade.start) * camNormal;
+        camPos += (camera.nearPlane + cascade.start) * camNormal;
 
         auto camD = camNormal.Dot(camPos);
         cascade.frontPlane = Vector4(camNormal, -camD);
@@ -113,6 +107,7 @@ Texture* AddMomentShadowPass(Renderer& renderer)
 {
     auto& settings = renderer.GetSettings();
 
+    // TODO: Expose these as custom settings
     uint32 width = 2048;
     uint32 samples = 8;
     uint32 numCascades = 4;
@@ -185,10 +180,10 @@ Texture* AddMomentShadowPass(Renderer& renderer)
             ctx.BindPipeline(depthOnly);
             view.GetScene().Each<ModelInstance, Transform>([&](ModelInstance& instance, Transform& local)
             {
-                for (auto& primitive : *instance.model)
+                for (auto& primitive: *instance.model)
                 {
                     auto& mesh = primitive.mesh;
-                    auto mvp = cascade.proj * local.model;
+                    auto mvp = cascade.projection * local.model;
                     ctx.Uniform("u_MVP"_id, mvp);
 
                     ctx.BindBuffer(mesh.vertexBuffer);

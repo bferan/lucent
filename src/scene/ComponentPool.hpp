@@ -18,7 +18,6 @@ struct ComponentMeta
 template<typename T>
 class ComponentPool;
 
-
 class ComponentPoolBase
 {
 public:
@@ -35,21 +34,28 @@ public:
 
 public:
     auto begin()
-    { return m_DenseArray.begin(); }
+    {
+        return m_DenseArray.begin();
+    }
     auto end()
-    { return m_DenseArray.end(); }
+    {
+        return m_DenseArray.end();
+    }
 
 protected:
     std::vector<uint32> m_SparseArray{};
     std::vector<EntityID> m_DenseArray{};
 };
 
+//! A contiguous container of components associated with an entity through sparse arrays
 template<typename T>
 class ComponentPool : public ComponentPoolBase
 {
 public:
     static ComponentID ID()
-    { return ComponentMeta::s_ID<T>; }
+    {
+        return ComponentMeta::s_ID<T>;
+    }
 
     ~ComponentPool() override = default;
 

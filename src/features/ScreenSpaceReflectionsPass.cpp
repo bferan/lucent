@@ -3,6 +3,63 @@
 namespace lucent
 {
 
+static Texture* AddBlurPass(Renderer& renderer, Texture* input)
+{
+    auto& settings = renderer.GetSettings();
+    auto[width, height] = input->GetSize();
+
+    auto levels = (uint32)Floor(Log2((float)Max(width, height))) + 1;
+
+    auto convolvedInput = renderer.AddRenderTarget(TextureSettings{
+        .width = width, .height = height, .levels = levels,
+        .format = TextureFormat::kRGBA32F,
+        .usage = TextureUsage::kReadWrite,
+    });
+
+    auto tempTargetSettings = TextureSettings{
+        .width = width / 2, .height = height / 2, .levels = levels - 1,
+        .format = TextureFormat::kRGBA32F,
+        .addressMode = TextureAddressMode::kClampToEdge,
+        .usage = TextureUsage::kReadWrite,
+    };
+    auto downsampleTarget = renderer.AddRenderTarget(tempTargetSettings);
+    auto blurTarget = renderer.AddRenderTarget(tempTargetSettings);
+
+    auto blurHorizontal = renderer.AddPipeline(PipelineSettings{
+        .shaderName = "SSRConvolve.shader", .shaderDefines = { "BLUR_HORIZONTAL" }, .type = PipelineType::kCompute
+    });
+    auto blurVertical = renderer.AddPipeline(PipelineSettings{
+        .shaderName = "SSRConvolve.shader", .shaderDefines = { "BLUR_VERTICAL" }, .type = PipelineType::kCompute
+    });
+
+    renderer.AddPass("SSR pre-convolve", [=, &settings](Context& ctx, View& view)
+    {
+        ctx.BlitTexture(input, 0, 0, convolvedInput, 0, 0);
+
+        for (int mip = 0; mip < levels - 1; ++mip)
+        {
+            // Downsample
+            ctx.BlitTexture(convolvedInput, 0, 0, downsampleTarget, 0, mip);
+
+            auto[mipWidth, mipHeight] = downsampleTarget->GetMipSize(mip);
+            auto[groupsX, groupsY] = settings.ComputeGroupCount(mipWidth, mipHeight);
+
+            // Horizontal blur
+            ctx.BindPipeline(blurHorizontal);
+            ctx.BindTexture("u_Input"_id, downsampleTarget, mip);
+            ctx.BindImage("u_Output"_id, blurTarget, mip);
+            ctx.Dispatch(groupsX, groupsY, 1);
+
+            // Vertical blur & output
+            ctx.BindPipeline(blurVertical);
+            ctx.BindTexture("u_Input"_id, blurTarget, mip);
+            ctx.BindImage("u_Output"_id, convolvedInput, mip + 1);
+            ctx.Dispatch(groupsX, groupsY, 1);
+        }
+    });
+    return convolvedInput;
+}
+
 Texture* AddScreenSpaceReflectionsPass(Renderer& renderer, GBuffer gBuffer, Texture* minZ, Texture* prevColor)
 {
     auto& settings = renderer.GetSettings();
@@ -35,55 +92,7 @@ Texture* AddScreenSpaceReflectionsPass(Renderer& renderer, GBuffer gBuffer, Text
     });
 
     // Scene blurring
-    auto levels = (uint32)Floor(Log2((float)Max(width, height))) + 1;
-
-    auto convolvedScene = renderer.AddRenderTarget(TextureSettings{
-        .width = width, .height = height, .levels = levels,
-        .format = TextureFormat::kRGBA32F,
-        .usage = TextureUsage::kReadWrite,
-    });
-
-    auto tempTargetSettings = TextureSettings{
-        .width = width / 2, .height = height / 2, .levels = levels - 1,
-        .format = TextureFormat::kRGBA32F,
-        .addressMode = TextureAddressMode::kClampToEdge,
-        .usage = TextureUsage::kReadWrite,
-    };
-    auto downsampleTarget = renderer.AddRenderTarget(tempTargetSettings);
-    auto blurTarget = renderer.AddRenderTarget(tempTargetSettings);
-
-    auto blurHorizontal = renderer.AddPipeline(PipelineSettings{
-        .shaderName = "SSRConvolve.shader", .shaderDefines = { "BLUR_HORIZONTAL" }, .type = PipelineType::kCompute
-    });
-    auto blurVertical = renderer.AddPipeline(PipelineSettings{
-        .shaderName = "SSRConvolve.shader", .shaderDefines = { "BLUR_VERTICAL" }, .type = PipelineType::kCompute
-    });
-
-    renderer.AddPass("SSR pre-convolve", [=, &settings](Context& ctx, View& view)
-    {
-        ctx.BlitTexture(prevColor, 0, 0, convolvedScene, 0, 0);
-
-        for (int mip = 0; mip < levels - 1; ++mip)
-        {
-            // Downsample
-            ctx.BlitTexture(convolvedScene, 0, 0, downsampleTarget, 0, mip);
-
-            auto[mipWidth, mipHeight] = downsampleTarget->GetMipSize(mip);
-            auto[groupsX, groupsY] = settings.ComputeGroupCount(mipWidth, mipHeight);
-
-            // Horizontal blur
-            ctx.BindPipeline(blurHorizontal);
-            ctx.BindTexture("u_Input"_id, downsampleTarget, mip);
-            ctx.BindImage("u_Output"_id, blurTarget, mip);
-            ctx.Dispatch(groupsX, groupsY, 1);
-
-            // Vertical blur & output
-            ctx.BindPipeline(blurVertical);
-            ctx.BindTexture("u_Input"_id, blurTarget, mip);
-            ctx.BindImage("u_Output"_id, convolvedScene, mip + 1);
-            ctx.Dispatch(groupsX, groupsY, 1);
-        }
-    });
+    auto convolvedScene = AddBlurPass(renderer, prevColor);
 
     // Resolve/reproject
     auto resolvedReflections = renderer.AddRenderTarget(TextureSettings{
