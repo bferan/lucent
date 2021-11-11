@@ -1,6 +1,6 @@
 #include "Scene.hpp"
 #include "rendering/PbrMaterial.hpp"
-#include "rendering/Geometry.hpp"
+#include "rendering/Engine.hpp"
 
 namespace lucent
 {
@@ -37,16 +37,18 @@ Material* Scene::AddMaterial(std::unique_ptr<Material> material)
 
 Material* Scene::GetDefaultMaterial()
 {
+    auto& settings = Engine::Instance()->GetRenderSettings();
+
     auto pbr = std::make_unique<PbrMaterial>();
     pbr->baseColorFactor = Color::Gray();
     pbr->metallicFactor = 0.0f;
     pbr->roughnessFactor = 1.0f;
 
-    pbr->baseColorMap = g_WhiteTexture;
-    pbr->metalRough = g_GreenTexture;
-    pbr->normalMap = g_NormalTexture;
-    pbr->aoMap = g_WhiteTexture;
-    pbr->emissive = g_BlackTexture;
+    pbr->baseColorMap = settings.defaultWhiteTexture;
+    pbr->metalRough = settings.defaultGreenTexture;
+    pbr->normalMap = settings.defaultNormalTexture;
+    pbr->aoMap = settings.defaultWhiteTexture;
+    pbr->emissive = settings.defaultBlackTexture;
 
     return AddMaterial(std::move(pbr));
 }

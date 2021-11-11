@@ -46,6 +46,7 @@ VulkanBuffer::VulkanBuffer(VulkanDevice* dev, BufferType bufType, size_t bufSize
     , allocation()
     , type(bufType)
     , capacity(bufSize)
+    , mappedPointer(nullptr)
 {
     auto allocInfo = VmaAllocationCreateInfo{
         .usage = VMA_MEMORY_USAGE_CPU_TO_GPU
@@ -62,53 +63,51 @@ VulkanBuffer::VulkanBuffer(VulkanDevice* dev, BufferType bufType, size_t bufSize
 
 VulkanBuffer::~VulkanBuffer()
 {
+    if (mappedPointer)
+        VulkanBuffer::Unmap();
+
     vmaDestroyBuffer(device->GetAllocator(), handle, allocation);
 }
 
 void VulkanBuffer::Upload(const void* data, size_t size, size_t offset)
 {
     LC_ASSERT(offset + size <= capacity);
+    auto allocator = device->GetAllocator();
 
     uint8* ptr;
-    vmaMapMemory(device->m_Allocator, allocation, (void**)&ptr);
+    vmaMapMemory(allocator, allocation, (void**)&ptr);
     ptr += offset;
     memcpy(ptr, data, size);
-    vmaUnmapMemory(device->m_Allocator, allocation);
-    vmaFlushAllocation(device->m_Allocator, allocation, offset, size);
+    vmaUnmapMemory(allocator, allocation);
+    vmaFlushAllocation(allocator, allocation, offset, size);
 }
 
 void VulkanBuffer::Clear(size_t size, size_t offset)
 {
     LC_ASSERT(offset + size <= capacity);
+    auto allocator = device->GetAllocator();
 
     uint8* ptr;
-    vmaMapMemory(device->m_Allocator, allocation, (void**)&ptr);
+    vmaMapMemory(allocator, allocation, (void**)&ptr);
     ptr += offset;
     memset(ptr, 0, size);
-    vmaUnmapMemory(device->m_Allocator, allocation);
-    vmaFlushAllocation(device->m_Allocator, allocation, offset, size);
+    vmaUnmapMemory(allocator, allocation);
+    vmaFlushAllocation(allocator, allocation, offset, size);
 }
 
 void* VulkanBuffer::Map()
 {
-    void* data;
-    LC_CHECK(vmaMapMemory(device->m_Allocator, allocation, &data));
-    return data;
+    if (!mappedPointer)
+    {
+        LC_CHECK(vmaMapMemory(device->GetAllocator(), allocation, &mappedPointer));
+    }
+    return mappedPointer;
 }
 
 void VulkanBuffer::Unmap()
 {
-    vmaUnmapMemory(device->m_Allocator, allocation);
-}
-
-void VulkanBuffer::Flush(size_t size, size_t offset)
-{
-    vmaFlushAllocation(device->m_Allocator, allocation, offset, size);
-}
-
-void VulkanBuffer::Invalidate(size_t size, size_t offset)
-{
-    vmaInvalidateAllocation(device->m_Allocator, allocation, offset, size);
+    vmaUnmapMemory(device->GetAllocator(), allocation);
+    mappedPointer = nullptr;
 }
 
 BufferType VulkanBuffer::GetType()

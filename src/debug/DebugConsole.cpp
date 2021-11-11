@@ -54,7 +54,7 @@ void DebugConsole::GenerateMesh()
     y += 2 * lineHeight;
 
     // Render text log
-    for (auto& entry : m_Entries)
+    for (auto& entry: m_Entries)
     {
         if (y > kMaxScreenY)
             break;
@@ -68,7 +68,7 @@ void DebugConsole::GenerateMesh()
         if (!m_Active)
             color.a *= Clamp(entry.lifetime, 0.0f, 1.0f);
 
-        for (auto c : entry.text)
+        for (auto c: entry.text)
         {
             bool newLine = c == '\n';
             if (newLine || col == m_MaxColumns)
@@ -97,7 +97,7 @@ void DebugConsole::AddEntry(std::string text, Color color)
 {
     // Count lines according to column width
     int lines = 1, column = 0;
-    for (char c : text)
+    for (char c: text)
     {
         if (c == '\n' || column == m_MaxColumns)
         {
@@ -150,7 +150,7 @@ void DebugConsole::Update(const InputState& input, float dt)
             if (!text.empty())
                 AddEntry(text);
 
-            // TODO: REMOVE
+            // TODO: Temporary commands, remove these or implement as more robust commands
             if (text == "q")
                 exit(0);
 
@@ -172,7 +172,7 @@ void DebugConsole::Update(const InputState& input, float dt)
     }
 
     // Fade out new entries
-    for (auto& entry : m_Entries)
+    for (auto& entry: m_Entries)
     {
         if (entry.lifetime <= 0.0f)
             break;

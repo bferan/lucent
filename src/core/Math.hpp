@@ -10,6 +10,8 @@ constexpr float kPi = 3.14159265358979323846;
 constexpr float k2Pi = kPi * 2.0f;
 constexpr float kHalfPi = kPi / 2.0f;
 
+// Math wrapper functions:
+
 inline float Sqrt(float x)
 {
     return std::sqrt(x);
@@ -115,17 +117,6 @@ template<typename T>
 T Max(T a, T b)
 {
     return a < b ? b : a;
-}
-
-// Temporary RNG implementation
-inline float RandF()
-{
-    return (float)std::rand() / RAND_MAX;
-}
-
-inline int Rand()
-{
-    return std::rand();
 }
 
 }

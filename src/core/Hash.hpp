@@ -22,7 +22,7 @@ struct FNVTraits<uint64>
     static constexpr uint64 kOffset = 14695981039346656037u;
 };
 
-// Currently supports 32 & 64 bit FNV-1a hashing
+//! Performs 32 & 64 bit FNV-1a hashing
 template<typename T>
 constexpr T Hash(std::string_view string, T offset = FNVTraits<T>::kOffset)
 {

@@ -312,6 +312,11 @@ VulkanTexture::~VulkanTexture()
     vkDestroyImageView(device->GetHandle(), imageView, nullptr);
     vkDestroySampler(device->GetHandle(), sampler, nullptr);
 
+    for (auto view : mipViews)
+    {
+        vkDestroyImageView(device->GetHandle(), view, nullptr);
+    }
+
     if (m_Settings.usage != TextureUsage::kPresentSrc)
     {
         vmaDestroyImage(device->GetAllocator(), image, alloc);

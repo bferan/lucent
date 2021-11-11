@@ -2,7 +2,6 @@
 
 #include "device/vulkan/VulkanFramebuffer.hpp"
 #include "device/vulkan/VulkanDevice.hpp"
-#include "rendering/Geometry.hpp"
 #include "rendering/Mesh.hpp"
 
 namespace lucent
@@ -69,6 +68,7 @@ void VulkanPipeline::InitGraphics()
         }
     };
 
+    // TODO: Allow user to configure vertex format
     VkVertexInputAttributeDescription vertexAttributeInfos[] = {
         {
             .location = 0,

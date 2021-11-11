@@ -17,8 +17,6 @@ public:
     void Clear(size_t size, size_t offset) override;
     void* Map() override;
     void Unmap() override;
-    void Flush(size_t size, size_t offset) override;
-    void Invalidate(size_t size, size_t offset) override;
     BufferType GetType() override;
 
 public:
@@ -27,6 +25,7 @@ public:
     VmaAllocation allocation;
     BufferType type;
     size_t capacity;
+    void* mappedPointer;
 };
 
 }

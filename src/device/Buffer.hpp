@@ -22,9 +22,6 @@ public:
     virtual void* Map() = 0;
     virtual void Unmap() = 0;
 
-    virtual void Flush(size_t size, size_t offset) = 0;
-    virtual void Invalidate(size_t size, size_t offset) = 0;
-
     virtual BufferType GetType() = 0;
 };
 

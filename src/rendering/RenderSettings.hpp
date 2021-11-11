@@ -7,14 +7,20 @@ namespace lucent
 
 struct RenderSettings
 {
-    uint32 viewportWidth = 1;
-    uint32 viewportHeight = 1;
+public:
+    std::pair<uint32, uint32> ComputeGroupCount(uint32 width, uint32 height) const;
+
+    void InitializeDefaultResources(Device* device);
+
+public:
+    uint32 viewportWidth = 1600;
+    uint32 viewportHeight = 900;
+    const char* viewportName = "Lucent";
 
     uint32 framesInFlight = 3;
 
     uint32 defaultGroupSizeX = 8;
     uint32 defaultGroupSizeY = 8;
-    std::pair<uint32, uint32> GetNumGroups(uint32 width, uint32 height) const;
 
     Texture* defaultBlackTexture;
     Texture* defaultWhiteTexture;
@@ -22,12 +28,10 @@ struct RenderSettings
     Texture* defaultGreenTexture;
     Texture* defaultNormalTexture;
 
-    // Cube mesh
-    // Quad mesh
-    // Sphere mesh
-
-    // BRDF LUT texture
-    // Blue noise texture
+    using DefaultMesh = std::unique_ptr<StaticMesh>;
+    DefaultMesh cubeMesh;
+    DefaultMesh quadMesh;
+    DefaultMesh sphereMesh;
 };
 
 }

@@ -11,7 +11,7 @@
 #include "features/MomentShadowPass.hpp"
 #include "features/PostProcessPass.hpp"
 #include "features/DebugOverlayPass.hpp"
-#include "rendering/Geometry.hpp"
+#include "rendering/RenderSettings.hpp"
 #include "scene/Camera.hpp"
 #include "scene/Transform.hpp"
 
@@ -36,7 +36,32 @@ static void BuildDefaultSceneRenderer(Engine* engine, Renderer& renderer)
     renderer.AddPresentPass(output);
 }
 
-Engine::Engine()
+std::unique_ptr<Engine> Engine::s_Engine;
+
+Engine* Engine::Init(RenderSettings settings)
+{
+    if (!s_Engine)
+    {
+        s_Engine = std::unique_ptr<Engine>(new Engine(std::move(settings)));
+    }
+    return s_Engine.get();
+}
+
+Engine* Engine::Instance()
+{
+    LC_ASSERT(s_Engine && "requires initialization!");
+    return s_Engine.get();
+}
+
+// TODO: Remove or extract to separate file
+// Ideally user provides existing window to the engine, might have to change debug functions in this case
+class Window
+{
+public:
+    GLFWwindow* window;
+};
+
+Engine::Engine(RenderSettings settings)
 {
     // Set up GLFW
     if (!glfwInit())
@@ -44,19 +69,18 @@ Engine::Engine()
 
     // Create window
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    m_Window = glfwCreateWindow(
-        1600, 900,
-        "Lucent",
-        nullptr, nullptr);
 
-    LC_ASSERT(m_Window != nullptr);
+    m_Window = std::make_unique<Window>(Window{
+        glfwCreateWindow((int)settings.viewportWidth, (int)settings.viewportHeight, "Lucent", nullptr, nullptr)
+    });
+    LC_ASSERT(m_Window->window != nullptr);
 
-    m_Device = std::make_unique<VulkanDevice>(m_Window);
-    m_Input = std::make_unique<Input>(m_Window);
+    m_Device = std::make_unique<VulkanDevice>(m_Window->window);
+    m_Input = std::make_unique<Input>(m_Window->window);
     m_Console = std::make_unique<DebugConsole>(*this, 120);
 
-    RenderSettings settings{ .viewportWidth = 1600, .viewportHeight = 900 };
-    m_SceneRenderer = std::make_unique<Renderer>(m_Device.get(), settings);
+    settings.InitializeDefaultResources(m_Device.get());
+    m_SceneRenderer = std::make_unique<Renderer>(m_Device.get(), std::move(settings));
     m_BuildSceneRenderer = BuildDefaultSceneRenderer;
 
     m_BuildSceneRenderer(this, *m_SceneRenderer);
@@ -64,12 +88,12 @@ Engine::Engine()
 
 bool Engine::Update()
 {
-    if (glfwWindowShouldClose(m_Window))
+    if (glfwWindowShouldClose(m_Window->window))
         return false;
 
     glfwPollEvents();
     double time = glfwGetTime();
-    float dt = time - m_LastUpdateTime;
+    auto dt = float(time - m_LastUpdateTime);
 
     UpdateDebug(dt);
     if (!m_SceneRenderer->Render(*m_ActiveScene))
@@ -80,16 +104,15 @@ bool Engine::Update()
         m_Device->RebuildSwapchain();
 
         int width, height;
-        glfwGetFramebufferSize(m_Window, &width, &height);
+        glfwGetFramebufferSize(m_Window->window, &width, &height);
 
-        auto settings = m_SceneRenderer->GetSettings();
+        auto& settings = m_SceneRenderer->GetSettings();
         settings.viewportWidth = width;
         settings.viewportHeight = height;
 
         m_ActiveScene->mainCamera.Get<Camera>().aspectRatio = (float)width / (float)height;
 
         m_SceneRenderer->Clear();
-        m_SceneRenderer->SetSettings(settings);
         m_BuildSceneRenderer(this, *m_SceneRenderer);
     };
     m_Input->Reset();
@@ -118,6 +141,8 @@ void Engine::UpdateDebug(float dt)
     {
         m_ActiveScene->Each<Transform, Camera>([&](auto& transform, auto& camera)
         {
+            // TODO: Remove temporary camera movement controls to debug camera
+
             // Update camera pos
             const float hSensitivity = 0.8f;
             const float vSensitivity = 1.0f;
@@ -139,22 +164,14 @@ void Engine::UpdateDebug(float dt)
             if (input.KeyDown(LC_KEY_SPACE)) velocityWorld += Vector3::Up();
             if (input.KeyDown(LC_KEY_LEFT_SHIFT)) velocityWorld += Vector3::Down();
 
-            float multiplier = input.KeyDown(LC_KEY_LEFT_CONTROL) ? 3.0f : 1.0f;
+            constexpr float kFlySpeedMultiplier = 3.0f;
+            float multiplier = input.KeyDown(LC_KEY_LEFT_CONTROL) ? kFlySpeedMultiplier : 1.0f;
 
             const float speed = 5.0f;
             transform.position += dt * speed * multiplier * velocityWorld;
         });
     }
-
-    if (input.KeyPressed(LC_KEY_R))
-        m_Device->ReloadPipelines();
-
-    if (input.KeyPressed(LC_KEY_B))
-    {
-        LC_INFO("Start breakpoint!");
-    }
-
-    // Update console
+    // Update debug console
     m_Console->Update(input, dt);
 }
 
@@ -166,6 +183,11 @@ DebugConsole* Engine::GetConsole()
 Input& Engine::GetInput()
 {
     return *m_Input;
+}
+
+const RenderSettings& Engine::GetRenderSettings()
+{
+    return m_SceneRenderer->GetSettings();
 }
 
 }

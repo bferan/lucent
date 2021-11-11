@@ -53,8 +53,10 @@ VulkanContext::VulkanContext(VulkanDevice& device)
 
 VulkanContext::~VulkanContext()
 {
-    m_ScratchUniformBuffers.ForEach([this](Buffer* buffer) { m_Device.DestroyBuffer(buffer); });
-    m_DescriptorPools.ForEach([this](auto pool) { vkDestroyDescriptorPool(m_Device.GetHandle(), pool, nullptr); });
+    m_ScratchUniformBuffers.ForEach([this](Buffer* buffer)
+    { m_Device.DestroyBuffer(buffer); });
+    m_DescriptorPools.ForEach([this](auto pool)
+    { vkDestroyDescriptorPool(m_Device.GetHandle(), pool, nullptr); });
 
     vkFreeCommandBuffers(m_Device.m_Handle, m_CommandPool, 1, &m_CommandBuffer);
     vkDestroyCommandPool(m_Device.m_Handle, m_CommandPool, nullptr);
@@ -615,6 +617,7 @@ VkDescriptorSet VulkanContext::FindDescriptorSet(const BindingArray& bindings, V
 
 VkDescriptorPool VulkanContext::AllocateDescriptorPool() const
 {
+    // TODO: Fine tune these from profiling data, or dynamically size them
     VkDescriptorPoolSize descPoolSizes[] = {
         {
             .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,

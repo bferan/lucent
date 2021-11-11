@@ -1,6 +1,5 @@
 #include "DebugOverlayPass.hpp"
-
-#include "rendering/Geometry.hpp"
+#include "rendering/Engine.hpp"
 
 namespace lucent
 {
@@ -25,6 +24,7 @@ void AddDebugOverlayPass(Renderer& renderer, DebugConsole* console, Texture* out
     });
 
     auto debugShapes = (DebugShapeBuffer*)renderer.GetDebugShapesBuffer()->Map();
+    auto sphere = settings.sphereMesh.get();
 
     renderer.AddPass("Debug overlay", [=](Context& ctx, View& view)
     {
@@ -44,9 +44,9 @@ void AddDebugOverlayPass(Renderer& renderer, DebugConsole* console, Texture* out
             ctx.Uniform("u_MVP"_id, mvp);
             ctx.Uniform("u_Color"_id, shape.color);
 
-            ctx.BindBuffer(g_Sphere.vertices);
-            ctx.BindBuffer(g_Sphere.indices);
-            ctx.Draw(g_Sphere.numIndices);
+            ctx.BindBuffer(sphere->vertexBuffer);
+            ctx.BindBuffer(sphere->indexBuffer);
+            ctx.Draw(sphere->numIndices);
         }
 
         ctx.BindPipeline(debugTextShader);

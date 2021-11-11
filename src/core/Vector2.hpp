@@ -10,28 +10,28 @@ struct Vector2
 public:
     inline static Vector2 Up()
     {
-        return Vector2(0.0f, 1.0f);
+        return { 0.0f, 1.0f };
     }
     inline static Vector2 Down()
     {
-        return Vector2(0.0f, -1.0f);
+        return { 0.0f, -1.0f };
     }
     inline static Vector2 Right()
     {
-        return Vector2(1.0f, 0.0f);
+        return { 1.0f, 0.0f };
     }
     inline static Vector2 Left()
     {
-        return Vector2(-1.0f, 0.0f);
+        return { -1.0f, 0.0f };
     }
 
     inline static Vector2 One()
     {
-        return Vector2(1.0f, 1.0f);
+        return { 1.0f, 1.0f };
     }
     inline static Vector2 Zero()
     {
-        return Vector2(0.0f, 0.0f);
+        return { 0.0f, 0.0f };
     }
 
 public:
@@ -109,7 +109,7 @@ inline Vector2 operator*(Vector2 lhs, const Vector2& rhs)
 
 inline Vector2 operator-(const Vector2& rhs)
 {
-    return Vector2(-rhs.x, -rhs.y);
+    return { -rhs.x, -rhs.y };
 }
 
 inline Vector2 operator+(Vector2 lhs, const Vector2& rhs)

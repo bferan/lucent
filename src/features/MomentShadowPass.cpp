@@ -1,6 +1,5 @@
 #include "MomentShadowPass.hpp"
 
-#include "rendering/Geometry.hpp"
 #include "scene/Transform.hpp"
 #include "scene/Camera.hpp"
 #include "scene/ModelInstance.hpp"
@@ -169,6 +168,8 @@ Texture* AddMomentShadowPass(Renderer& renderer)
         .framebuffer = momentMapLayers.back()
     });
 
+    auto quad = settings.quadMesh.get();
+
     renderer.AddPass("Shadow map render depth MS", [=](Context& ctx, View& view)
     {
         CalculateCascades(view);
@@ -212,9 +213,9 @@ Texture* AddMomentShadowPass(Renderer& renderer)
             ctx.BindPipeline(resolveDepth);
             ctx.BindTexture("u_Depth"_id, depthTexture);
 
-            ctx.BindBuffer(g_Quad.vertices);
-            ctx.BindBuffer(g_Quad.indices);
-            ctx.Draw(g_Quad.numIndices);
+            ctx.BindBuffer(quad->vertexBuffer);
+            ctx.BindBuffer(quad->indexBuffer);
+            ctx.Draw(quad->numIndices);
 
             ctx.EndRenderPass();
         }

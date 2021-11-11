@@ -1,5 +1,7 @@
 #pragma once
 
+// Precompiled common headers
+
 #include <algorithm>
 #include <string>
 #include <string_view>

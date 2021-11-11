@@ -5,9 +5,9 @@
 namespace lucent
 {
 
-Renderer::Renderer(Device* device, const RenderSettings& settings)
+Renderer::Renderer(Device* device, RenderSettings settings)
     : m_Device(device)
-    , m_Settings(settings)
+    , m_Settings(std::move(settings))
     , m_FrameIndex(0)
 {
     m_TransferBuffer = m_Device->CreateBuffer(BufferType::kStaging, 64 * 1024 * 1024);
@@ -49,7 +49,7 @@ Buffer* Renderer::GetTransferBuffer()
     return m_TransferBuffer;
 }
 
-const RenderSettings& Renderer::GetSettings()
+RenderSettings& Renderer::GetSettings()
 {
     return m_Settings;
 }
@@ -98,11 +98,6 @@ bool Renderer::Render(Scene& scene)
 
     ++m_FrameIndex;
     return success;
-}
-
-void Renderer::SetSettings(const RenderSettings& settings)
-{
-    m_Settings = settings;
 }
 
 Buffer* Renderer::GetDebugShapesBuffer()

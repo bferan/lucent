@@ -30,7 +30,7 @@ Texture* AddGTAOPass(Renderer& renderer, GBuffer gBuffer, Texture* hiZ)
         .type = PipelineType::kCompute
     });
 
-    renderer.AddPass("Compute GTAO", [=](Context& ctx, View& view)
+    renderer.AddPass("Compute GTAO", [=, &settings](Context& ctx, View& view)
     {
         ctx.BindPipeline(computeGTAO);
         view.BindUniforms(ctx);
@@ -41,18 +41,18 @@ Texture* AddGTAOPass(Renderer& renderer, GBuffer gBuffer, Texture* hiZ)
 
         ctx.Uniform("u_ViewToScreenZ"_id, 0.5f * view.GetProjectionMatrix()(1, 1));
 
-        auto[numX, numY] = settings.GetNumGroups(width, height);
+        auto[numX, numY] = settings.ComputeGroupCount(width, height);
         ctx.Dispatch(numX, numY, 1);
     });
 
-    renderer.AddPass("Denoise GTAO", [=](Context& ctx, View& view)
+    renderer.AddPass("Denoise GTAO", [=, &settings](Context& ctx, View& view)
     {
         ctx.BindPipeline(denoiseGTAO);
 
         ctx.BindTexture("u_AORaw"_id, aoResult);
         ctx.BindImage("u_AODenoised"_id, aoDenoised);
 
-        auto[numX, numY] = settings.GetNumGroups(width, height);
+        auto[numX, numY] = settings.ComputeGroupCount(width, height);
         ctx.Dispatch(numX, numY, 1);
     });
 

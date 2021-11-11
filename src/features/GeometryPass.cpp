@@ -104,7 +104,7 @@ Texture* AddGenerateHiZPass(Renderer& renderer, Texture* depthTexture)
 
     auto buffer = renderer.GetTransferBuffer();
 
-    renderer.AddPass("Generate Hi-Z", [=](Context& ctx, View& view)
+    renderer.AddPass("Generate Hi-Z", [=, &settings](Context& ctx, View& view)
     {
         // Copy depth texture to level 0 of color mip pyramid
         ctx.CopyTexture(depthTexture, 0, 0, buffer, 0, baseWidth, baseHeight);
@@ -128,7 +128,7 @@ Texture* AddGenerateHiZPass(Renderer& renderer, Texture* depthTexture)
             ctx.BindImage("u_Output"_id, hiZ, level);
             ctx.Uniform("u_Offset"_id, offset);
 
-            auto[numX, numY] = settings.GetNumGroups(width, height);
+            auto[numX, numY] = settings.ComputeGroupCount(width, height);
             ctx.Dispatch(numX, numY, 1);
         }
     });

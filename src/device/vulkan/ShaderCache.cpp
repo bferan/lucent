@@ -524,7 +524,7 @@ bool ShaderCache::PopulateShaderModules(VulkanShader& shader,
             .pCode = m_SpirvBuffer.data()
         };
 
-        auto result = vkCreateShaderModule(m_Device->m_Handle, &moduleInfo, nullptr, &shader.stages[i].module);
+        auto result = vkCreateShaderModule(m_Device->GetHandle(), &moduleInfo, nullptr, &shader.stages[i].module);
         if (result != VK_SUCCESS)
         {
             log.Error("Failed to create Vulkan shader module");
@@ -579,7 +579,7 @@ bool ShaderCache::PopulateShaderLayout(VulkanShader& shader, const PipelineLayou
         };
 
         VkPipelineLayout pipelineLayout;
-        auto result = vkCreatePipelineLayout(m_Device->m_Handle, &pipelineLayoutInfo, nullptr, &pipelineLayout);
+        auto result = vkCreatePipelineLayout(m_Device->GetHandle(), &pipelineLayoutInfo, nullptr, &pipelineLayout);
         LC_ASSERT(result == VK_SUCCESS);
 
         it = m_PipelineLayouts.insert(it, { shader.setLayouts, pipelineLayout });
@@ -598,12 +598,12 @@ void ShaderCache::Clear()
 
     for (auto&[layout, vkLayout]: m_SetLayouts)
     {
-        vkDestroyDescriptorSetLayout(m_Device->m_Handle, vkLayout, nullptr);
+        vkDestroyDescriptorSetLayout(m_Device->GetHandle(), vkLayout, nullptr);
     }
 
     for (auto&[layout, vkLayout]: m_PipelineLayouts)
     {
-        vkDestroyPipelineLayout(m_Device->m_Handle, vkLayout, nullptr);
+        vkDestroyPipelineLayout(m_Device->GetHandle(), vkLayout, nullptr);
     }
 }
 
@@ -611,7 +611,7 @@ void ShaderCache::FreeResources(VulkanShader* shader)
 {
     for (auto& stage: shader->stages)
     {
-        vkDestroyShaderModule(m_Device->m_Handle, stage.module, nullptr);
+        vkDestroyShaderModule(m_Device->GetHandle(), stage.module, nullptr);
     }
 }
 
@@ -645,7 +645,7 @@ VkDescriptorSetLayout ShaderCache::FindSetLayout(const SetLayout& layout)
     };
 
     VkDescriptorSetLayout setLayout;
-    auto result = vkCreateDescriptorSetLayout(m_Device->m_Handle,
+    auto result = vkCreateDescriptorSetLayout(m_Device->GetHandle(),
         &setLayoutInfo,
         nullptr,
         &setLayout);

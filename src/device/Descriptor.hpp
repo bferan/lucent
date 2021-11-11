@@ -18,7 +18,7 @@ inline constexpr DescriptorID operator ""_id(const char* name, size_t size)
     return { hash, nameView };
 }
 
-/// A named slot exposed by a Pipeline to bind graphics resources or uniform values
+//! A named slot exposed by a Pipeline to bind graphics resources or uniform values
 struct Descriptor
 {
     uint32 hash: 32;

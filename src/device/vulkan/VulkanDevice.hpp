@@ -47,6 +47,8 @@ public:
 
 private:
     friend class VulkanContext;
+    friend class VulkanSwapchain;
+    friend class VulkanTexture;
 
     void CreateInstance();
     void CreateDevice();
@@ -59,7 +61,7 @@ private:
         const VkDebugUtilsMessengerCallbackDataEXT* callbackData,
         void* userData);
 
-public:
+private:
     GLFWwindow* m_Window;
     VkInstance m_Instance{};
     VkDevice m_Handle{};
@@ -78,7 +80,6 @@ public:
     DeviceQueue m_PresentQueue{};
 
     std::vector<std::unique_ptr<VulkanPipeline>> m_Pipelines;
-
     std::vector<std::unique_ptr<VulkanBuffer>> m_Buffers;
     std::vector<std::unique_ptr<VulkanTexture>> m_Textures;
     std::vector<std::unique_ptr<VulkanFramebuffer>> m_Framebuffers;

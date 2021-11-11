@@ -10,7 +10,6 @@
 #include "device/vulkan/VulkanContext.hpp"
 #include "device/vulkan/VulkanFramebuffer.hpp"
 #include "device/vulkan/ShaderCache.hpp"
-#include "rendering/Geometry.hpp"
 
 namespace lucent
 {
@@ -41,8 +40,6 @@ VulkanDevice::VulkanDevice(GLFWwindow* window)
     m_ShaderCache = std::make_unique<ShaderCache>(this);
 
     m_Swapchain = std::make_unique<VulkanSwapchain>(this);
-
-    InitGeometry(this);
 }
 
 VulkanDevice::~VulkanDevice()

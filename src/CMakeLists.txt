@@ -74,8 +74,6 @@ target_sources(lucent PRIVATE
 
         rendering/Engine.cpp
         rendering/Engine.hpp
-        rendering/Geometry.cpp
-        rendering/Geometry.hpp
         rendering/Material.hpp
         rendering/Mesh.cpp
         rendering/Mesh.hpp

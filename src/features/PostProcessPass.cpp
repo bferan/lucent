@@ -52,7 +52,7 @@ Texture* AddPostProcessPass(Renderer& renderer, Texture* sceneRadiance)
         .type = PipelineType::kCompute
     });
 
-    renderer.AddPass("Bloom", [=](Context& ctx, View& view)
+    renderer.AddPass("Bloom", [=, &settings](Context& ctx, View& view)
     {
         auto[srcWidth, srcHeight] = sceneRadiance->GetSize();
         ctx.CopyTexture(sceneRadiance, 0, 0, bloomDownsampleMips, 0, 0, srcWidth, srcHeight);
@@ -65,7 +65,7 @@ Texture* AddPostProcessPass(Renderer& renderer, Texture* sceneRadiance)
             ctx.BindImage("u_Output"_id, bloomDownsampleMips, srcMip + 1);
 
             auto[width, height] = bloomDownsampleMips->GetMipSize(srcMip + 1);
-            auto[groupsX, groupsY] = settings.GetNumGroups(width, height);
+            auto[groupsX, groupsY] = settings.ComputeGroupCount(width, height);
             ctx.Dispatch(groupsX, groupsY, 1);
         }
 
@@ -82,7 +82,7 @@ Texture* AddPostProcessPass(Renderer& renderer, Texture* sceneRadiance)
             ctx.Uniform("u_Strength"_id, 0.5f);
 
             auto[width, height] = bloomUpsampleMips->GetMipSize(srcMip - 1);
-            auto[groupsX, groupsY] = settings.GetNumGroups(width, height);
+            auto[groupsX, groupsY] = settings.ComputeGroupCount(width, height);
             ctx.Dispatch(groupsX, groupsY, 1);
 
             // Rest of inputs are from upsample chain
@@ -91,14 +91,14 @@ Texture* AddPostProcessPass(Renderer& renderer, Texture* sceneRadiance)
 
     });
 
-    renderer.AddPass("Post-process Output", [=](Context& ctx, View& view)
+    renderer.AddPass("Post-process Output", [=, &settings](Context& ctx, View& view)
     {
         ctx.BindPipeline(computeOutput);
         ctx.BindTexture("u_Input"_id, sceneRadiance);
         ctx.BindTexture("u_Bloom"_id, bloomUpsampleMips, 0);
         ctx.BindImage("u_Output"_id, output);
 
-        auto[numX, numY] = settings.GetNumGroups(settings.viewportWidth, settings.viewportHeight);
+        auto[numX, numY] = settings.ComputeGroupCount(settings.viewportWidth, settings.viewportHeight);
         ctx.Dispatch(numX, numY, 1);
     });
 

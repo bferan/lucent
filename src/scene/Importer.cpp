@@ -5,8 +5,8 @@
 #include "mikktspace.h"
 #include "weldmesh.h"
 
-#include "rendering/Geometry.hpp"
 #include "rendering/PbrMaterial.hpp"
+#include "rendering/Engine.hpp"
 #include "scene/ModelInstance.hpp"
 #include "scene/Transform.hpp"
 
@@ -111,6 +111,8 @@ static Texture* ImportTexture(Device* device, const gltf::Model& model, const gl
 
 void Importer::ImportMaterials(Scene& scene, const gltf::Model& model)
 {
+    auto& settings = Engine::Instance()->GetRenderSettings();
+
     for (auto& data: model.materials)
     {
         auto material = std::make_unique<PbrMaterial>();
@@ -118,11 +120,11 @@ void Importer::ImportMaterials(Scene& scene, const gltf::Model& model)
         auto& pbr = data.pbrMetallicRoughness;
 
         // Create textures
-        material->baseColorMap = ImportTexture(m_Device, model, pbr.baseColorTexture, g_BlackTexture, false);
-        material->metalRough = ImportTexture(m_Device, model, pbr.metallicRoughnessTexture, g_GreenTexture);
-        material->normalMap = ImportTexture(m_Device, model, data.normalTexture, g_NormalTexture);
-        material->aoMap = ImportTexture(m_Device, model, data.occlusionTexture, g_WhiteTexture);
-        material->emissive = ImportTexture(m_Device, model, data.emissiveTexture, g_BlackTexture, false);
+        material->baseColorMap = ImportTexture(m_Device, model, pbr.baseColorTexture, settings.defaultBlackTexture, false);
+        material->metalRough = ImportTexture(m_Device, model, pbr.metallicRoughnessTexture, settings.defaultGreenTexture);
+        material->normalMap = ImportTexture(m_Device, model, data.normalTexture, settings.defaultNormalTexture);
+        material->aoMap = ImportTexture(m_Device, model, data.occlusionTexture, settings.defaultWhiteTexture);
+        material->emissive = ImportTexture(m_Device, model, data.emissiveTexture, settings.defaultBlackTexture, false);
 
         // Material parameters
         auto& col = pbr.baseColorFactor;

@@ -13,6 +13,7 @@ namespace lucent
 
 class Context;
 
+//! Graphics device interface to manage GPU resources
 class Device
 {
 public:

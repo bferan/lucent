@@ -19,7 +19,7 @@ struct FramebufferSettings
     int depthLevel = -1;
 };
 
-// Represents a collection of image attachments for rendering
+//! Represents a collection of image attachments for rendering
 class Framebuffer
 {
 public:

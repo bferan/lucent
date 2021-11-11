@@ -1,6 +1,5 @@
 #include "LightingPass.hpp"
 
-#include "rendering/Geometry.hpp"
 #include "scene/Transform.hpp"
 
 namespace lucent
@@ -53,6 +52,11 @@ void AddLightingPass(Renderer& renderer,
         .depthWriteEnable = false
     });
 
+    // Shared geometry primitives
+    auto& settings = renderer.GetSettings();
+    auto quad = settings.quadMesh.get();
+    auto cube = settings.cubeMesh.get();
+
     renderer.AddPass("Lighting", [=](Context& ctx, View& view)
     {
         ctx.BeginRenderPass(framebuffer);
@@ -96,9 +100,9 @@ void AddLightingPass(Renderer& renderer,
         ctx.BindTexture("u_Depth"_id, depth);
         ctx.BindTexture("u_Emissive"_id, gBuffer.emissive);
 
-        ctx.BindBuffer(g_Quad.indices);
-        ctx.BindBuffer(g_Quad.vertices);
-        ctx.Draw(g_Quad.numIndices);
+        ctx.BindBuffer(quad->vertexBuffer);
+        ctx.BindBuffer(quad->indexBuffer);
+        ctx.Draw(quad->numIndices);
 
         ctx.EndRenderPass();
     });
@@ -112,9 +116,9 @@ void AddLightingPass(Renderer& renderer,
 
         ctx.BindTexture("u_Skybox"_id, view.GetScene().environment.cubeMap);
 
-        ctx.BindBuffer(g_Cube.indices);
-        ctx.BindBuffer(g_Cube.vertices);
-        ctx.Draw(g_Cube.numIndices);
+        ctx.BindBuffer(cube->indexBuffer);
+        ctx.BindBuffer(cube->vertexBuffer);
+        ctx.Draw(cube->numIndices);
 
         ctx.EndRenderPass();
     });

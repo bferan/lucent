@@ -10,6 +10,7 @@
 namespace lucent
 {
 
+//! 4x4 matrix of floats
 struct Matrix4
 {
 public:
@@ -156,11 +157,6 @@ public:
             Vector4(0.0f, 0.0f, k, 1.0f),
             Vector4(0.0f, 0.0f, -n * k, 0.0f)
         };
-    }
-
-    static Matrix4 InversePerspective(float verticalFov, float aspectRatio, float n, float f)
-    {
-
     }
 
     static Matrix4 Orthographic(float w, float h, float d)

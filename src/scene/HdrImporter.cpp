@@ -4,7 +4,7 @@
 
 #include "core/Utility.hpp"
 #include "device/Context.hpp"
-#include "rendering/Geometry.hpp"
+#include "rendering/Engine.hpp"
 
 namespace lucent
 {
@@ -62,6 +62,7 @@ void HdrImporter::RenderToCube(Pipeline* pipeline, Texture* src, Texture* dst, i
 {
     auto& ctx = *m_Context;
     auto proj = Matrix4::Perspective(kHalfPi, 1.0f, 0.001, 10000);
+    auto cube = Engine::Instance()->GetRenderSettings().cubeMesh.get();
 
     Matrix4 views[] = {
         Matrix4::RotationY(kHalfPi),   // +x
@@ -84,8 +85,8 @@ void HdrImporter::RenderToCube(Pipeline* pipeline, Texture* src, Texture* dst, i
 
         ctx.BindPipeline(pipeline);
 
-        ctx.BindBuffer(g_Cube.indices);
-        ctx.BindBuffer(g_Cube.vertices);
+        ctx.BindBuffer(cube->indexBuffer);
+        ctx.BindBuffer(cube->vertexBuffer);
 
         ctx.Uniform("u_View"_id, view);
         ctx.Uniform("u_Proj"_id, proj);
@@ -94,7 +95,7 @@ void HdrImporter::RenderToCube(Pipeline* pipeline, Texture* src, Texture* dst, i
         Descriptor desc{.set = 0, .binding = 1};
         ctx.BindTexture(&desc, src);
 
-        ctx.Draw(g_Cube.numIndices);
+        ctx.Draw(cube->numIndices);
         ctx.EndRenderPass();
 
         ctx.CopyTexture(
@@ -110,6 +111,7 @@ void HdrImporter::RenderToCube(Pipeline* pipeline, Texture* src, Texture* dst, i
 void HdrImporter::RenderToQuad(Pipeline* pipeline, Texture* dst, uint32 size)
 {
     auto& ctx = *m_Context;
+    auto quad = Engine::Instance()->GetRenderSettings().quadMesh.get();
 
     ctx.Begin();
     ctx.BeginRenderPass(m_Offscreen);
@@ -118,10 +120,10 @@ void HdrImporter::RenderToQuad(Pipeline* pipeline, Texture* dst, uint32 size)
 
     ctx.BindPipeline(pipeline);
 
-    ctx.BindBuffer(g_Quad.indices);
-    ctx.BindBuffer(g_Quad.vertices);
+    ctx.BindBuffer(quad->indexBuffer);
+    ctx.BindBuffer(quad->vertexBuffer);
 
-    ctx.Draw(g_Quad.numIndices);
+    ctx.Draw(quad->numIndices);
     ctx.EndRenderPass();
 
     ctx.CopyTexture(

@@ -24,6 +24,7 @@ enum class ShaderStage
     kCompute
 };
 
+//! Locates shader source from a given shader name
 class ShaderResolver
 {
 public:
@@ -59,9 +60,9 @@ struct VulkanShader
     Array <VkDescriptorSetLayout, kMaxSets> setLayouts;
     Array <Descriptor, kMaxDescriptors> descriptors;
     Array <Descriptor, kMaxDescriptorBlocks> blocks;
-    VkPipelineLayout pipelineLayout;
-    uint64 hash;
-    uint32 uses;
+    VkPipelineLayout pipelineLayout{};
+    uint64 hash{};
+    uint32 uses{};
 };
 
 }

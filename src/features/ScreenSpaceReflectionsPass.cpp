@@ -21,7 +21,7 @@ Texture* AddScreenSpaceReflectionsPass(Renderer& renderer, GBuffer gBuffer, Text
         .shaderName = "SSRTraceMinZ.shader", .type = PipelineType::kCompute
     });
 
-    renderer.AddPass("SSR trace rays", [=](Context& ctx, View& view)
+    renderer.AddPass("SSR trace rays", [=, &settings](Context& ctx, View& view)
     {
         ctx.BindPipeline(traceReflections);
         view.BindUniforms(ctx);
@@ -30,7 +30,7 @@ Texture* AddScreenSpaceReflectionsPass(Renderer& renderer, GBuffer gBuffer, Text
         ctx.BindTexture("u_Normals"_id, gBuffer.normals);
         ctx.BindImage("u_Result"_id, rayHits);
 
-        auto[numX, numY] = settings.GetNumGroups(width, height);
+        auto[numX, numY] = settings.ComputeGroupCount(width, height);
         ctx.Dispatch(numX, numY, 1);
     });
 
@@ -59,7 +59,7 @@ Texture* AddScreenSpaceReflectionsPass(Renderer& renderer, GBuffer gBuffer, Text
         .shaderName = "SSRConvolve.shader", .shaderDefines = { "BLUR_VERTICAL" }, .type = PipelineType::kCompute
     });
 
-    renderer.AddPass("SSR pre-convolve", [=](Context& ctx, View& view)
+    renderer.AddPass("SSR pre-convolve", [=, &settings](Context& ctx, View& view)
     {
         ctx.BlitTexture(prevColor, 0, 0, convolvedScene, 0, 0);
 
@@ -69,7 +69,7 @@ Texture* AddScreenSpaceReflectionsPass(Renderer& renderer, GBuffer gBuffer, Text
             ctx.BlitTexture(convolvedScene, 0, 0, downsampleTarget, 0, mip);
 
             auto[mipWidth, mipHeight] = downsampleTarget->GetMipSize(mip);
-            auto[groupsX, groupsY] = settings.GetNumGroups(mipWidth, mipHeight);
+            auto[groupsX, groupsY] = settings.ComputeGroupCount(mipWidth, mipHeight);
 
             // Horizontal blur
             ctx.BindPipeline(blurHorizontal);
@@ -96,7 +96,7 @@ Texture* AddScreenSpaceReflectionsPass(Renderer& renderer, GBuffer gBuffer, Text
         .shaderName = "SSRResolveReflections.shader", .type = PipelineType::kCompute
     });
 
-    renderer.AddPass("SSR resolve reflections", [=](Context& ctx, View& view)
+    renderer.AddPass("SSR resolve reflections", [=, &settings](Context& ctx, View& view)
     {
         ctx.BindPipeline(resolveReflections);
         view.BindUniforms(ctx);
@@ -107,7 +107,7 @@ Texture* AddScreenSpaceReflectionsPass(Renderer& renderer, GBuffer gBuffer, Text
         ctx.BindTexture("u_MetalRoughness"_id, gBuffer.metalRoughness);
         ctx.BindImage("u_Result"_id, resolvedReflections);
 
-        auto[numX, numY] = settings.GetNumGroups(width, height);
+        auto[numX, numY] = settings.ComputeGroupCount(width, height);
         ctx.Dispatch(numX, numY, 1);
     });
 

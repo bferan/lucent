@@ -5,7 +5,7 @@
 namespace lucent
 {
 
-/// A container for recyclable elements that can be used, active or free
+//! A container for recyclable elements that can be used, active or free
 template<typename T>
 class Pool
 {

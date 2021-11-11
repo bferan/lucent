@@ -6,6 +6,7 @@
 namespace lucent
 {
 
+//! Abstracts an underlying command buffer, allowing you to bind resources and execute rendering commands
 class Context
 {
 public:

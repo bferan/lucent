@@ -33,7 +33,7 @@ void Compute()
     vec3 bloom = texture(u_Bloom, coord).rgb;
     value = mix(value, bloom, 0.35);
 
-    value = ToneMap(value);
+    //value = ToneMap(value);
     value = Vignette(value, coord);
 
     imageStore(u_Output, imgCoord, vec4(value, 1.0));

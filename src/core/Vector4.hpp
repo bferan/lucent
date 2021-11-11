@@ -22,7 +22,7 @@ public:
 
     explicit operator Vector3() const
     {
-        return Vector3(x, y, z);
+        return { x, y, z };
     }
 
     Vector4(const Vector4&) = default;
@@ -97,7 +97,7 @@ inline Vector4 operator*(float lhs, Vector4 rhs)
 // Negation
 inline Vector4 operator-(const Vector4& rhs)
 {
-    return Vector4(-rhs.x, -rhs.y, -rhs.z, -rhs.w);
+    return { -rhs.x, -rhs.y, -rhs.z, -rhs.w };
 }
 
 inline Vector4 operator+(Vector4 lhs, const Vector4& rhs)

@@ -67,11 +67,11 @@ void InitScene(Engine& engine, Scene& scene)
 
 int main()
 {
-    Engine engine;
-    auto scene = engine.CreateScene();
+    auto engine = Engine::Init();
+    auto scene = engine->CreateScene();
 
-    InitScene(engine, *scene);
-    while (engine.Update());
+    InitScene(*engine, *scene);
+    while (engine->Update());
 
     return 0;
 }

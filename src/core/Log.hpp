@@ -25,14 +25,14 @@ enum class LogLevel
     kError
 };
 
-/// Interface to subscribe to log events
+//! Interface to subscribe to log events
 class LogListener
 {
 public:
     virtual void OnLog(LogLevel level, const std::string& msg) = 0;
 };
 
-/// Singleton log dispatcher
+//! Singleton log dispatcher
 class Logger
 {
 public:
@@ -71,7 +71,7 @@ private:
 
 };
 
-/// A log listener that forwards to stdout
+//! Log listener that forwards to stdout
 class LogStdOut : public LogListener
 {
 public:
