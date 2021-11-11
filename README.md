@@ -4,7 +4,7 @@
 
 <p align="center">
 <img alt="GitHub" src="https://img.shields.io/github/license/bferan/lucent">
-<img alt="GitHub release (latest by date)" src="https://img.shields.io/github/v/release/bferan/lucent?display_name=tag">
+<img alt="GitHub release (latest by date including pre-releases)" src="https://img.shields.io/github/v/release/bferan/lucent?include_prereleases">
 <img alt="Status: experimental" src="https://img.shields.io/badge/status-experimental-orange">
 <img alt="Vulkan" src="https://img.shields.io/badge/-Vulkan-red?logo=Vulkan&logoColor=white">
 <img alt="C++" src="https://img.shields.io/badge/-C++-blue?logo=cplusplus&logoColor=white">
