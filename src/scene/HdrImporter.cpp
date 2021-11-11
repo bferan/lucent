@@ -144,6 +144,7 @@ Environment HdrImporter::Import(const std::string& hdrFile)
     const int kDesiredChannels = 4;
     int x, y, numChannels;
     float* data = stbi_loadf(hdrFile.c_str(), &x, &y, &numChannels, kDesiredChannels);
+    LC_ASSERT(data);
 
     auto envRectangle = m_Device->CreateTexture(TextureSettings{
         .width = static_cast<uint32>(x),

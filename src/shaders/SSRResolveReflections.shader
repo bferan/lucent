@@ -25,7 +25,7 @@ float ConeRadius(float length, float base)
 }
 
 // Convolve scene color from cone defined by two screen-space ray start and end positions
-vec4 ConeTrace(vec2 rayStart, vec2 rayEnd, float angle, float maxDimension)
+vec4 ConeTrace(vec2 rayStart, vec2 rayEnd, float rough, float angle, float maxDimension)
 {
     float lengthToBaseFactor = 2.0 * tan(angle);
 
@@ -51,7 +51,7 @@ vec4 ConeTrace(vec2 rayStart, vec2 rayEnd, float angle, float maxDimension)
     }
     #endif
 
-    vec3 color = textureLod(u_ConvolvedScene, rayEnd, 1.0).rgb;
+    vec3 color = textureLod(u_ConvolvedScene, rayEnd, rough * 10).rgb;
     color = clamp(color, vec3(0.0), vec3(1.0));
 
     return vec4(color, 1.0);
@@ -70,7 +70,7 @@ void Compute()
     float angle = AlphaToConeAngle(rough * rough);
     float maxDim = max(sceneSize.x, sceneSize.y);
 
-    vec4 result = ConeTrace(coord, rayEnd, angle, maxDim);
+    vec4 result = ConeTrace(coord, rayEnd, rough, angle, maxDim);
 
     if (any(lessThanEqual(rayEnd, vec2(0.0))))
         result = vec4(0.0);

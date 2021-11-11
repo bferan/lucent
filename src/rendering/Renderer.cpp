@@ -10,7 +10,7 @@ Renderer::Renderer(Device* device, RenderSettings settings)
     , m_Settings(std::move(settings))
     , m_FrameIndex(0)
 {
-    m_TransferBuffer = m_Device->CreateBuffer(BufferType::kStaging, 64 * 1024 * 1024);
+    m_TransferBuffer = m_Device->CreateBuffer(BufferType::kStaging, 200 * 1024 * 1024);
     m_DebugShapesBuffer = m_Device->CreateBuffer(BufferType::kStorage, 64 * 1024);
 
     for (int i = 0; i < settings.framesInFlight; ++i)
