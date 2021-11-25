@@ -52,6 +52,11 @@ public:
         }
     }
 
+    uint32 Size() const
+    {
+        return m_Entities.size() - m_NumFree - 1; // Exclude the null entity
+    }
+
     bool Valid(EntityID entity)
     {
         return entity.index < m_Entities.size() && m_Entities[entity.index] == entity;
