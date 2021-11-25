@@ -64,7 +64,7 @@ struct MyComponent { ... };
 
 robot.Assign(MyComponent(...));
 
-MyComponent& myComponent = robot.Get<MyComponent>()
+MyComponent& myComponent = robot.Get<MyComponent>();
 ....
 
 // Render frames in a loop
@@ -88,23 +88,23 @@ auto myPipeline = renderer.AddPipeline(PipelineSettings{
 });
 
 // Register a render pass function to be executed on each rendering of the scene 
-renderer.AddPass("My Custom Pass", [=](Context& ctx, View& view))
+renderer.AddPass("My Custom Pass", [=](Context& ctx, View& view)
 {
     ctx.BeginRenderPass(myFramebuffer);
 
     ctx.BindPipeline(myPipeline);
     
     // Iterate over all entities in the scene with both Transform and MyComponent
-    view.GetScene().Each<Transform, MyComponent>([&](auto& transform, auto& myComponent))
+    view.GetScene().Each<Transform, MyComponent>([&](auto& transform, auto& myComponent)
     {
         // Set a uniform value in the shader with given ID
         ctx.Uniform("u_MyValue"_id, myComponent.value);
         
         ctx.Draw(...);
-    }
+    });
     
     ctx.EndRenderPass();
-}
+});
 ```
 
 ## Building
@@ -117,6 +117,7 @@ To build:
 
 ```shell
 git clone --recursive https://github.com/bferan/lucent
+...
 ```
 
 When launching a Lucent application, runtime shaders are loaded from the `LC_SHADER_ROOT` environment variable. Set this

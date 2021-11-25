@@ -5,8 +5,15 @@ set(CMAKE_CXX_STANDARD 20)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 
+# Lucent core library
 add_library(lucent STATIC)
 add_subdirectory(src)
+
+# Lucent tests
+add_subdirectory(extern/Catch2)
+add_executable(lucent-tests)
+add_subdirectory(tests)
+target_link_libraries(lucent-tests PRIVATE Catch2::Catch2WithMain lucent)
 
 # Demos
 add_subdirectory(demos)
