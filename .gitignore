@@ -47,3 +47,9 @@ _deps
 # Intellij
 .idea/
 cmake-build*
+
+# VS
+.vs/
+
+# Build
+build/
