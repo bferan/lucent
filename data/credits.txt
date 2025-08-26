@@ -1,0 +1,13 @@
+Model:
+"Marble Bust 01" (CC0) by Poly Haven
+https://polyhaven.com/
+
+HDR Environment:
+"Old Hall" (4K) by Poly Haven
+https://polyhaven.com/
+
+Font:
+JetBrains Mono Medium
+Copyright 2020 The JetBrains Mono Project Authors
+Licensed under the SIL Open Font License, Version 1.0
+https://www.jetbrains.com/lp/mono/

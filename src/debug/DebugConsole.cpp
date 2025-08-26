@@ -16,7 +16,7 @@ constexpr float kMaxScreenY = 800.0f;
 DebugConsole::DebugConsole(Engine& engine, int maxColumns)
     : m_Engine(engine)
     , m_Device(engine.GetDevice())
-    , m_Font(m_Device, "fonts/JetBrainsMono-Medium.ttf", 26.0f)
+    , m_Font(m_Device, "data/fonts/JetBrainsMono-Medium.ttf", 26.0f)
     , m_TextLog(m_Device, m_Font)
     , m_TextPrompt(m_Device, m_Font)
     , m_MaxColumns(maxColumns)

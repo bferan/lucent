@@ -9,17 +9,18 @@ using namespace lucent;
 // Example usage: importing a model and setting up a basic light and camera
 void InitScene(Engine& engine, Scene& scene)
 {
-    auto robotLocation = "models/robo/scene.gltf";
-    auto hdrLocation = "textures/rooitou_park_4k.hdr";
+    auto modelPath = "data/models/bust/marble_bust_01_4k.gltf";
+    auto hdrPath = "data/textures/old_hall_4k.hdr";
 
     Importer importer(engine.GetDevice());
 
-    // Import robot entity from model
-    auto robot = importer.Import(scene, robotLocation);
-    robot.SetScale(0.2f);
+    // Import entity for model
+    auto model = importer.Import(scene, modelPath);
+    model.SetScale(5.0f);
+	model.SetRotation(Quaternion::AxisAngle(Vector3::Up(), kHalfPi));
 
     HdrImporter hdrImporter(engine.GetDevice());
-    scene.environment = hdrImporter.Import(hdrLocation);
+    scene.environment = hdrImporter.Import(hdrPath);
 
     // Create camera entity
     scene.mainCamera = scene.CreateEntity();

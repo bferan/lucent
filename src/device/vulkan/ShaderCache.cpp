@@ -175,15 +175,18 @@ public:
         {
             LC_DEBUG("Resolving shaders from {}", env);
             m_RootPath = env;
-            if (!m_RootPath.empty() && !m_RootPath.ends_with(kPathSeparator))
-            {
-                m_RootPath += kPathSeparator;
-            }
         }
         else
         {
-            LC_INFO("Default shader resolver could not locate ENV variable {}\n"
-                    "Using current working directory instead.", kShaderEnvVar);
+            // Set root path to "shaders" subdirectory in current working directory
+            m_RootPath = "shaders";
+            LC_INFO("Using shaders subdirectory for shader resolution: {}", m_RootPath);
+        }
+
+        // Ensure path ends with separator
+        if (!m_RootPath.empty() && !m_RootPath.ends_with(kPathSeparator))
+        {
+            m_RootPath += kPathSeparator;
         }
     }
 
